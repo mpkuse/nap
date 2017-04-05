@@ -3,3 +3,4 @@ other_seqs*
 tf.logs*
 *.swp
 *.pyc
+*.dat

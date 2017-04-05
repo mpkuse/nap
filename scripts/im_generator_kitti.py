@@ -20,8 +20,8 @@ import glob
 PKG_PATH = '/home/mpkuse/catkin_ws/src/nap/'
 
 # PARAM_IM_PATH = PKG_PATH+'/other_seqs/kitti_dataset/sequences/00/image_2/' #kitti
-# PARAM_IM_PATH = PKG_PATH+'/other_seqs/altizure_seq/sequences/02/' #altizure-seq
-PARAM_IM_PATH = PKG_PATH+'/other_seqs/ust_drone_seq/sequences/10/' #ust-drone-seq
+PARAM_IM_PATH = PKG_PATH+'/other_seqs/altizure_seq/sequences/02/' #altizure-seq
+# PARAM_IM_PATH = PKG_PATH+'/other_seqs/ust_drone_seq/sequences/22/' #ust-drone-seq
 PARAM_START_INDX = 0
 PARAM_END_INDX = len( glob.glob(PARAM_IM_PATH+'*.png'))-1
 PARAM_STEP = 5

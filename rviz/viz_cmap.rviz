@@ -14,7 +14,10 @@ Panels:
         - /Current Position1/Status1
         - /Raw Image Stream1
         - /Raw Image Stream1/Status1
-        - /NN Position1
+        - /Observation1
+        - /Belief1
+        - /Odometry1
+        - /Odometry1/Status1
       Splitter Ratio: 0.5
     Tree Height: 460
   - Class: rviz/Selection
@@ -109,11 +112,29 @@ Visualization Manager:
     - Class: rviz/Marker
       Enabled: true
       Marker Topic: /nn
-      Name: NN Position
+      Name: Observation
       Namespaces:
         "": true
       Queue Size: 100
       Value: true
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /belief
+      Name: Belief
+      Namespaces:
+        "": true
+      Queue Size: 100
+      Value: true
+    - Angle Tolerance: 0.100000001
+      Class: rviz/Odometry
+      Color: 255; 25; 0
+      Enabled: false
+      Keep: 0
+      Length: 1
+      Name: Odometry
+      Position Tolerance: 0.100000001
+      Topic: /vins_estimator/odometry
+      Value: false
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -138,24 +159,24 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 266.923645
+      Distance: 203.559265
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.0599999987
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -2.9574337
-        Y: -14.2524481
-        Z: 155.033951
+        X: 65.2720871
+        Y: 33.2335281
+        Z: 124.787468
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.0500000007
       Name: Current View
       Near Clip Distance: 0.00999999978
-      Pitch: -1.56979632
+      Pitch: 1.02479732
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 4.79259062
+      Yaw: 5.32263088
     Saved: ~
 Window Geometry:
   Displays:
