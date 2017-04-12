@@ -17,6 +17,7 @@ from sensor_msgs.msg import Image
 from visualization_msgs.msg import Marker
 from geometry_msgs.msg import Point
 from std_msgs.msg import ColorRGBA
+from std_msgs.msg import Float32
 
 from nap.msg import NapMsg
 
@@ -57,7 +58,7 @@ PARAM_MODEL = PKG_PATH+'/tf.logs/netvlad_angular_loss_w_mini_dev/model-4000'
 PARAM_MODEL_DIM_RED = PKG_PATH+'/tf.logs/siamese_dimred_fc/model-400'
 
 PARAM_FPS = 25
-PARAM_FRAMES_SKIP = 5
+PARAM_FRAMES_SKIP = 2
 
 call_q = 0
 def callback_image( data ):
@@ -103,10 +104,17 @@ def normalize_batch( im_batch ):
 
 ## 'x' can also be a vector
 def logistic( x ):
-    y = np.array(x)
+    #y = np.array(x)
+    #return (1.0 / (1.0 + np.exp( 11.0*y - 3.0 )) + 0.01)
+    # return (1.0 / (1.0 + 0.6*np.exp( 22.0*y - 2.0 )) + 0.04)
+
+    y = np.convolve( np.array(x), [0.25,0.5,0.25], 'same' )
     return (1.0 / (1.0 + np.exp( 11.0*y - 3.0 )) + 0.01)
 
 
+
+def publish_time( PUB, time_ms ):
+    PUB.publish( Float32(time_ms) )
 #
 # Setup Callbacks and Publishers
 im_queue = Queue.Queue()
@@ -114,9 +122,27 @@ im_timestamp_queue = Queue.Queue()
 
 rospy.init_node( 'nap_time_node', log_level=rospy.INFO )
 # rospy.Subscriber( 'chatter', String, callback_string )
-# rospy.Subscriber( 'semi_keyframes', Image, callback_image )
-rospy.Subscriber( '/mv_29900616/image_raw', Image, callback_image ) #subscribes to color image
+rospy.Subscriber( '/semi_keyframes', Image, callback_image )
+# rospy.Subscriber( '/color_image/image_raw', Image, callback_image ) #subscribes to color image
+# rospy.Subscriber( '/mv_29900616/image_raw_resized', Image, callback_image ) #subscribes to color image
+
 pub_colocation = rospy.Publisher( '/colocation', NapMsg, queue_size=1000 )
+
+
+# Timing Publishers
+pub_time_queue_size = rospy.Publisher( '/time/queue_size', Float32, queue_size=1000)
+pub_time_color_normalization = rospy.Publisher( '/time/color_normalization', Float32, queue_size=1000)
+pub_time_netvlad = rospy.Publisher( '/time/netvlad', Float32, queue_size=1000)
+pub_time_dimred = rospy.Publisher( '/time/dimred', Float32, queue_size=1000)
+pub_time_total_desc_computation = rospy.Publisher( '/time/total_desc_computation', Float32, queue_size=1000)
+pub_time_similarity = rospy.Publisher( '/time/similarity', Float32, queue_size=1000)
+
+# pub_time_grid_filter = rospy.Publisher( '/time/grid_filter', Float32, queue_size=1000)
+pub_time_grid_filter_sense = rospy.Publisher( '/time/grid_filter/sense', Float32, queue_size=1000)
+pub_time_grid_filter_move = rospy.Publisher( '/time/grid_filter/move', Float32, queue_size=1000)
+
+pub_time_total_loop = rospy.Publisher( '/time/total_loop', Float32, queue_size=1000)
+
 
 #
 # Init netvlad - def computational graph, load trained model
@@ -172,17 +198,18 @@ plot3.setRange( yRange=[0,10] )
 rate = rospy.Rate(PARAM_FPS)
 Likelihood = namedtuple( 'Likelihood', 'L dist')
 S = np.zeros( (25000,128) ) #char
-S_word = np.zeros( (25000,8192) ) #word
+# S_word = np.zeros( (25000,8192) ) #word
 S_timestamp = np.zeros( 25000, dtype=rospy.Time )
 loop_index = -1
 while not rospy.is_shutdown():
     rate.sleep()
-    print '---\nQueue Size : ', im_queue.qsize(), im_timestamp_queue.qsize()
+    rospy.logdebug( '---\nQueue Size : %d, %d' %( im_queue.qsize(), im_timestamp_queue.qsize()) )
     if im_queue.qsize() < 1 and im_timestamp_queue.qsize() < 1:
         rospy.loginfo( 'Empty Queue...Waiting' )
         continue
 
-
+    publish_time( pub_time_queue_size, im_queue.qsize() )
+    startTimeTotalLoop = time.time()
     im_raw = im_queue.get()
     im_raw_timestamp = im_timestamp_queue.get()
 
@@ -219,14 +246,17 @@ while not rospy.is_shutdown():
     d_compute_time_ms.append( (time.time() - startTime)*1000. )
 
     ###### END of descriptor compute : d_WORD, d_CHAR, d_compute_time_ms[] ###############
-    rospy.loginfo( '[%6.2fms] Descriptor Computation' %(sum(d_compute_time_ms)) )
-
+    rospy.logdebug( '[%6.2fms] Descriptor Computation' %(sum(d_compute_time_ms)) )
+    publish_time( pub_time_color_normalization, d_compute_time_ms[0] )
+    publish_time( pub_time_netvlad, d_compute_time_ms[1] )
+    publish_time( pub_time_dimred, d_compute_time_ms[2] )
+    publish_time( pub_time_total_desc_computation, sum(d_compute_time_ms) )
 
 
     ################## Array Insert (in S)
     startSimTime = time.time()
     S[loop_index,:] = d_CHAR
-    S_word[loop_index,:] = d_WORD
+    # S_word[loop_index,:] = d_WORD
     # S_im_index[loop_index] = int(im_indx)
     S_timestamp[loop_index] = im_raw_timestamp
     # sim_score =  1.0 - np.dot( S[0:loop_index+1,:], d_CHAR )
@@ -234,11 +264,11 @@ while not rospy.is_shutdown():
     # sim_score =  np.sqrt( 1.0 - np.dot( S_word[0:loop_index+1,:], d_WORD ) )
     # sim_score =  np.dot( S[:loop_index,:], d_CHAR )
 
-    sim_scores_logistic = logistic( sim_score )
+    sim_scores_logistic = logistic( sim_score ) #convert the raw Similarity scores above to likelihoods
 
 
-    rospy.loginfo( '[%6.2fms] Similarity with all prev in' %( (time.time() - startSimTime)*1000. ) )
-
+    rospy.logdebug( '[%6.2fms] Similarity with all prev in' %( (time.time() - startSimTime)*1000. ) )
+    publish_time( pub_time_similarity,   (time.time() - startSimTime)*1000. )
 
 
 
@@ -257,8 +287,9 @@ while not rospy.is_shutdown():
     w[0:L] = np.multiply( w[0:L], sim_scores_logistic[0:L]  )
 
 
+    rospy.logdebug( '[%4.2fms] GridFilter : Time for likelihood x prior' %(1000.*(time.time() - startSenseTime)) )
+    publish_time( pub_time_grid_filter_sense, (1000.*(time.time() - startSenseTime) ) )
 
-    rospy.loginfo( '[%4.2fms] GridFilter : Time for likelihood x prior' %(1000.*(time.time() - startSenseTime)) )
 
 
     # Move
@@ -268,28 +299,32 @@ while not rospy.is_shutdown():
     w = np.convolve( w, [0.025,0.1,0.75,0.1,0.025], 'same' )
 
     w = w / sum(w)
-    w[0:L] = np.maximum( w[0:L], 0.001 )
+    w[0:L] = np.maximum( w[0:L], 1.0/L )
     w[L:] = 1E-10
-    rospy.loginfo( '[%4.2f ms] GridFilter Time for move' %(1000. * (time.time()-startMoveTime)) )
+    rospy.logdebug( '[%4.2f ms] GridFilter Time for move' %(1000. * (time.time()-startMoveTime)) )
+    publish_time( pub_time_grid_filter_move, (1000. * (time.time()-startMoveTime)) )
 
+
+    thresh_log_scale = -np.log(1.0/L)
+    thresh_log_scale -= 0.1*thresh_log_scale
 
     # Plot bar graphs
     curve1.setData( range(len(sim_score)), sim_score )
     # curve2.setData( range(len(sim_scores_logistic)), -np.log(sim_scores_logistic)/np.log(10) )
     curve2.setData( range(len(sim_scores_logistic)), sim_scores_logistic )
     curve3.setData( range(0,L+50), -np.log(w[0:L+50]) )
-    curve_thresh.setData( range(0,L+50), 6.*np.ones( (L+50) ) , pen=(1,2)  )
+    curve_thresh.setData( range(0,L+50), thresh_log_scale*np.ones( (L+50) ) , pen=(1,2)  )
     qapp.processEvents()
 
 
-    ################# Publish
+    ################# Publish (on loop closure detection)
     # if loop_index > 50:
         # code.interact( local=locals() )
 
     startTimePub = time.time()
     # Publish (c_timestamp, prev_timestamp, goodness)
     w_log = -np.log( w[0:L-20] ) #dont report on latest 20 frames
-    argT = np.argwhere( w_log < 6 ) #find all index of all elements in w less than 6
+    argT = np.argwhere( w_log < thresh_log_scale ) #find all index of all elements in w less than 6
     for aT in argT:
         nap_msg = NapMsg()
         # nap_msg.c_timestamp = rospy.Time.now()
@@ -299,27 +334,11 @@ while not rospy.is_shutdown():
         nap_msg.prev_timestamp = rospy.Time.from_sec( float(S_timestamp[aT[0]].to_sec()) )
         nap_msg.goodness = w_log[aT]
         pub_colocation.publish( nap_msg )
-        print 'c_time=',S_timestamp[L-1], ';;;prev_time=',S_timestamp[aT], ';;;goodness=', w_log[aT]
+        rospy.loginfo( 'c_time=%s ; prev_time=%s ; goodness=%f' %(str(S_timestamp[L-1]), str(S_timestamp[aT]), w_log[aT] ) )
 
 
-    # if loop_index > 100:
-        # code.interact( local=locals() )
-    # #collect nn
-    # likelihoods = []
-    # posterior = []
-    # for inxx in range(loop_index):
-    #     # likelihoods.append( Likelihood(L=int(S_im_index[inxx]), dist=sim_score[inxx] ) )
-    #     likelihoods.append( Likelihood(L=int(S_im_index[inxx]), dist=sim_scores_logistic[inxx] ) )
-    #     fd = -np.log(w[inxx])/(np.log(10.) * 4.0 )
-    #     posterior.append( Likelihood(L=int(S_im_index[inxx]), dist=fd ) )
-    #
-    # publish_gt( PUB_gt_path, im_indx, color=(1.0,1.0,0.5), marker_id=50000 ) #in yellow
-    # # publish_gt( PUB_gt_path, im_indx, color=(1.0,1.0,0.5,0.5) ) #in yellow (entire trail)
-    # # print im_indx, likelihoods
-    # # publish_likelihoods_all_colorcoded( PUB_nn, im_indx, likelihoods ) #all prev color-coded. Blue is small value, red high value
-    # publish_likelihoods_all_colorcoded( PUB_nn, im_indx, posterior ) #all prev color-coded. Blue is small value, red high value
-
-    rospy.loginfo( '[%6.2fms] SPublished in ' %( (time.time() - startTimePub)*1000. ) )
+    # rospy.loginfo( '[%6.2fms] SPublished in ' %( (time.time() - startTimePub)*1000. ) )
+    publish_time( pub_time_total_loop, (1000.0*(time.time()-startTimeTotalLoop)))
 
     # cv2.imshow( 'win', im_ )
     # cv2.waitKey(10)

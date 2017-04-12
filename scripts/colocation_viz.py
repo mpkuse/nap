@@ -109,7 +109,7 @@ def colocation_callback( data ):
     # 2. make 2 markers which represents a line using poses from part-1 (above)
     m = Marker()
     m.header = _d[c_indx].header
-    m.lifetime = rospy.Duration(5)
+    m.lifetime = rospy.Duration(1)
     m.id = seq
     seq += 1
     m.type = Marker.LINE_LIST
@@ -118,7 +118,7 @@ def colocation_callback( data ):
     m.scale.x = .2
     m.scale.y = 0.5
     m.scale.z = 0.0
-    m.color.a = 1.0
+    m.color.a = 0.5
     m.color.r = goodness_color[0]#1.0
     m.color.g = goodness_color[1]#1.0
     m.color.b = goodness_color[2]#0.0

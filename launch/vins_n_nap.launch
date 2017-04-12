@@ -1,26 +1,26 @@
 <launch>
 
-  <!-- Live -->
-  <!--
-  <arg name="bluefox_topic" default="/mv_25001498/image_raw"/>
-  <arg name="imu_topic" default="/imu_3dm_gx4/imu"/>
--->
-
-  <!-- Bag #01 -->
-  <!--
-  <arg name="bluefox_topic" default="/djiros/image"/>
-  <arg name="imu_topic" default="/djiros/imu"/>
--->
-
   <!-- Corridor #02 -->
+  <!--
   <arg name="bag_base" default="/media/mpkuse/Bulk_Data/other_seqs/tony_bags/"/>
-  <arg name="bag_name" default="corridor_03.bag"/>
-  <node name="rosbag" pkg="rosbag" type="play" args="$(arg bag_base)/$(arg bag_name)" output="screen" />
+  <arg name="bag_name" default="corridor_02.bag"/>
+  <node name="rosbag" pkg="rosbag" type="play" args="-s=0 -u=310 $(arg bag_base)/$(arg bag_name)" output="screen" />-->
+
+
+<!--############## Parking Lot #03 #############-->
+  <arg name="bag_base" default="/media/mpkuse/Bulk_Data/other_seqs/tony_bags/"/>
+
+  <!--<arg name="bag_name" default="parking_lot_00.bag"/>
+  <node name="rosbag" pkg="rosbag" type="play" args="-s 20  -u 310 $(arg bag_base)/$(arg bag_name)" output="screen" />
+-->
+  <arg name="bag_name" default="parking_lot_01.bag"/>
+  <node name="rosbag" pkg="rosbag" type="play" args="-s 20  $(arg bag_base)/$(arg bag_name)" output="screen" />
+
 
   <arg name="bluefox_topic" default="/mv_25001498/image_raw"/>
   <arg name="imu_topic" default="/imu_3dm_gx4/imu"/>
-
-
+  <arg name="color_image_topic" default="/mv_29900616/image_raw_resized"/>
+<!--############## END Parking Lot #############-->
 
     <node name="feature_tracker" pkg="feature_tracker" type="feature_tracker" output="log">
         <!-- camera calibration file. Be care about the format -->
@@ -78,8 +78,11 @@
     </node>
 
 
+    <node name="nap" pkg="nap" type="nap_time_node.py" output="screen" >
+      <remap to="$(arg color_image_topic)" from="/semi_keyframes"/>
+    </node>
 
-
-    <node name="rvizvisualisation" pkg="rviz" type="rviz" output="log" args="-d $(find vins_estimator)/../config/rviz/euroc.rviz" />
+    <node name="rvizvisualisation" pkg="rviz" type="rviz" output="log" args="-d $(find nap)/rviz/euroc.rviz" />
+    <node name="nap_viz" pkg="nap" type="colocation_viz.py" output="screen" />
 
 </launch>
