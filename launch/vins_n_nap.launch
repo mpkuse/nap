@@ -8,11 +8,9 @@
 
 
 <!--############## Parking Lot #03 #############-->
+<!--
   <arg name="bag_base" default="/media/mpkuse/Bulk_Data/other_seqs/tony_bags/"/>
 
-  <!--<arg name="bag_name" default="parking_lot_00.bag"/>
-  <node name="rosbag" pkg="rosbag" type="play" args="-s 20  -u 310 $(arg bag_base)/$(arg bag_name)" output="screen" />
--->
   <arg name="bag_name" default="parking_lot_01.bag"/>
   <node name="rosbag" pkg="rosbag" type="play" args="-s 20  $(arg bag_base)/$(arg bag_name)" output="screen" />
 
@@ -20,7 +18,21 @@
   <arg name="bluefox_topic" default="/mv_25001498/image_raw"/>
   <arg name="imu_topic" default="/imu_3dm_gx4/imu"/>
   <arg name="color_image_topic" default="/mv_29900616/image_raw_resized"/>
+-->
 <!--############## END Parking Lot #############-->
+
+
+<!-- DJI Cam -->
+<arg name="bag_base" default="/media/mpkuse/Bulk_Data/other_seqs/tony_bags/"/>
+<arg name="bag_name" default="dji_00.bag"/>
+<node name="rosbag" pkg="rosbag" type="play" args="-s 12 $(arg bag_base)/$(arg bag_name)" output="log" />
+
+<arg name="bluefox_topic" default="/mv_25001498/image_raw"/>
+<arg name="imu_topic" default="/imu_3dm_gx4/imu"/>
+<arg name="color_image_topic" default="/dji_sdk/image_raw_resized"/>
+
+
+
 
     <node name="feature_tracker" pkg="feature_tracker" type="feature_tracker" output="log">
         <!-- camera calibration file. Be care about the format -->

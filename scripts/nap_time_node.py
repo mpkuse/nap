@@ -32,6 +32,8 @@ import time
 from collections import namedtuple
 import code
 import os
+import signal
+import sys
 
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
@@ -58,7 +60,15 @@ PARAM_MODEL = PKG_PATH+'/tf.logs/netvlad_angular_loss_w_mini_dev/model-4000'
 PARAM_MODEL_DIM_RED = PKG_PATH+'/tf.logs/siamese_dimred_fc/model-400'
 
 PARAM_FPS = 25
-PARAM_FRAMES_SKIP = 2
+PARAM_FRAMES_SKIP = 3
+
+
+def signal_handler(signal, frame ):
+    print 'Written File : ', PKG_PATH+'/vote_bank.npy'
+    np.save( PKG_PATH+'/vote_bank.npy', vote_bank )
+    print 'You Pressed CTRL+C'
+    sys.exit(0)
+
 
 call_q = 0
 def callback_image( data ):
@@ -173,6 +183,9 @@ w = np.zeros( 25000 ) + 1E-10
 w[0:30] = 1
 w = w / sum(w)
 
+signal.signal(signal.SIGINT, signal_handler)
+vote_bank = np.zeros( (3000,3000) )
+
 #
 # Vispy - Fast Plotting
 qapp = pg.mkQApp()
@@ -185,27 +198,29 @@ curve2 = plot2.plot()
 plot3 = win.addPlot()
 curve3 = plot3.plot()
 curve_thresh = plot3.plot()
-
+plot4 = win.addPlot()
+curve4 = plot4.plot()
 # plot1.setRange( xRange=[0,1000 ], yRange=[0,1] )
 # plot2.setRange( xRange=[0,1000 ], yRange=[0,1] )
 # plot3.setRange( xRange=[0,1000 ], yRange=[0,15] )
 plot1.setRange( yRange=[0,1] )
 plot2.setRange( yRange=[0,1] )
 plot3.setRange( yRange=[0,10] )
+plot4.setRange( yRange=[0,32] )
 
 #
 # Main Loop
 rate = rospy.Rate(PARAM_FPS)
 Likelihood = namedtuple( 'Likelihood', 'L dist')
 S = np.zeros( (25000,128) ) #char
-# S_word = np.zeros( (25000,8192) ) #word
+S_word = np.zeros( (25000,8192) ) #word
 S_timestamp = np.zeros( 25000, dtype=rospy.Time )
 loop_index = -1
 while not rospy.is_shutdown():
     rate.sleep()
     rospy.logdebug( '---\nQueue Size : %d, %d' %( im_queue.qsize(), im_timestamp_queue.qsize()) )
     if im_queue.qsize() < 1 and im_timestamp_queue.qsize() < 1:
-        rospy.loginfo( 'Empty Queue...Waiting' )
+        # rospy.loginfo( 'Empty Queue...Waiting' )
         continue
 
     publish_time( pub_time_queue_size, im_queue.qsize() )
@@ -256,15 +271,23 @@ while not rospy.is_shutdown():
     ################## Array Insert (in S)
     startSimTime = time.time()
     S[loop_index,:] = d_CHAR
-    # S_word[loop_index,:] = d_WORD
+    S_word[loop_index,:] = d_WORD
     # S_im_index[loop_index] = int(im_indx)
     S_timestamp[loop_index] = im_raw_timestamp
     # sim_score =  1.0 - np.dot( S[0:loop_index+1,:], d_CHAR )
     sim_score =  np.sqrt( 1.0 - np.minimum(1.0, np.dot( S[0:loop_index+1,:], d_CHAR )) ) #minimum is added to ensure dot product doesnt go beyond 1.0 as it sometimes happens because of numerical issues, which inturn causes issues with sqrt
-    # sim_score =  np.sqrt( 1.0 - np.dot( S_word[0:loop_index+1,:], d_WORD ) )
+    # sim_score =  np.sqrt( 1.0 - np.minimum( 1.0, np.dot( S_word[0:loop_index+1,:], d_WORD ) ) )
     # sim_score =  np.dot( S[:loop_index,:], d_CHAR )
 
     sim_scores_logistic = logistic( sim_score ) #convert the raw Similarity scores above to likelihoods
+
+
+    # # Clusterwise sum - Sample Code
+    #X = np.random.randint(0,10, (20, 10) )
+    # sanyo_mul = np.multiply( S_word[0:loop_index+1,:], 32.0*S_word[loop_index,:] )
+    # sanyo_seg_sum = np.add.reduceat( sanyo_mul, range(0,sanyo_mul.shape[1],256), axis=1 )
+    # sanyo_ncluster_matches = (np.sqrt(sanyo_seg_sum) > 0.95).sum( axis=1 )
+    # print sanyo_seg_sum
 
 
     rospy.logdebug( '[%6.2fms] Similarity with all prev in' %( (time.time() - startSimTime)*1000. ) )
@@ -279,6 +302,7 @@ while not rospy.is_shutdown():
         continue
 
 
+    # vote_bank[loop_index,0:(loop_index+1)] = sanyo_ncluster_matches/32.
     # Sense and Update Weights
     startSenseTime = time.time()
 
@@ -314,6 +338,7 @@ while not rospy.is_shutdown():
     curve2.setData( range(len(sim_scores_logistic)), sim_scores_logistic )
     curve3.setData( range(0,L+50), -np.log(w[0:L+50]) )
     curve_thresh.setData( range(0,L+50), thresh_log_scale*np.ones( (L+50) ) , pen=(1,2)  )
+    # curve4.setData( range(len(sanyo_ncluster_matches)),  sanyo_ncluster_matches )
     qapp.processEvents()
 
 

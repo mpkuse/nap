@@ -13,9 +13,17 @@
 -->
 
   <!-- Corridor #02 -->
+  <!--
   <arg name="bag_base" default="/media/mpkuse/Bulk_Data/other_seqs/tony_bags/"/>
   <arg name="bag_name" default="corridor_03.bag"/>
   <node name="rosbag" pkg="rosbag" type="play" args="$(arg bag_base)/$(arg bag_name)" output="screen" />
+-->
+
+  <!-- DJI Cam -->
+  <arg name="bag_base" default="/media/mpkuse/Bulk_Data/other_seqs/tony_bags/"/>
+  <arg name="bag_name" default="dji_00.bag"/>
+  <node name="rosbag" pkg="rosbag" type="play" args="-s 12 $(arg bag_base)/$(arg bag_name)" output="log" />
+
 
   <arg name="bluefox_topic" default="/mv_25001498/image_raw"/>
   <arg name="imu_topic" default="/imu_3dm_gx4/imu"/>

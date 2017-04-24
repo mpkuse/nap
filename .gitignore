@@ -4,3 +4,5 @@ tf.logs*
 *.swp
 *.pyc
 *.dat
+*.npy
+*.npz

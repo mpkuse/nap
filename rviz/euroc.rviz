@@ -4,6 +4,7 @@ Panels:
     Name: Displays
     Property Tree Widget:
       Expanded:
+        - /Grid1
         - /Colocation Lines1
         - /Image1
         - /Odometry1
@@ -47,7 +48,7 @@ Visualization Manager:
         Y: 0
         Z: 0
       Plane: XY
-      Plane Cell Count: 100
+      Plane Cell Count: 50
       Reference Frame: <Fixed Frame>
       Value: true
     - Alpha: 1
@@ -107,13 +108,22 @@ Visualization Manager:
       Frame Timeout: 15
       Frames:
         All Enabled: true
+        body:
+          Value: true
+        camera:
+          Value: true
+        world:
+          Value: true
       Marker Scale: 1
       Name: TF
       Show Arrows: false
       Show Axes: true
       Show Names: true
       Tree:
-        {}
+        world:
+          body:
+            camera:
+              {}
       Update Interval: 0
       Value: true
     - Class: rviz/Image
@@ -133,7 +143,7 @@ Visualization Manager:
       Marker Topic: /vins_estimator/camera_pose_visual
       Name: MarkerArray
       Namespaces:
-        {}
+        CameraPoseVisualization: true
       Queue Size: 100
       Value: true
     - Class: rviz/Marker
@@ -146,7 +156,7 @@ Visualization Manager:
       Value: true
     - Class: rviz/Image
       Enabled: true
-      Image Topic: /mv_29900616/image_raw_resized
+      Image Topic: /dji_sdk/image_raw_resized
       Max Value: 1
       Median window: 5
       Min Value: 0
@@ -198,24 +208,24 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 114.478195
+      Distance: 95.2451096
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.0599999987
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -27.1658688
-        Y: -3.68530774
-        Z: 17.756382
+        X: -91.614006
+        Y: 2.31560516
+        Z: 36.4444046
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.0500000007
       Name: Current View
       Near Clip Distance: 0.00999999978
-      Pitch: 1.08539999
+      Pitch: 0.700400352
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 0.0572136976
+      Yaw: 4.86539698
     Saved: ~
 Window Geometry:
   Displays:
@@ -235,7 +245,7 @@ Window Geometry:
   Views:
     collapsed: true
   Width: 1215
-  X: 163
-  Y: 338
+  X: 162
+  Y: 310
   track_Image:
     collapsed: false
