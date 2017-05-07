@@ -51,6 +51,15 @@ def odometry_callback( data ):
     marker.color.b = 0.0
     pub_odometry.publish( marker )
 
+    marker.id = 0;
+    marker.color.r = 1.0;
+    marker.color.g = 0.64;
+    marker.color.b = 0.0;
+    marker.scale.x = 2
+    marker.scale.y = 2
+    marker.scale.z = 2
+    pub_curr_position.publish( marker )
+
 
 ## Binary Search on timestamps
 def binary_search_on_dequeue( time_stamp ):
@@ -66,7 +75,7 @@ def binary_search_on_dequeue( time_stamp ):
             return -1
 
         # test for equality
-        if abs(time_stamp - _d[mid_index].header.stamp) < rospy.Duration(0.1):
+        if abs(time_stamp - _d[mid_index].header.stamp) < rospy.Duration(0.05):
             rospy.logdebug( 'Found' )
             return mid_index
 
@@ -100,7 +109,7 @@ def colocation_callback( data ):
     c_indx = binary_search_on_dequeue( data.c_timestamp )
     prev_indx = binary_search_on_dequeue( data.prev_timestamp )
     goodness = data.goodness # currently will be between 0 and 6. 6 means less confident that it is a loop_closure. 0 means most confident that it is a loop
-    goodness_color, _ = dist_to_color( goodness / 6.0 )
+    goodness_color, _ = dist_to_color( 2.5*(goodness-0.6) )
 
     # 1.1 Make points
     pt0 = _d[c_indx].pose.pose.position
@@ -139,6 +148,7 @@ rospy.loginfo( 'Subscribed to /colocation')
 
 
 pub_odometry = rospy.Publisher( '/colocation_viz/odom_marker', Marker, queue_size=100 )
+pub_curr_position = rospy.Publisher( '/colocation_viz/cur_position', Marker, queue_size=100 )
 pub_colocation = rospy.Publisher( '/colocation_viz/colocation_marker', Marker, queue_size=100 )
 seq = 0
 seq_odom = 0

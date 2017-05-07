@@ -60,7 +60,7 @@ PARAM_MODEL = PKG_PATH+'/tf.logs/netvlad_angular_loss_w_mini_dev/model-4000'
 PARAM_MODEL_DIM_RED = PKG_PATH+'/tf.logs/siamese_dimred_fc/model-400'
 
 PARAM_FPS = 25
-PARAM_FRAMES_SKIP = 3
+PARAM_FRAMES_SKIP = 2
 
 
 def signal_handler(signal, frame ):
@@ -198,15 +198,14 @@ curve2 = plot2.plot()
 plot3 = win.addPlot()
 curve3 = plot3.plot()
 curve_thresh = plot3.plot()
-plot4 = win.addPlot()
-curve4 = plot4.plot()
+
 # plot1.setRange( xRange=[0,1000 ], yRange=[0,1] )
 # plot2.setRange( xRange=[0,1000 ], yRange=[0,1] )
 # plot3.setRange( xRange=[0,1000 ], yRange=[0,15] )
 plot1.setRange( yRange=[0,1] )
 plot2.setRange( yRange=[0,1] )
 plot3.setRange( yRange=[0,10] )
-plot4.setRange( yRange=[0,32] )
+
 
 #
 # Main Loop
@@ -271,7 +270,7 @@ while not rospy.is_shutdown():
     ################## Array Insert (in S)
     startSimTime = time.time()
     S[loop_index,:] = d_CHAR
-    S_word[loop_index,:] = d_WORD
+    # S_word[loop_index,:] = d_WORD
     # S_im_index[loop_index] = int(im_indx)
     S_timestamp[loop_index] = im_raw_timestamp
     # sim_score =  1.0 - np.dot( S[0:loop_index+1,:], d_CHAR )
@@ -323,14 +322,14 @@ while not rospy.is_shutdown():
     w = np.convolve( w, [0.025,0.1,0.75,0.1,0.025], 'same' )
 
     w = w / sum(w)
-    w[0:L] = np.maximum( w[0:L], 1.0/L )
+    w[0:L] = np.maximum( w[0:L], 2.0/L )
     w[L:] = 1E-10
     rospy.logdebug( '[%4.2f ms] GridFilter Time for move' %(1000. * (time.time()-startMoveTime)) )
     publish_time( pub_time_grid_filter_move, (1000. * (time.time()-startMoveTime)) )
 
 
     thresh_log_scale = -np.log(1.0/L)
-    thresh_log_scale -= 0.1*thresh_log_scale
+    thresh_log_scale -= 0.15*thresh_log_scale
 
     # Plot bar graphs
     curve1.setData( range(len(sim_score)), sim_score )
@@ -348,8 +347,13 @@ while not rospy.is_shutdown():
 
     startTimePub = time.time()
     # Publish (c_timestamp, prev_timestamp, goodness)
+    # @Baysian Filter
     w_log = -np.log( w[0:L-20] ) #dont report on latest 20 frames
     argT = np.argwhere( w_log < thresh_log_scale ) #find all index of all elements in w less than 6
+
+    # @Raw sim scores
+    w_log = sim_scores_logistic[0:L-20]
+    argT = np.argwhere( w_log > 0.65 )
     for aT in argT:
         nap_msg = NapMsg()
         # nap_msg.c_timestamp = rospy.Time.now()
