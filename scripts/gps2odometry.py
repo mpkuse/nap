@@ -65,13 +65,26 @@ def compute_ecef_to_enu_transform( lati_r, longi_r ):
     return T_enu_ecef
 
 seq_odom = 0
+gps_home_set = False
+radar_lat = 0.0
+radar_long = 0.0
+radar_alti = 0.0
 def callback_gps(data):
+    global gps_home_set, radar_lat, radar_long, radar_alti
+    if gps_home_set is False:
+        radar_lat = data.latitude
+        radar_long = data.longitude
+        radar_alti = data.altitude
+        gps_home_set = True
+
+
     # rospy.logdebug( 'Rcvd')
     #################
     # Publish Satellitle Msg
     #################
     n = NavSatFix()
     n.header = data.header
+    n.header.frame_id = 'world'
     n.latitude = data.latitude
     n.longitude = data.longitude
     n.altitude = data.altitude
@@ -81,8 +94,11 @@ def callback_gps(data):
     # publish xyz as markers
     ###############22.334500, 114.263082
     # GPS (geodedic to Earth-center cords, ie. ecef )
-    Xr, Yr, Zr = geodedic_to_ecef( 22.334500, 114.263082, 173.073608398 ) #of radar
-    T_enu_ecef = compute_ecef_to_enu_transform( 22.334500,114.263082 )
+    # Xr, Yr, Zr = geodedic_to_ecef( 22.334500, 114.263082, 173.073608398 ) #of radar -hkust
+    # T_enu_ecef = compute_ecef_to_enu_transform( 22.334500,114.263082 )
+
+    Xr, Yr, Zr = geodedic_to_ecef( radar_lat, radar_long, radar_alti ) #of radar
+    T_enu_ecef = compute_ecef_to_enu_transform(radar_lat, radar_long )
 
     Xp, Yp, Zp = geodedic_to_ecef( data.latitude, data.longitude, data.altitude ) #curr pos of drone
 
@@ -132,8 +148,13 @@ def callback_gps(data):
 
 rospy.init_node( 'gps_test', anonymous=True)
 rospy.Subscriber( "/dji_sdk/global_position", GlobalPosition, callback_gps )
+print 'Subscribed to /dji_sdk/global_position'
 
 pub_satmsg = rospy.Publisher( 'chatter', NavSatFix, queue_size=10 )
-pub_odom_marker = rospy.Publisher( 'gps_odom_marker', Marker, queue_size=10 )
-pub_odom = rospy.Publisher( 'gps_odom', Odometry, queue_size=10 )
+print 'Publishing /chatter of type sensor_msgs.NavSatFix'
+
+pub_odom_marker = rospy.Publisher( '/gps_odom_marker', Marker, queue_size=10 )
+print 'Publishing gps_odom_marker of type visualization_msgs.Marker'
+pub_odom = rospy.Publisher( '/gps_odom', Odometry, queue_size=10 )
+print 'Publishing gps_odom of type nav_msgs.Odometry'
 rospy.spin()

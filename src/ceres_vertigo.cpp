@@ -582,18 +582,18 @@ private:
         getValueBetweenTwoFixedColors( max(0.0,min(1.0,psi)), r, g, b);
         // cout <<  edgeVec[i]->switch_opt_var << endl;
         // cout << r << " "<< " "<< g << " "<<b << endl;
-        // if( edgeVec[i]->edge_type == ODOMETRY_EDGE )
-        // {
-        //   r = 1.0; g=0.0; b=0.0;
-        // }
-        // if( edgeVec[i]->edge_type == CLOSURE_EDGE )
-        // {
-        //   r = 0.0; g=1.0; b=0.0;
-        // }
-        // if( edgeVec[i]->edge_type == BOGUS_EDGE )
-        // {
-        //   r = 0.0; g=0.0; b=1.0;
-        // }
+        if( edgeVec[i]->edge_type == ODOMETRY_EDGE )
+        {
+          r = 1.0; g=0.0; b=0.0;
+        }
+        if( edgeVec[i]->edge_type == CLOSURE_EDGE )
+        {
+          r = 0.0; g=1.0; b=0.0;
+        }
+        if( edgeVec[i]->edge_type == BOGUS_EDGE )
+        {
+          r = 0.0; g=0.0; b=1.0;
+        }
 
         color.r = r;
         color.g = g;
@@ -693,8 +693,8 @@ int main(int argc, char ** argv )
         Edge* ed = g.nEdgesClosure[i];
         ed->switch_prior = .9 + drand48() / 10.0;
         ed->switch_opt_var = ed->switch_prior;
-        // ceres::CostFunction * cost_function = SwitchableClosureResidue::Create( ed->x, ed->y, ed->theta, ed->switch_prior );
-        ceres::CostFunction * cost_function = SwitchableClosureResidue::Create( 0.0,0.0,  0.0, ed->switch_prior );
+        ceres::CostFunction * cost_function = SwitchableClosureResidue::Create( ed->x, ed->y, ed->theta, ed->switch_prior );
+        // ceres::CostFunction * cost_function = SwitchableClosureResidue::Create( 0.0,0.0,  0.0, ed->switch_prior );
 
         problem.AddResidualBlock( cost_function, /*new ceres::HuberLoss(0.01)*/NULL, ed->a->p, ed->b->p, &ed->switch_opt_var );
         // cout << ed->a->index << "---> " << ed->b->index << endl;
@@ -705,8 +705,8 @@ int main(int argc, char ** argv )
         Edge* ed = g.nEdgesBogus[i];
         ed->switch_prior = .9 + drand48() / 10.0;
         ed->switch_opt_var = ed->switch_prior;
-        // ceres::CostFunction * cost_function = SwitchableClosureResidue::Create( ed->x, ed->y, ed->theta, ed->switch_prior );
-        ceres::CostFunction * cost_function = SwitchableClosureResidue::Create( 0.0,0.0,  0.0, ed->switch_prior );
+        ceres::CostFunction * cost_function = SwitchableClosureResidue::Create( ed->x, ed->y, ed->theta, ed->switch_prior );
+        // ceres::CostFunction * cost_function = SwitchableClosureResidue::Create( 0.0,0.0,  0.0, ed->switch_prior );
 
         problem.AddResidualBlock( cost_function, /*new ceres::HuberLoss(0.01)*/NULL, ed->a->p, ed->b->p, &ed->switch_opt_var  );
         // cout << ed->a->index << "---> " << ed->b->index << endl;

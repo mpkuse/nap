@@ -9,6 +9,10 @@ colocation messages and odometry to produce rviz results.
 <arg name="bag_name" default="22.bag"/>
 <node name="rosbag" pkg="rosbag" type="play" args="-d 10 $(arg bag_base)/$(arg bag_name)" output="log" />
 
+<!--<arg name="colocation_topic" default="/colocation_dbow"/>-->
+<arg name="colocation_topic" default="/colocation"/>
+
+
 
 <!-- NAP Node -->
 <arg name="color_image_topic" default="/dji_sdk/image_raw"/>
@@ -16,16 +20,26 @@ colocation messages and odometry to produce rviz results.
   <remap to="$(arg color_image_topic)" from="/semi_keyframes"/>
 </node>
 
+<!-- DBOW Node -->
+<!--<node name="dbow_node" pkg="nap" type="dbow3_naive" output="screen">
+  <remap to="$(arg color_image_topic)" from="/color_image_inp" />
+</node>-->
 
 <!-- GPS Odometry Node -->
 <node name="gps2odometry" pkg="nap" type="gps2odometry.py" output="screen">
     <remap to="/dji_sdk/global_position" from="/dji_sdk/global_position" />
 </node>
 
+
 <!-- Colocation visualizer -->
-<node name="nap_viz" pkg="nap" type="colocation_viz.py" output="screen">
+<node name="colocation_viz" pkg="nap" type="colocation_viz.py" output="screen">
     <remap from="/vins_estimator/odometry" to="/gps_odom" />
+    <remap to="$(arg colocation_topic)" from="/colocation" />
 </node>
+
+
+<node name="rvizvisualisation" pkg="rviz" type="rviz" output="log" args="-d $(find nap)/rviz/viz_gps.rviz" />
+
 
 
 </launch>

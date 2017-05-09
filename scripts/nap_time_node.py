@@ -151,6 +151,8 @@ pub_time_similarity = rospy.Publisher( '/time/similarity', Float32, queue_size=1
 pub_time_grid_filter_sense = rospy.Publisher( '/time/grid_filter/sense', Float32, queue_size=1000)
 pub_time_grid_filter_move = rospy.Publisher( '/time/grid_filter/move', Float32, queue_size=1000)
 
+pub_time_ros_publish = rospy.Publisher( '/time/ros_publish', Float32, queue_size=1000)
+
 pub_time_total_loop = rospy.Publisher( '/time/total_loop', Float32, queue_size=1000)
 
 
@@ -270,12 +272,12 @@ while not rospy.is_shutdown():
     ################## Array Insert (in S)
     startSimTime = time.time()
     S[loop_index,:] = d_CHAR
-    # S_word[loop_index,:] = d_WORD
+    S_word[loop_index,:] = d_WORD
     # S_im_index[loop_index] = int(im_indx)
     S_timestamp[loop_index] = im_raw_timestamp
     # sim_score =  1.0 - np.dot( S[0:loop_index+1,:], d_CHAR )
-    sim_score =  np.sqrt( 1.0 - np.minimum(1.0, np.dot( S[0:loop_index+1,:], d_CHAR )) ) #minimum is added to ensure dot product doesnt go beyond 1.0 as it sometimes happens because of numerical issues, which inturn causes issues with sqrt
-    # sim_score =  np.sqrt( 1.0 - np.minimum( 1.0, np.dot( S_word[0:loop_index+1,:], d_WORD ) ) )
+    # sim_score =  np.sqrt( 1.0 - np.minimum(1.0, np.dot( S[0:loop_index+1,:], d_CHAR )) ) #minimum is added to ensure dot product doesnt go beyond 1.0 as it sometimes happens because of numerical issues, which inturn causes issues with sqrt
+    sim_score =  np.sqrt( 1.0 - np.minimum( 1.0, np.dot( S_word[0:loop_index+1,:], d_WORD ) ) )
     # sim_score =  np.dot( S[:loop_index,:], d_CHAR )
 
     sim_scores_logistic = logistic( sim_score ) #convert the raw Similarity scores above to likelihoods
@@ -365,6 +367,8 @@ while not rospy.is_shutdown():
         pub_colocation.publish( nap_msg )
         rospy.loginfo( 'c_time=%s ; prev_time=%s ; goodness=%f' %(str(S_timestamp[L-1]), str(S_timestamp[aT]), w_log[aT] ) )
 
+
+    publish_time( pub_time_ros_publish, (1000.0*(time.time()-startTimePub)))
 
     # rospy.loginfo( '[%6.2fms] SPublished in ' %( (time.time() - startTimePub)*1000. ) )
     publish_time( pub_time_total_loop, (1000.0*(time.time()-startTimeTotalLoop)))

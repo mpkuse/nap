@@ -5,6 +5,7 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Grid1
+        - /track_Image1
         - /Colocation Lines1
         - /Image1
         - /Odometry1
@@ -29,7 +30,7 @@ Panels:
     Experimental: false
     Name: Time
     SyncMode: 0
-    SyncSource: Image
+    SyncSource: track_Image
 Visualization Manager:
   Class: ""
   Displays:
@@ -108,27 +109,18 @@ Visualization Manager:
       Frame Timeout: 15
       Frames:
         All Enabled: true
-        body:
-          Value: true
-        camera:
-          Value: true
-        world:
-          Value: true
       Marker Scale: 1
       Name: TF
       Show Arrows: false
       Show Axes: true
       Show Names: true
       Tree:
-        world:
-          body:
-            camera:
-              {}
+        {}
       Update Interval: 0
       Value: true
     - Class: rviz/Image
       Enabled: true
-      Image Topic: /feature_tracker/feature_img
+      Image Topic: /djiros/image
       Max Value: 1
       Median window: 5
       Min Value: 0
@@ -143,7 +135,7 @@ Visualization Manager:
       Marker Topic: /vins_estimator/camera_pose_visual
       Name: MarkerArray
       Namespaces:
-        CameraPoseVisualization: true
+        {}
       Queue Size: 100
       Value: true
     - Class: rviz/Marker
@@ -151,12 +143,12 @@ Visualization Manager:
       Marker Topic: /colocation_viz/colocation_marker
       Name: Colocation Lines
       Namespaces:
-        "": true
+        {}
       Queue Size: 100
       Value: true
     - Class: rviz/Image
       Enabled: true
-      Image Topic: /dji_sdk/image_raw_resized
+      Image Topic: /mv_29900616/image_raw
       Max Value: 1
       Median window: 5
       Min Value: 0
@@ -245,7 +237,7 @@ Window Geometry:
   Views:
     collapsed: true
   Width: 1215
-  X: 162
-  Y: 310
+  X: 160
+  Y: 254
   track_Image:
     collapsed: false

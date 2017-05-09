@@ -63,7 +63,7 @@ Visualization Manager:
       Marker Topic: /nodes
       Name: Nodes
       Namespaces:
-        {}
+        my_namespace: true
       Queue Size: 100
       Value: true
     - Class: rviz/Marker
@@ -71,7 +71,7 @@ Visualization Manager:
       Marker Topic: /edges
       Name: Edges
       Namespaces:
-        {}
+        my_namespace: true
       Queue Size: 100
       Value: true
   Enabled: true
@@ -98,24 +98,24 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 193.136276
+      Distance: 141.541428
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.0599999987
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 12.9571714
-        Y: -7.20147133
-        Z: -18.6718979
+        X: 33.3025055
+        Y: -21.861515
+        Z: -27.2086353
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.0500000007
       Name: Current View
       Near Clip Distance: 0.00999999978
-      Pitch: 1.56979632
+      Pitch: 1.41979671
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 4.71036911
+      Yaw: 4.59037828
     Saved: ~
 Window Geometry:
   Displays:

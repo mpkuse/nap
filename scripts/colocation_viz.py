@@ -64,6 +64,8 @@ def odometry_callback( data ):
 ## Binary Search on timestamps
 def binary_search_on_dequeue( time_stamp ):
     # My implementation
+    if len(_d) == 0:
+        return -1
     left_index = 0
     right_index = len(_d) - 1
     mid_index = (left_index + right_index)//2
@@ -75,7 +77,7 @@ def binary_search_on_dequeue( time_stamp ):
             return -1
 
         # test for equality
-        if abs(time_stamp - _d[mid_index].header.stamp) < rospy.Duration(0.05):
+        if abs(time_stamp - _d[mid_index].header.stamp) < rospy.Duration(0.1):
             rospy.logdebug( 'Found' )
             return mid_index
 
@@ -108,6 +110,12 @@ def colocation_callback( data ):
     # 1. do a binary search on the deque with data.c_timestamp and data.prev_timestamp
     c_indx = binary_search_on_dequeue( data.c_timestamp )
     prev_indx = binary_search_on_dequeue( data.prev_timestamp )
+    print  data.c_timestamp, '<--->', data.prev_timestamp
+    print  c_indx, '<--->', prev_indx
+    print '(%d)' %(len(_d)), _d[-1].header.stamp, ', ', _d[-2].header.stamp, ', ', _d[-3].header.stamp
+
+    if prev_indx < 0:
+        return None
     goodness = data.goodness # currently will be between 0 and 6. 6 means less confident that it is a loop_closure. 0 means most confident that it is a loop
     goodness_color, _ = dist_to_color( 2.5*(goodness-0.6) )
 
@@ -118,7 +126,7 @@ def colocation_callback( data ):
     # 2. make 2 markers which represents a line using poses from part-1 (above)
     m = Marker()
     m.header = _d[c_indx].header
-    m.lifetime = rospy.Duration(1)
+    m.lifetime = rospy.Duration(0)
     m.id = seq
     seq += 1
     m.type = Marker.LINE_LIST
@@ -128,9 +136,9 @@ def colocation_callback( data ):
     m.scale.y = 0.5
     m.scale.z = 0.0
     m.color.a = 0.5
-    m.color.r = goodness_color[0]#1.0
-    m.color.g = goodness_color[1]#1.0
-    m.color.b = goodness_color[2]#0.0
+    m.color.r = 1.0#goodness_color[0]#1.0
+    m.color.g = 0.0#goodness_color[1]#1.0
+    m.color.b = 0.0#goodness_color[2]#0.0
 
 
     # 3. publish
@@ -139,7 +147,7 @@ def colocation_callback( data ):
 
 
 
-rospy.init_node( 'colocation_viz' )
+rospy.init_node( 'colocation_viz', log_level=rospy.INFO )
 rospy.Subscriber( '/vins_estimator/odometry', Odometry, odometry_callback )
 rospy.loginfo( 'Subscribed to /vins_estimator/odometry')
 
