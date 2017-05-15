@@ -4,16 +4,7 @@ Panels:
     Name: Displays
     Property Tree Widget:
       Expanded:
-        - /Global Options1
-        - /Status1
-        - /Grid1
-        - /Axes1
-        - /Image1
-        - /Odometry1
-        - /Odometry1/Status1
-        - /AerialMapDisplay1
-        - /GPS Odom Marker1
-        - /Colocation Marker1
+        - /RawEdge1
       Splitter Ratio: 0.5
     Tree Height: 387
   - Class: rviz/Selection
@@ -38,31 +29,35 @@ Panels:
 Visualization Manager:
   Class: ""
   Displays:
-    - Alpha: 0.5
-      Cell Size: 10
-      Class: rviz/Grid
-      Color: 160; 160; 164
+    - Class: rviz/Group
+      Displays:
+        - Alpha: 0.5
+          Cell Size: 10
+          Class: rviz/Grid
+          Color: 160; 160; 164
+          Enabled: true
+          Line Style:
+            Line Width: 0.0299999993
+            Value: Lines
+          Name: Grid
+          Normal Cell Count: 0
+          Offset:
+            X: 0
+            Y: 0
+            Z: 0
+          Plane: XY
+          Plane Cell Count: 100
+          Reference Frame: <Fixed Frame>
+          Value: true
+        - Class: rviz/Axes
+          Enabled: true
+          Length: 10
+          Name: Axes
+          Radius: 1
+          Reference Frame: <Fixed Frame>
+          Value: true
       Enabled: true
-      Line Style:
-        Line Width: 0.0299999993
-        Value: Lines
-      Name: Grid
-      Normal Cell Count: 0
-      Offset:
-        X: 0
-        Y: 0
-        Z: 0
-      Plane: XY
-      Plane Cell Count: 100
-      Reference Frame: <Fixed Frame>
-      Value: true
-    - Class: rviz/Axes
-      Enabled: true
-      Length: 10
-      Name: Axes
-      Radius: 1
-      Reference Frame: <Fixed Frame>
-      Value: true
+      Name: Ref
     - Class: rviz/Image
       Enabled: true
       Image Topic: /dji_sdk/image_raw
@@ -99,17 +94,41 @@ Visualization Manager:
       Value: true
       Zoom: 18
     - Class: rviz/Marker
-      Enabled: true
+      Enabled: false
       Marker Topic: /gps_odom_marker
       Name: GPS Odom Marker
+      Namespaces:
+        {}
+      Queue Size: 100
+      Value: false
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /colocation_viz/colocation_marker
+      Name: Colocation Marker
+      Namespaces:
+        {}
+      Queue Size: 100
+      Value: true
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /colocation_viz/cur_position
+      Name: Current Postion
       Namespaces:
         "": true
       Queue Size: 100
       Value: true
     - Class: rviz/Marker
       Enabled: true
-      Marker Topic: /colocation_viz/colocation_marker
-      Name: Colocation Marker
+      Marker Topic: /colocation_viz/raw/node
+      Name: RawNode
+      Namespaces:
+        "": true
+      Queue Size: 100
+      Value: true
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /colocation_viz/raw/edge
+      Name: RawEdge
       Namespaces:
         "": true
       Queue Size: 100
@@ -138,24 +157,24 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 1037.85938
+      Distance: 435.869537
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.0599999987
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -25.2247334
-        Y: -41.6439667
-        Z: -89.1576157
+        X: -30.4223881
+        Y: -2.41478324
+        Z: -55.5412903
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.0500000007
       Name: Current View
       Near Clip Distance: 0.00999999978
-      Pitch: 1.13979626
+      Pitch: 0.424796641
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 5.22852468
+      Yaw: 4.85852909
     Saved: ~
 Window Geometry:
   Displays:

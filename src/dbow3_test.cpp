@@ -47,7 +47,7 @@ int main()
   // images_path.push_back("/home/mpkuse/catkin_ws/src/nap/slam_data/dbow3_vocab/Images/lip6kennedy_bigdoubleloop_000002.ppm");
   // images_path.push_back("/home/mpkuse/catkin_ws/src/nap/slam_data/dbow3_vocab/Images/lip6kennedy_bigdoubleloop_000003.ppm");
 
-  for( size_t i=0; i<385 ; i++ )
+  for( size_t i=0; i<10 ; i++ )
   {
     ostringstream ss;
     ss << BASE_PATH << std::setw(6) << std::setfill('0') << i << ".ppm";
@@ -60,6 +60,7 @@ int main()
 
   vector< cv::Mat   >   features= loadFeatures(images_path,"orb");
 
+  BowVector bow_vec;
 
 
   Vocabulary voc("/home/mpkuse/catkin_ws/src/nap/slam_data/dbow3_vocab/orbvoc.dbow3");
@@ -67,9 +68,13 @@ int main()
 
   // add images to the database
  for(size_t i = 0; i < features.size(); i++)
-     db.add(features[i]);
+ {
+     db.add(features[i], &bow_vec );
+     cout << "bow_vec.size() : "<< bow_vec.size() << endl;
+ }
 
   cout << "Database information: " << endl << db << endl;
+  return 0;
 
 
   QueryResults ret;
@@ -84,6 +89,6 @@ int main()
   // }
 
   db.query(features[71], ret, 20);
-  cout << "Searching for Image " << i << ". " << ret << endl;
+  cout << "Searching for Image " << 71 << ". " << ret << endl;
 
 }

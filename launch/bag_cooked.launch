@@ -16,23 +16,34 @@ This can be visualized with rviz
 <!-- BAG -->
 <arg name="bag_base" default="/media/mpkuse/Bulk_Data/other_seqs/tony_bags/"/>
 <arg name="bag_name" default="dji_00_cooked.bag"/>
-<node name="rosbag" pkg="rosbag" type="play" args="-r 1 -d 10 $(arg bag_base)/$(arg bag_name)" output="log" />
+<node name="rosbag" pkg="rosbag" type="play" args="-r 2 -d 10 $(arg bag_base)/$(arg bag_name)" output="log" />
+
+
+<!-- Nap Node -->
+<node name="nap" pkg="nap" type="nap_geom_node.py" output="screen" >
+  <remap to="$(arg bag_color_im_topic)" from="/semi_keyframes"/>
+</node>
 
 
 
 <!-- DBOW node -->
-<node name="dbow_node" pkg="nap" type="dbow3_naive" output="log">
+<!--<node name="dbow_node" pkg="nap" type="dbow3_naive" output="screen">
   <remap to="$(arg bag_color_im_topic)" from="/color_image_inp" />
-</node>
+</node>-->
 
 
 <!-- Colocation viz -->
-<node name="nap_viz" pkg="nap" type="colocation_viz.py" output="screen" > <!-- subscribes to /vins_estimator/odometry -->
+<node name="colocation_viz2" pkg="nap" type="colocation_viz2.py" output="log" > <!-- subscribes to /vins_estimator/odometry -->
   <remap to="$(arg bag_odometry_topic)" from="/vins_estimator/odometry"/>
   <remap to="$(arg colocation_topic)" from="/colocation" />
 </node>
 
+<!-- Write Odometry to file(debug) -->
+<node name="odometry2file" pkg="nap" type="odometry2file.py" output="screen">
+  <remap from="/vins_estimator/odometry" to="$(arg bag_odometry_topic)" />
+</node>
+
 <!-- RVIZ -->
-<node name="rvizvisualisation" pkg="rviz" type="rviz" output="log" args="-d $(find nap)/rviz/euroc.rviz" />
+<node name="rvizvisualisation" pkg="rviz" type="rviz" output="log" args="-d $(find nap)/rviz/viz_gps.rviz" />
 
 </launch>

@@ -14,6 +14,7 @@ import rospy
 
 import collections
 import numpy as np
+import code
 
 from nav_msgs.msg import Odometry
 from visualization_msgs.msg import Marker
@@ -126,7 +127,7 @@ def colocation_callback( data ):
     # 2. make 2 markers which represents a line using poses from part-1 (above)
     m = Marker()
     m.header = _d[c_indx].header
-    m.lifetime = rospy.Duration(0)
+    m.lifetime = rospy.Duration(0) #set this to zero => colocation edges are never deleted. positive value will cause the edges to disappear after this many seconds
     m.id = seq
     seq += 1
     m.type = Marker.LINE_LIST
@@ -155,9 +156,9 @@ rospy.Subscriber( '/colocation', NapMsg, colocation_callback )
 rospy.loginfo( 'Subscribed to /colocation')
 
 
-pub_odometry = rospy.Publisher( '/colocation_viz/odom_marker', Marker, queue_size=100 )
-pub_curr_position = rospy.Publisher( '/colocation_viz/cur_position', Marker, queue_size=100 )
-pub_colocation = rospy.Publisher( '/colocation_viz/colocation_marker', Marker, queue_size=100 )
+pub_odometry = rospy.Publisher( '/colocation_viz/odom_marker', Marker, queue_size=1000 )
+pub_curr_position = rospy.Publisher( '/colocation_viz/cur_position', Marker, queue_size=1000 )
+pub_colocation = rospy.Publisher( '/colocation_viz/colocation_marker', Marker, queue_size=1000 )
 seq = 0
 seq_odom = 0
 _d = collections.deque()

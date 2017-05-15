@@ -16,12 +16,13 @@ find_package(Ceres REQUIRED)
 find_package(DBoW3 REQUIRED )
 find_package(OpenCV REQUIRED)
 
-set( CMAKE_CXX_FLAGS "-fpermissive" )
+set( CMAKE_CXX_FLAGS "-fpermissive -std=c++11" )
 
 ## Generate messages in the 'msg' folder
 add_message_files(
   FILES
   NapMsg.msg
+  NapNodeMsg.msg
 )
 
 ## Generate added messages and services with any dependencies listed here

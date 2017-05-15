@@ -350,12 +350,12 @@ while not rospy.is_shutdown():
     startTimePub = time.time()
     # Publish (c_timestamp, prev_timestamp, goodness)
     # @Baysian Filter
-    w_log = -np.log( w[0:L-20] ) #dont report on latest 20 frames
+    w_log = -np.log( w[0:L-200] ) #dont report on latest 20 frames
     argT = np.argwhere( w_log < thresh_log_scale ) #find all index of all elements in w less than 6
 
     # @Raw sim scores
-    w_log = sim_scores_logistic[0:L-20]
-    argT = np.argwhere( w_log > 0.65 )
+    w_log = sim_scores_logistic[0:L-200]
+    argT = np.argwhere( w_log > 0.60 )
     for aT in argT:
         nap_msg = NapMsg()
         # nap_msg.c_timestamp = rospy.Time.now()

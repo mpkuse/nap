@@ -6,7 +6,8 @@
 
         gps.lat and gps.long converted to xyz. Published as odometry msg.
 """
-
+# PKG_PATH = rospkg.RosPack().get_path('nap')
+PKG_PATH = '/home/mpkuse/catkin_ws/src/nap/'
 
 import rospy
 from dji_sdk.msg import GlobalPosition
@@ -146,6 +147,8 @@ def callback_gps(data):
 
 
 
+
+
 rospy.init_node( 'gps_test', anonymous=True)
 rospy.Subscriber( "/dji_sdk/global_position", GlobalPosition, callback_gps )
 print 'Subscribed to /dji_sdk/global_position'
@@ -157,4 +160,6 @@ pub_odom_marker = rospy.Publisher( '/gps_odom_marker', Marker, queue_size=10 )
 print 'Publishing gps_odom_marker of type visualization_msgs.Marker'
 pub_odom = rospy.Publisher( '/gps_odom', Odometry, queue_size=10 )
 print 'Publishing gps_odom of type nav_msgs.Odometry'
+
+
 rospy.spin()

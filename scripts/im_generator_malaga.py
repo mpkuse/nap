@@ -26,7 +26,7 @@ PKG_PATH = '/home/mpkuse/catkin_ws/src/nap/'
 # c) malaga-urban-dataset-extract-10_all-sensors_IMAGES.txt (list of images note: image file names have timestamps)
 PARAM_DATASET_ID = 99
 PARAM_TIME_SUBSAMPLE = 1 #use every 10th frame
-PARAM_FPS = 30 #frames per sec
+PARAM_FPS = 20 #frames per sec
 
 PARAM_DATASET_PATH = PKG_PATH+'other_seqs/malaga_dataset/malaga-urban-dataset-extract-%02d/' %(PARAM_DATASET_ID)
 
