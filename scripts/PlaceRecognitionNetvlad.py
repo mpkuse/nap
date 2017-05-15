@@ -30,7 +30,7 @@ import TerminalColors
 tcolor = TerminalColors.bcolors()
 
 class PlaceRecognitionNetvlad:
-    def __init__(self, PARAM_MODEL, PARAM_MODEL_DIM_RED, PARAM_CALLBACK_SKIP=2):
+    def __init__(self, PARAM_MODEL, PARAM_CALLBACK_SKIP=2):
         #
         # Init netvlad - def computational graph, load trained model
         self.tf_x = tf.placeholder( 'float', [None,240,320,3], name='x' )
@@ -43,15 +43,6 @@ class PlaceRecognitionNetvlad:
         tensorflow_saver.restore( self.tensorflow_session, PARAM_MODEL )
 
 
-        #
-        # Init DimRed Mapping (Dimensionality Reduction by Learning Invariant Mapping)
-        if PARAM_MODEL_DIM_RED is not None:
-            self.dm_vlad_word = tf.placeholder( 'float', [None,None], name='vlad_word' )
-            self.net = DimRed.DimRed()
-            self.dm_vlad_char = self.net.fc( self.dm_vlad_word )
-            tensorflow_saver2 = tf.train.Saver( self.net.return_vars() )
-            print tcolor.OKGREEN,'Restore model from : ', PARAM_MODEL_DIM_RED, tcolor.ENDC
-            tensorflow_saver2.restore( self.tensorflow_session, PARAM_MODEL_DIM_RED )
 
 
         #
@@ -62,7 +53,22 @@ class PlaceRecognitionNetvlad:
         self.PARAM_CALLBACK_SKIP = PARAM_CALLBACK_SKIP
 
         self.PARAM_MODEL = PARAM_MODEL
-        self.PARAM_MODEL_DIM_RED = PARAM_MODEL_DIM_RED
+        self.PARAM_MODEL_DIM_RED = None
+
+    def load_siamese_dim_red_module( self, PARAM_MODEL_DIM_RED, PARAM_input_dim, PARAM_net_intermediate_dim, PARAM_net_out_dim ):
+        #
+        # Init DimRed Mapping (Dimensionality Reduction by Learning Invariant Mapping)
+        if PARAM_MODEL_DIM_RED is not None:
+            self.dm_vlad_word = tf.placeholder( 'float', [None,None], name='vlad_word' )
+
+            self.net = DimRed.DimRed(n_input_dim=PARAM_input_dim, n_intermediate_dim=PARAM_net_intermediate_dim, n_output_dim=PARAM_net_out_dim)
+            self.dm_vlad_char = self.net.fc( self.dm_vlad_word )
+            tensorflow_saver2 = tf.train.Saver( self.net.return_vars() )
+            print tcolor.OKGREEN,'Restore model from : ', PARAM_MODEL_DIM_RED, tcolor.ENDC
+            tensorflow_saver2.restore( self.tensorflow_session, PARAM_MODEL_DIM_RED )
+
+            self.PARAM_MODEL_DIM_RED = PARAM_MODEL_DIM_RED
+
 
 
     ## Subscribes to image message and store in internal queue
@@ -134,7 +140,7 @@ class PlaceRecognitionNetvlad:
 
         # Dim Reduction
         if self.PARAM_MODEL_DIM_RED is None:
-            rospy.logerror( "PARAM_MODEL_DIM_RED is not loaded")
+            rospy.logerror( "PARAM_MODEL_DIM_RED is not loaded. You should probably be calling `extract_descriptor()`")
             return None
 
         dmm_vlad_char = self.tensorflow_session.run( self.dm_vlad_char, feed_dict={self.dm_vlad_word: tff_vlad_word})

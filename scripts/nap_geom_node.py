@@ -37,11 +37,14 @@ import networkx as nx
 # PKG_PATH = rospkg.RosPack().get_path('nap')
 PKG_PATH = '/home/mpkuse/catkin_ws/src/nap/'
 PARAM_MODEL = PKG_PATH+'/tf.logs/netvlad_k48/model-13000' #PKG_PATH+'/tf.logs/netvlad_angular_loss_w_mini_dev/model-4000'
-PARAM_MODEL_DIM_RED = None#PKG_PATH+'/tf.logs/siamese_dimred_fc/model-400'
+PARAM_MODEL_DIM_RED = PKG_PATH+'/tf.logs/netvlad_k48/db2/siamese_dimred/model-400' #PKG_PATH+'/tf.logs/siamese_dimred_fc/model-400'
 
-# INPUT_IMAGE_TOPIC = '/dji_sdk/image_raw'
+PARAM_NETVLAD_WORD_DIM = 12288 # If these are not compatible with tensorfloaw model files program will fail
+PARAM_NETVLAD_CHAR_DIM = 256
+
+INPUT_IMAGE_TOPIC = '/dji_sdk/image_raw'
 # INPUT_IMAGE_TOPIC = '/youtube_camera/image'
-INPUT_IMAGE_TOPIC = '/semi_keyframes'
+# INPUT_IMAGE_TOPIC = '/semi_keyframes' #this is t be used for launch
 PARAM_CALLBACK_SKIP = 2
 
 PARAM_FPS = 25
@@ -52,11 +55,10 @@ def publish_time( PUB, time_ms ):
 ########### Init PlaceRecognitionNetvlad ##########
 place_mod = PlaceRecognitionNetvlad(\
                                     PARAM_MODEL,\
-                                    PARAM_MODEL_DIM_RED,\
                                     PARAM_CALLBACK_SKIP=PARAM_CALLBACK_SKIP\
                                     )
 
-
+place_mod.load_siamese_dim_red_module( PARAM_MODEL_DIM_RED, PARAM_NETVLAD_WORD_DIM, 1024, PARAM_NETVLAD_CHAR_DIM  )
 
 ################### Init Node and Topics ############
 rospy.init_node( 'nap_geom_node', log_level=rospy.INFO )
@@ -82,16 +84,17 @@ pub_time_total_loop = rospy.Publisher( '/time/total', Float32, queue_size=1000)
 
 
 #################### Init Plotter #####################
-plotter = FastPlotter(n=3)
+plotter = FastPlotter(n=4)
 plotter.setRange( 0, yRange=[0,1] )
 plotter.setRange( 1, yRange=[0,1] )
 plotter.setRange( 2, yRange=[0,1] )
+plotter.setRange( 3, yRange=[0,1] )
 
 ##################### Main Loop ########################
 rate = rospy.Rate(PARAM_FPS)
-S_char = np.zeros( (25000,128) ) #char
+S_char = np.zeros( (25000,PARAM_NETVLAD_CHAR_DIM) ) #char
 # S_word = np.zeros( (25000,8192) ) #word
-S_word = np.zeros( (25000,12288) ) #word-48
+S_word = np.zeros( (25000,PARAM_NETVLAD_WORD_DIM) ) #word-48
 S_timestamp = np.zeros( 25000, dtype=rospy.Time )
 S_thumbnail = []
 G = nx.Graph()
@@ -120,21 +123,22 @@ while not rospy.is_shutdown():
     #---------------------- Descriptor Extractor ------------------#
     startDescComp = time.time()
     rospy.loginfo( 'NetVLAD Computation' )
-    # d_CHAR, d_WORD = place_mod.extract_reduced_descriptor(im_raw)
-    d_WORD = place_mod.extract_descriptor(im_raw)
+    d_CHAR, d_WORD = place_mod.extract_reduced_descriptor(im_raw)
+    # d_WORD = place_mod.extract_descriptor(im_raw)
     publish_time( pub_time_desc_comp, 1000.*(time.time() - startDescComp) )
-    print d_WORD.shape
+    print 'Word Shape : ', d_WORD.shape
+    print 'Char Shape : ', d_CHAR.shape
     #---------------------------- END  -----------------------------#
 
     #------------------- Storage & Score Computation ----------------#
     rospy.loginfo( 'Storage & Score Computation' )
-    # S_char[loop_index,:] = d_CHAR
+    S_char[loop_index,:] = d_CHAR
     S_word[loop_index,:] = d_WORD
     S_timestamp[loop_index] = im_raw_timestamp
     S_thumbnail.append(  cv2.resize( im_raw.astype('uint8'), (0,0), fx=0.2, fy=0.2 ) )
 
-    # DOT = np.dot( S_char[0:loop_index+1,:], S_char[loop_index,:] )
-    DOT = np.dot( S_word[0:loop_index+1,:], S_word[loop_index,:] )
+    DOT = np.dot( S_char[0:loop_index+1,:], S_char[loop_index,:] )
+    DOT_word = np.dot( S_word[0:loop_index+1,:], S_word[loop_index,:] )
     sim_scores =  np.sqrt( 1.0 - np.minimum(1.0, DOT ) ) #minimum is added to ensure dot product doesnt go beyond 1.0 as it sometimes happens because of numerical issues, which inturn causes issues with sqrt
     sim_scores_logistic = place_mod.logistic( sim_scores ) #convert the raw Similarity scores above to likelihoods
     #---------------------------- END  -----------------------------#
@@ -142,8 +146,9 @@ while not rospy.is_shutdown():
 
     # Plot sim_scores
     plotter.set_data( 0, range(len(DOT)), DOT, title="DOT"  )
-    plotter.set_data( 1, range(len(sim_scores)), sim_scores, title="sim_scores"  )
-    plotter.set_data( 2, range(len(sim_scores_logistic)), sim_scores_logistic, title="sim_scores_logistic"  )
+    plotter.set_data( 1, range(len(DOT_word)), DOT_word, title="DOT_word"  )
+    plotter.set_data( 2, range(len(sim_scores)), sim_scores, title="sim_scores"  )
+    plotter.set_data( 3, range(len(sim_scores_logistic)), sim_scores_logistic, title="sim_scores_logistic"  )
     plotter.spin()
 
     #--------------------- Graph Build  --------------------------------#
