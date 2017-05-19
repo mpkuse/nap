@@ -27,7 +27,7 @@ PKG_PATH = '/home/mpkuse/catkin_ws/src/nap/'
 
 gps_t, gps_x, gps_y, gps_z = np.loadtxt( PKG_PATH+'/DUMP/GPS_track.csv', dtype={'names':('t','x','y','z'), 'formats':('i8', 'f4', 'f4', 'f4') }, delimiter=',', unpack=True)
 
-G = nx.read_gexf( PKG_PATH+'/DUMP/Graph.gexf' )
+G = nx.read_gexf( PKG_PATH+'/DUMP/Graph_head_nodes.gexf' )
 
 pos1 = gps_layout2d( G, gps_t, gps_x, gps_y )
 pos = nx.circular_layout( G )

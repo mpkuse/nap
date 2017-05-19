@@ -4,12 +4,13 @@
     Images are indexed by time. In the future possibly index with distance
     using an IMU. Note that this script does not know about poses (generated from SLAM system)
 
-    In this edition of this script, there is an attempt to organize this code.
+    In this edition (2) of this script, there is an attempt to organize this code.
     The core netvlad place recognition system is moved into the class
     `PlaceRecognition`.
 
         Author  : Manohar Kuse <mpkuse@connect.ust.hk>
         Created : 3rd Apr, 2017
+        Edition : 2 (of nap_time_node.py)
 """
 
 
@@ -42,8 +43,8 @@ PARAM_MODEL_DIM_RED = PKG_PATH+'/tf.logs/netvlad_k48/db2/siamese_dimred/model-40
 PARAM_NETVLAD_WORD_DIM = 12288 # If these are not compatible with tensorfloaw model files program will fail
 PARAM_NETVLAD_CHAR_DIM = 256
 
-INPUT_IMAGE_TOPIC = '/dji_sdk/image_raw'
-# INPUT_IMAGE_TOPIC = '/youtube_camera/image'
+# INPUT_IMAGE_TOPIC = '/dji_sdk/image_raw'
+INPUT_IMAGE_TOPIC = '/youtube_camera/image'
 # INPUT_IMAGE_TOPIC = '/semi_keyframes' #this is t be used for launch
 PARAM_CALLBACK_SKIP = 2
 
@@ -135,11 +136,11 @@ while not rospy.is_shutdown():
     S_char[loop_index,:] = d_CHAR
     S_word[loop_index,:] = d_WORD
     S_timestamp[loop_index] = im_raw_timestamp
-    S_thumbnail.append(  cv2.resize( im_raw.astype('uint8'), (0,0), fx=0.2, fy=0.2 ) )
+    S_thumbnail.append(  cv2.resize( im_raw.astype('uint8'), (128,96) ) )#, fx=0.2, fy=0.2 ) )
 
     DOT = np.dot( S_char[0:loop_index+1,:], S_char[loop_index,:] )
     DOT_word = np.dot( S_word[0:loop_index+1,:], S_word[loop_index,:] )
-    sim_scores =  np.sqrt( 1.0 - np.minimum(1.0, DOT ) ) #minimum is added to ensure dot product doesnt go beyond 1.0 as it sometimes happens because of numerical issues, which inturn causes issues with sqrt
+    sim_scores =  np.sqrt( 1.0 - np.minimum(1.0, DOT_word ) ) #minimum is added to ensure dot product doesnt go beyond 1.0 as it sometimes happens because of numerical issues, which inturn causes issues with sqrt
     sim_scores_logistic = place_mod.logistic( sim_scores ) #convert the raw Similarity scores above to likelihoods
     #---------------------------- END  -----------------------------#
 
@@ -154,6 +155,7 @@ while not rospy.is_shutdown():
     #--------------------- Graph Build  --------------------------------#
     print 'Added Node : ', loop_index
     G.add_node(loop_index, time_stamp=str(im_raw_timestamp))
+
     node_msg = NapNodeMsg()
     node_msg.node_timestamp = rospy.Time.from_sec( float(im_raw_timestamp.to_sec()) )
     node_msg.node_label = str(loop_index)
@@ -180,18 +182,18 @@ while not rospy.is_shutdown():
     if len(argT ) < 1:
         continue
     for aT in argT[0]:
-        print aT
-        print '%d<--->%d' %(L,aT)
+        # print aT
+        # print '%d<--->%d' %(L,aT)
         nap_msg = NapMsg()
-        nap_msg.c_timestamp = rospy.Time.from_sec( float(S_timestamp[L-1].to_sec()) )
+        nap_msg.c_timestamp = rospy.Time.from_sec( float(S_timestamp[L].to_sec()) )
         nap_msg.prev_timestamp = rospy.Time.from_sec( float(S_timestamp[aT].to_sec()) )
         nap_msg.goodness = sim_scores_logistic[aT]
         pub_colocation.publish( nap_msg ) #TODO this is suppose to only publish filtered edges
 
         if float(S_timestamp[L-1].to_sec() - S_timestamp[aT].to_sec())>10.:
             pub_edge_msg.publish( nap_msg ) #publish raw edges (all)
-            print 'Add Edge : ', loop_index-1, aT
-            G.add_edge(loop_index-1, aT, weight=sim_scores_logistic[aT])
+            # print 'Add Edge : ', loop_index-1, aT
+            # G.add_edge(loop_index-1, aT, weight=sim_scores_logistic[aT])
 
 
     publish_time( pub_time_publish, 1000.*(time.time() - startPublish) )
@@ -205,6 +207,7 @@ print 'Writing ', PKG_PATH+'/DUMP/S_char.npy'
 print 'Writing ', PKG_PATH+'/DUMP/S_thumbnail.npy'
 np.save( PKG_PATH+'/DUMP/S_word.npy', S_word[0:loop_index+1] )
 np.save( PKG_PATH+'/DUMP/S_char.npy', S_char[0:loop_index+1] )
+np.save( PKG_PATH+'/DUMP/S_timestamp.npy', S_timestamp[0:loop_index+1] )
 np.save( PKG_PATH+'/DUMP/S_thumbnail.npy', S_thumbnail )
 
 print 'Writing Graph : ', PKG_PATH+'/DUMP/Graph.adjlist'

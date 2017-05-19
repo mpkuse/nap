@@ -4,6 +4,7 @@ Panels:
     Name: Displays
     Property Tree Widget:
       Expanded:
+        - /Image1
         - /RawEdge1
       Splitter Ratio: 0.5
     Tree Height: 387
@@ -60,7 +61,7 @@ Visualization Manager:
       Name: Ref
     - Class: rviz/Image
       Enabled: true
-      Image Topic: /dji_sdk/image_raw
+      Image Topic: /dji_sdk/image_raw_resized
       Max Value: 1
       Median window: 5
       Min Value: 0
@@ -130,7 +131,7 @@ Visualization Manager:
       Marker Topic: /colocation_viz/raw/edge
       Name: RawEdge
       Namespaces:
-        "": true
+        {}
       Queue Size: 100
       Value: true
   Enabled: true
