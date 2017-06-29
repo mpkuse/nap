@@ -18,24 +18,28 @@ find_package(OpenCV REQUIRED)
 
 set( CMAKE_CXX_FLAGS "-fpermissive -std=c++11" )
 
+
+
+
 ## Generate messages in the 'msg' folder
 add_message_files(
   FILES
   NapMsg.msg
   NapNodeMsg.msg
+  NapVisualEdgeMsg.msg
 )
 
 ## Generate added messages and services with any dependencies listed here
 generate_messages(
   DEPENDENCIES
   std_msgs
+  sensor_msgs
 )
 
 
 catkin_package(
   CATKIN_DEPENDS roscpp rospy std_msgs message_runtime image_transport cv_bridge
 )
-
 
 include_directories(
   ${catkin_INCLUDE_DIRS}

@@ -13,8 +13,8 @@ import time
 import TerminalColors
 tcol = TerminalColors.bcolors()
 
-# PKG_PATH = rospkg.RosPack().get_path('nap')
-PKG_PATH = '/home/mpkuse/catkin_ws/src/nap/'
+PKG_PATH = rospkg.RosPack().get_path('nap')
+# PKG_PATH = '/home/mpkuse/catkin_ws/src/nap/'
 
 ## 'x' can also be a vector
 def logistic( x ):

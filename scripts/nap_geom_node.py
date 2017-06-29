@@ -32,7 +32,6 @@ from nap.msg import NapNodeMsg
 from PlaceRecognitionNetvlad import PlaceRecognitionNetvlad
 from FastPlotter import FastPlotter
 
-import networkx as nx
 
 ############# PARAMS #############
 # PKG_PATH = rospkg.RosPack().get_path('nap')
@@ -44,9 +43,11 @@ PARAM_NETVLAD_WORD_DIM = 12288 # If these are not compatible with tensorfloaw mo
 PARAM_NETVLAD_CHAR_DIM = 256
 
 # INPUT_IMAGE_TOPIC = '/dji_sdk/image_raw'
-INPUT_IMAGE_TOPIC = '/youtube_camera/image'
-# INPUT_IMAGE_TOPIC = '/semi_keyframes' #this is t be used for launch
-PARAM_CALLBACK_SKIP = 2
+# INPUT_IMAGE_TOPIC = '/youtube_camera/image'
+# INPUT_IMAGE_TOPIC = '/android/image'
+# INPUT_IMAGE_TOPIC = '/fabmap_data/image'
+INPUT_IMAGE_TOPIC = '/semi_keyframes' #this is t be used for launch
+PARAM_CALLBACK_SKIP = 1
 
 PARAM_FPS = 25
 
@@ -74,9 +75,6 @@ rospy.loginfo( 'Publish to /raw_graph_node' )
 pub_edge_msg = rospy.Publisher( '/raw_graph_edge', NapMsg, queue_size=1000 )
 rospy.loginfo( 'Publish to /raw_graph_edge' )
 
-# /colocation will be filtered msg
-pub_colocation = rospy.Publisher( '/colocation', NapMsg, queue_size=1000 )
-rospy.loginfo( 'Publish to /colocation' )
 
 pub_time_queue_size = rospy.Publisher( '/time/queue_size', Float32, queue_size=1000)
 pub_time_desc_comp = rospy.Publisher( '/time/netvlad_comp', Float32, queue_size=1000)
@@ -85,11 +83,12 @@ pub_time_total_loop = rospy.Publisher( '/time/total', Float32, queue_size=1000)
 
 
 #################### Init Plotter #####################
-plotter = FastPlotter(n=4)
+plotter = FastPlotter(n=5)
 plotter.setRange( 0, yRange=[0,1] )
 plotter.setRange( 1, yRange=[0,1] )
 plotter.setRange( 2, yRange=[0,1] )
 plotter.setRange( 3, yRange=[0,1] )
+# plotter.setRange( 4, yRange=[0,2] )
 
 ##################### Main Loop ########################
 rate = rospy.Rate(PARAM_FPS)
@@ -98,8 +97,14 @@ S_char = np.zeros( (25000,PARAM_NETVLAD_CHAR_DIM) ) #char
 S_word = np.zeros( (25000,PARAM_NETVLAD_WORD_DIM) ) #word-48
 S_timestamp = np.zeros( 25000, dtype=rospy.Time )
 S_thumbnail = []
-G = nx.Graph()
 loop_index = -1
+
+# init grid filter
+w = np.zeros( 25000 ) + 1E-10
+w[0:50] = 1
+# w = w / sum(w)
+
+
 startTotalTime = time.time()
 
 while not rospy.is_shutdown():
@@ -152,28 +157,42 @@ while not rospy.is_shutdown():
     plotter.set_data( 3, range(len(sim_scores_logistic)), sim_scores_logistic, title="sim_scores_logistic"  )
     plotter.spin()
 
-    #--------------------- Graph Build  --------------------------------#
-    print 'Added Node : ', loop_index
-    G.add_node(loop_index, time_stamp=str(im_raw_timestamp))
-
+    #------------------- Publish Current Node  -------------------------#
     node_msg = NapNodeMsg()
     node_msg.node_timestamp = rospy.Time.from_sec( float(im_raw_timestamp.to_sec()) )
     node_msg.node_label = str(loop_index)
+    node_msg.node_label_str = str(loop_index)
+    node_msg.color_r = node_msg.color_g = node_msg.color_b =1.0
     pub_node_msg.publish( node_msg )
 
-
-
     #------------------------------ END  -------------------------------#
+
+
 
     #----------------- Grid Filter / Temporal Fusion -------------------#
-    if loop_index < 2: #let data accumulate
-        continue
+    if loop_index < 50: #let data accumulate
+        # Do nothing
+        _jkghgn = 0
+    else:
+        # Likelihood x Prior
+        L = len(sim_scores_logistic)
+        w[0:L] =  np.multiply( w[0:L], 1.5*sim_scores_logistic[0:L] )
+        # w[0:L] = w[0:L] + sim_scores_logistic[0:L]
+
+        # Move
+        w = np.roll(w, 1)
+        w[0] = w[1]
+        w = np.convolve( w, [0.05,0.1,0.7,0.1,0.05], 'same' )
+        w = w / sum(w)
+        w[0:L] = np.maximum( w[0:L], 0.01 )
+        w[L:] = 1E-10
+        plotter.set_data( 4, range(L+50), -np.log(w[0:L+50]) )
+
     #------------------------------ END  -------------------------------#
 
 
 
-    #------------- Publish Colocation (on loop closure ) ---------------#
-    #------------------------------ Add Edge ---------------------------#
+    #------------- Publish Edges (thresh on raw likelihoods) ---------------#
     startPublish = time.time()
     L = loop_index #alias
 
@@ -188,7 +207,9 @@ while not rospy.is_shutdown():
         nap_msg.c_timestamp = rospy.Time.from_sec( float(S_timestamp[L].to_sec()) )
         nap_msg.prev_timestamp = rospy.Time.from_sec( float(S_timestamp[aT].to_sec()) )
         nap_msg.goodness = sim_scores_logistic[aT]
-        pub_colocation.publish( nap_msg ) #TODO this is suppose to only publish filtered edges
+        nap_msg.color_r = 0.0
+        nap_msg.color_g = 0.0
+        nap_msg.color_b = 1.0
 
         if float(S_timestamp[L-1].to_sec() - S_timestamp[aT].to_sec())>10.:
             pub_edge_msg.publish( nap_msg ) #publish raw edges (all)
@@ -209,7 +230,3 @@ np.save( PKG_PATH+'/DUMP/S_word.npy', S_word[0:loop_index+1] )
 np.save( PKG_PATH+'/DUMP/S_char.npy', S_char[0:loop_index+1] )
 np.save( PKG_PATH+'/DUMP/S_timestamp.npy', S_timestamp[0:loop_index+1] )
 np.save( PKG_PATH+'/DUMP/S_thumbnail.npy', S_thumbnail )
-
-print 'Writing Graph : ', PKG_PATH+'/DUMP/Graph.adjlist'
-nx.write_adjlist(G, PKG_PATH+'/DUMP/Graph.adjlist')
-nx.write_gexf(G, PKG_PATH+'/DUMP/Graph.gexf')

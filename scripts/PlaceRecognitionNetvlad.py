@@ -30,12 +30,12 @@ import TerminalColors
 tcolor = TerminalColors.bcolors()
 
 class PlaceRecognitionNetvlad:
-    def __init__(self, PARAM_MODEL, PARAM_CALLBACK_SKIP=2):
+    def __init__(self, PARAM_MODEL, PARAM_CALLBACK_SKIP=2, PARAM_K=48):
         #
         # Init netvlad - def computational graph, load trained model
         self.tf_x = tf.placeholder( 'float', [None,240,320,3], name='x' )
         self.is_training = tf.placeholder( tf.bool, [], name='is_training')
-        self.vgg_obj = VGGDescriptor(b=1, K=48)
+        self.vgg_obj = VGGDescriptor(b=1, K=PARAM_K)
         self.tf_vlad_word = self.vgg_obj.vgg16(self.tf_x, self.is_training)
         self.tensorflow_session = tf.Session()
         tensorflow_saver = tf.train.Saver()
@@ -79,7 +79,8 @@ class PlaceRecognitionNetvlad:
         cv_image = CvBridge().imgmsg_to_cv2( data, 'bgr8' )
 
         if self.call_q%n_SKIP == 0: #only use 1 out of 10 images
-            self.im_queue.put( cv_image )
+            # self.im_queue.put( cv_image )
+            self.im_queue.put(cv2.resize(cv_image, (320,240) ) )
             self.im_timestamp_queue.put(data.header.stamp)
         self.call_q = self.call_q + 1
 
@@ -100,7 +101,11 @@ class PlaceRecognitionNetvlad:
     def normalize_batch( self, im_batch ):
         im_batch_normalized = np.zeros(im_batch.shape)
         for b in range(im_batch.shape[0]):
-            im_batch_normalized[b,:,:,:] = self.rgbnormalize( im_batch[b,:,:,:] )
+            im_batch_normalized[b,:,:,0] = self.zNormalize( im_batch[b,:,:,0])
+            im_batch_normalized[b,:,:,1] = self.zNormalize( im_batch[b,:,:,1])
+            im_batch_normalized[b,:,:,2] = self.zNormalize( im_batch[b,:,:,2])
+            # im_batch_normalized[b,:,:,:] = self.rgbnormalize( im_batch[b,:,:,:] )
+
 
         # cv2.imshow( 'org_', (im_batch[0,:,:,:]).astype('uint8') )
         # cv2.imshow( 'out_', (im_batch_normalized[0,:,:,:]*255.).astype('uint8') )
@@ -108,13 +113,21 @@ class PlaceRecognitionNetvlad:
         # code.interact(local=locals())
         return im_batch_normalized
 
+    ## M is a 2D matrix
+    def zNormalize(self,M):
+        return (M-M.mean())/(M.std()+0.0001)
+
+
     ## 'x' can also be a vector
     def logistic( self, x ):
         #y = np.array(x)
         #return (1.0 / (1.0 + np.exp( 11.0*y - 3.0 )) + 0.01)
         # return (1.0 / (1.0 + 0.6*np.exp( 22.0*y - 2.0 )) + 0.04)
+        filt = [0.1,0.2,0.4,0.2,0.1]
+        if len(x) < len(filt):
+            return (1.0 / (1.0 + np.exp( 11.0*x - 3.0 )) + 0.01)
 
-        y = np.convolve( np.array(x), [0.25,0.5,0.25], 'same' )
+        y = np.convolve( np.array(x), filt, 'same' )
         return (1.0 / (1.0 + np.exp( 11.0*y - 3.0 )) + 0.01)
 
 
@@ -164,7 +177,14 @@ class PlaceRecognitionNetvlad:
         feed_dict = {self.tf_x : im_batch_normalized,\
                      self.is_training:False,\
                      self.vgg_obj.initial_t: 0}
-        tff_vlad_word = self.tensorflow_session.run( self.tf_vlad_word, feed_dict )
+
+        # tff_vlad_word = self.tensorflow_session.run( self.tf_vlad_word, feed_dict )
+
+        tff_vlad_word, tff_sm = self.tensorflow_session.run( [self.tf_vlad_word, self.vgg_obj.nl_sm], feed_dict )
+        #b=1
+        Assgn_matrix = np.reshape( tff_sm, [1,60,80,-1] ).argmax( axis=-1 ) #assuming batch size = 1
+        self.Assgn_matrix = Assgn_matrix
+
         d_WORD = tff_vlad_word[0,:]
 
         return d_WORD

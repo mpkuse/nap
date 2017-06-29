@@ -13,19 +13,25 @@
 
 
 import rospy
+import rospkg
 
 import collections
 import numpy as np
 import code
+import cv2
+from cv_bridge import CvBridge, CvBridgeError
+
 
 from nav_msgs.msg import Odometry
 from visualization_msgs.msg import Marker
+from sensor_msgs.msg import Image
 from geometry_msgs.msg import Point
 from std_msgs.msg import ColorRGBA
 
 
 from nap.msg import NapMsg
 from nap.msg import NapNodeMsg
+from nap.msg import NapVisualEdgeMsg
 
 # PKG_PATH = rospkg.RosPack().get_path('nap')
 PKG_PATH = '/home/mpkuse/catkin_ws/src/nap/'
@@ -154,15 +160,19 @@ def node_callback( data ):
     marker.scale.y = .5
     marker.scale.z = .5
     marker.color.a = 0.5
-    marker.color.r = 1.0
-    marker.color.g = 1.0
-    marker.color.b = 1.0
+    marker.color.r = data.color_r#1.0
+    marker.color.g = data.color_g#1.0
+    marker.color.b = data.color_b#1.0
     pub_raw_node.publish( marker )
 
     marker.type=Marker.TEXT_VIEW_FACING
     marker.id = 2*int(data.node_label) + 1
-    marker.text = str(data.node_label)
-    pub_raw_node.publish( marker )
+    marker.text = str(data.node_label_str)
+    marker.color.r = 0.0
+    marker.color.g = 0.0
+    marker.color.b = 0.0
+    if marker.id % 5 == 0:
+        pub_raw_node.publish( marker )
 
 
 # Edge Callback - Optional
@@ -199,13 +209,31 @@ def edge_callback( data ):
     # m.scale.y = 0.5
     # m.scale.z = 0.0
     m.color.a = 0.3
-    m.color.r = 1.0
-    m.color.g = 0.0
-    m.color.b = 0.0
+    m.color.r = data.color_r#1.0
+    m.color.g = data.color_g#0.0
+    m.color.b = data.color_b#0.0
 
 
     # 3. publish
     pub_raw_edge.publish( m )
+
+
+def visual_edge_callback( data ):
+    curr_image = CvBridge().imgmsg_to_cv2( data.curr_image, 'bgr8' )
+    prev_image = CvBridge().imgmsg_to_cv2( data.prev_image, 'bgr8' )
+    curr_label = data.curr_label
+    prev_label = data.prev_label
+    cv2.putText( curr_image, curr_label, (10,40), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255) )
+    cv2.putText( prev_image, prev_label, (10,40), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255) )
+
+    catted = np.concatenate( (curr_image,prev_image), axis=1)
+    msg_frame = CvBridge().cv2_to_imgmsg( catted, "bgr8" )
+    pub_raw_edge_image_pair.publish( msg_frame )
+    # cv2.imshow( 'curr_image', curr_image )
+    # cv2.imshow( 'prev_image', prev_image )
+    # cv2.imshow( 'cated', np.concatenate( (curr_image,prev_image), axis=1 ) )
+    # cv2.waitKey(1)
+
 
 
 rospy.init_node( 'colocation_viz', log_level=rospy.INFO )
@@ -219,7 +247,9 @@ rospy.loginfo( 'Subscribed to /vins_estimator/odometry')
 # Raw Graph
 rospy.Subscriber( '/raw_graph_node', NapNodeMsg, node_callback, queue_size=10000 )
 rospy.Subscriber( '/raw_graph_edge', NapMsg, edge_callback, queue_size=10000 )
-rospy.loginfo( 'Subscribed to Raw Graph : /raw_graph_node and /raw_graph_edge')
+rospy.Subscriber( '/raw_graph_visual_edge', NapVisualEdgeMsg, visual_edge_callback, queue_size=10000 )
+# rospy.Subscriber( '/raw_graph_visual_edge_cluster_assgn', NapVisualEdgeMsg, visual_edge_callback, queue_size=10000 )  #uncomment this line and comment the above one to see neural cluster assgnment false color images as pairs
+rospy.loginfo( 'Subscribed to Raw Graph : /raw_graph_node and /raw_graph_edge and /raw_graph_visual_edge')
 
 
 pub_odometry = rospy.Publisher( '/colocation_viz/odom_marker', Marker, queue_size=1000 )
@@ -228,6 +258,7 @@ pub_colocation = rospy.Publisher( '/colocation_viz/colocation_marker', Marker, q
 
 pub_raw_node = rospy.Publisher( '/colocation_viz/raw/node', Marker, queue_size=1000 )
 pub_raw_edge = rospy.Publisher( '/colocation_viz/raw/edge', Marker, queue_size=1000 )
+pub_raw_edge_image_pair = rospy.Publisher( '/colocation_viz/raw/image_pair', Image, queue_size=1000 )
 
 seq = 0
 seq_odom = 0
@@ -237,6 +268,8 @@ list_x = []
 list_y = []
 list_z = []
 list_msg = []
+
+# fourcc = cv2.VideoWriter_fourcc(*'DIVX')
 
 rate = rospy.Rate(30)
 while not rospy.is_shutdown():
