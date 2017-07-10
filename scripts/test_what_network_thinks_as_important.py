@@ -134,7 +134,9 @@ PARAM_stride = 30
 PARAM_mask_halfsize = 50 #can be even or odd
 # PARAM_MODEL = PKG_PATH+'/tf.logs/netvlad_k48/model-13000'
 PARAM_MODEL = PKG_PATH+'/tf.logs/netvlad_k64_tokyoTM/model-3500' #trained with tokyo, normalization is simple '
-
+PARAM_MODEL = PKG_PATH+'/tf.logs/netvlad_k64_tokyoTM_reg0001/model-2500'
+PARAM_MODEL = PKG_PATH+'/tf.logs/netvlad_k64_b20_tokyoTM_mean_aggregation/model-3750' #trained with mean aggregation in place of usual sum aggregation in netvlad_layer
+PARAM_MODEL = PKG_PATH+'/tf.logs/netvlad_k64_b20_tokyoTM_pos_set_dev/model-4000' #trained with rotation without black borders and with pos-set-dev
 # PARAM_MODEL = PKG_PATH+'/tf.logs/netvlad_angular_loss_w_mini_dev/model-4000'
 
 #--- END ---#
@@ -158,7 +160,7 @@ tensorflow_saver.restore( tensorflow_session, PARAM_MODEL )
 #--- END ---#
 
 # for idx in range(0,1600,50):
-idx = 2500
+idx = 1250
 # Select Image
 IM = S_full_im[idx,:,:,:]
 
@@ -226,22 +228,26 @@ rows,cols, _ = IM.shape
 # plt.show()
 # quit()
 
-# # Rotation
-# rot_scores = []
-# for irot in range(-90,90):
-#     M = cv2.getRotationMatrix2D((cols*.75,rows*.75),irot,1.)
-#     dst = cv2.warpAffine(IM,M,(cols,rows))
-#
-#     dst_word = compute_netvlad(dst)
-#     print irot, np.dot( dst_word, im_word)
-#     rot_scores.append(np.dot( dst_word, im_word))
-#
-#     cv2.imshow( 'IM', IM )
-#     cv2.imshow( 'dst', dst )
-#     cv2.waitKey(10)
-#
-# plt.plot( range(-90,90), rot_scores)
-# plt.show()
+# Rotation
+rot_scores = []
+rot_range = range(-400,400)
+for irot in rot_range:
+    M = cv2.getRotationMatrix2D((cols*.5,rows*.5),irot,1.)
+    dst = cv2.warpAffine(IM,M,(cols,rows))
+
+    dst_word = compute_netvlad(dst)
+    dot_score = np.dot( dst_word, im_word)
+    hellinger_score =  1.0 - np.minimum(1.0, dot_score ) #np.sqrt( 1.0 - np.minimum(1.0, dot_score ) )
+    logistic_score = logistic_func( hellinger_score )
+    print irot, logistic_score
+    rot_scores.append(logistic_score)
+
+    cv2.imshow( 'IM', IM )
+    cv2.imshow( 'dst', dst )
+    cv2.waitKey(10)
+
+plt.plot( rot_range, rot_scores)
+plt.show()
 
 
 # # Random Affine Transform
@@ -252,12 +258,15 @@ rows,cols, _ = IM.shape
 #     b = np.float32( [ np.random.randint(150,290 ),  np.random.randint(20,90 ) ] )
 #     c = np.float32( [ np.random.randint(80,150 ), np.random.randint(190,290 ) ] )
 #     pts2 = np.stack( (a,b,c), axis=0 )
-#     print pts2
+#     # print pts2
 #
 #     M = cv2.getAffineTransform(pts1,pts2)
 #     dst = cv2.warpAffine(IM,M,(cols,rows))
 #     dst_word = compute_netvlad(dst)
-#     print np.dot( dst_word, im_word)
+#     dot_score = np.dot( dst_word, im_word)
+#     hellinger_score = np.sqrt( 1.0 - np.minimum(1.0, dot_score ) )
+#     logistic_score = logistic_func( hellinger_score )
+#     print logistic_score
 #     cv2.imshow( 'IM', IM )
 #     cv2.imshow( 'dst', dst )
 #     cv2.waitKey(0)

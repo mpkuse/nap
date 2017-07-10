@@ -20,6 +20,8 @@
 
 #include <DBoW3/DBoW3.h>
 
+#include "cnpy.h"
+
 using namespace DBoW3;
 using namespace std;
 
@@ -31,6 +33,24 @@ public:
   {
     json_bow << ",\"total_images\": "<< current_image_index+1 << "\n}";
     json_bow.close();
+
+    cout <<  "Written loop_candidates_dbow\n";
+    loop_candidates_dbow.close();
+
+    // Write S_thumbnails as npy
+    unsigned int shape[] = {0,0,0,0};
+    shape[0] = S_thumbnails.size();
+    shape[1] = S_thumbnails[0].rows;
+    shape[2] = S_thumbnails[0].cols;
+    shape[3] = (unsigned int)S_thumbnails[0].channels();
+    unsigned char * data_raw = new unsigned char[shape[0]*shape[1]*shape[2]*shape[3]];
+    for( int i=0 ; i<S_thumbnails.size() ; i++ )
+    {
+      memcpy( &data_raw[i*shape[1]*shape[2]*shape[3]], S_thumbnails[i].data, shape[1]*shape[2]*shape[3]*sizeof(char) );
+    }
+    std::string npy_file_name = ros::package::getPath( "nap" )+std::string("/DUMP/S_thumbnail_dbow.npy");
+    cout << "Write FIle : " << npy_file_name << std::endl;
+    cnpy::npy_save( npy_file_name, data_raw, (const unsigned int *)shape,4, "w" );
   }
   BOWPlaces( ros::NodeHandle& nh, string vocabulary_file )
   {
@@ -46,23 +66,38 @@ public:
 
     this->nh = nh;
     pub_colocations = nh.advertise<nap::NapMsg>( "/colocation_dbow", 1000 );
-    pub_raw_edge = nh.advertise<nap::NapMsg>( "/raw_graph_edge", 10000 );
-    pub_raw_node = nh.advertise<nap::NapNodeMsg>( "/raw_graph_node", 10000 );
+    pub_raw_edge = nh.advertise<nap::NapMsg>( "/raw_graph_edge", 1000 );
+    pub_raw_edge_visual = nh.advertise<nap::NapVisualEdgeMsg>( "/raw_graph_visual_edge", 1000 );
+    pub_raw_node = nh.advertise<nap::NapNodeMsg>( "/raw_graph_node", 1000 );
 
     // time publishers
     pub_time_desc_computation = nh.advertise<std_msgs::Float32>( "/time_dbow/pub_time_desc_computation", 1000 );
     pub_time_similarity = nh.advertise<std_msgs::Float32>( "/time_dbow/pub_time_similarity", 1000 );
     pub_total_time = nh.advertise<std_msgs::Float32>( "/time_dbow/pub_time_total", 1000 );
 
-    // json file
+    // json file - BOW vector at every image (sparse)
     string json_file_name = ros::package::getPath( "nap" ) + "/DUMP/dbow_per_image.json";
     json_bow.open( json_file_name);
     cout << "Opening file : " << json_file_name << endl;
 
+    // loop_candidates_dbow
+    string loop_candidates_fname = ros::package::getPath( "nap" ) + "/DUMP/loop_candidates_dbow.csv";
+    loop_candidates_dbow.open( loop_candidates_fname);
+    cout << "Opening file : " << loop_candidates_fname << endl;
+
+
   }
 
+
+  int call_back_count = -1;
+  int SKIP = 2;
   void imageCallback( const sensor_msgs::ImageConstPtr& msg )
   {
+    // This to skip frames. ie. process every SKIP frame that arrives
+    call_back_count++;
+    if( call_back_count%SKIP != 0 )
+      return;
+
     clock_t startTime = clock();
     std::cout << "Rcvd - "<< current_image_index+1 << endl;
     time_vec.push_back(msg->header.stamp);
@@ -70,6 +105,8 @@ public:
     current_image_index++;
     cv::Mat im_thumbnail;
     cv::resize(im, im_thumbnail, cv::Size(80,60) );
+    // S_thumbnails.push_back( im_thumbnail );
+    S_thumbnails.push_back( im.clone() );
     //TODO : posisbly need to resize image to (320x240). Might have to deep copy the im
     // cv::imshow( "win", im );
     // cv::waitKey(30);
@@ -125,7 +162,7 @@ public:
     // Publish NapMsg
     for( int i=0 ; i < ret.size() ; i++ )
     {
-      if( ret[i].Score > 0.05 )
+      if( ret[i].Score > 0.055 )
       {
         nap::NapMsg coloc_msg;
         coloc_msg.c_timestamp = msg->header.stamp;
@@ -135,11 +172,26 @@ public:
         coloc_msg.color_g = .0;
         coloc_msg.color_b = .0;
 
+        // Visual Message - Same as above but has 2 images
+        nap::NapVisualEdgeMsg visual_edge_msg;
+        visual_edge_msg.c_timestamp = msg->header.stamp;
+        visual_edge_msg.prev_timestamp = time_vec[ ret[i].Id ];
+        visual_edge_msg.goodness = ret[i].Score;
+        cv::Mat im__1 = S_thumbnails[current_image_index]; //cv::Mat(240,320, CV_8UC3, cv::Scalar(10,100,150) );
+        cv::Mat im__2 = S_thumbnails[ ret[i].Id ]; //cv::Mat(240,320, CV_8UC3, cv::Scalar(255,0,0) );
+        visual_edge_msg.curr_image = *cv_bridge::CvImage( std_msgs::Header(), "bgr8", im__1).toImageMsg();
+        visual_edge_msg.prev_image = *cv_bridge::CvImage( std_msgs::Header(), "bgr8", im__2).toImageMsg();
+        visual_edge_msg.curr_label = std::to_string(current_image_index);
+        visual_edge_msg.prev_label = std::to_string(ret[i].Id )+string( ";;" )+std::to_string(ret[i].Score);
 
-        if( ( coloc_msg.c_timestamp - coloc_msg.prev_timestamp) > ros::Duration(5) ) {
+
+
+        if( ( coloc_msg.c_timestamp - coloc_msg.prev_timestamp) > ros::Duration(10) ) {
+          pub_raw_edge_visual.publish( visual_edge_msg );
           pub_colocations.publish( coloc_msg );
           pub_raw_edge.publish( coloc_msg );
           cout << ret[i].Id << ":" << ret[i].Score << "(" << time_vec[ ret[i].Id ] << ")  " ;
+          loop_candidates_dbow << current_image_index << "," << ret[i].Id << "," << ret[i].Score << ",-1,-1\n";
         }
       }
     }
@@ -162,15 +214,20 @@ private:
   ros::Publisher pub_colocations;
   ros::Publisher pub_raw_node;
   ros::Publisher pub_raw_edge;
+  ros::Publisher pub_raw_edge_visual;
 
 
   ros::Publisher pub_time_desc_computation;
   ros::Publisher pub_time_similarity;
   ros::Publisher pub_total_time;
 
+  // Maintains also a thumbnails of all the images for visualization/debuging. This is not required for bag of words Computation
+  std::vector<cv::Mat> S_thumbnails;
+
 
   // Json file writing of BOW representation at each image
   ofstream json_bow;
+  ofstream loop_candidates_dbow;
   void bow_to_file( int current_image_index, const BowVector& bow_vec, const cv::Mat& im_thumbnail )
   {
     if( current_image_index == 0 )

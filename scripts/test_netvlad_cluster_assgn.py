@@ -89,7 +89,7 @@ else: # load from a trained model
     # PARAM_model_restore = 'tf.logs/netvlad_angular_loss_w_mini_dev/model-4000'
     # PARAM_model_restore = 'tf.logs/netvlad_k48/model-13000'
     # PARAM_model_restore = 'tf.logs/netvlad_k64_znormed/model-2000' # trained from 3d model z-normalize R,G,B individual,
-    PARAM_model_restore = '../tf.logs/netvlad_k64_tokyoTM/model-2500'
+    PARAM_model_restore = '../tf.logs/netvlad_k64_tokyoTM/model-3500'
 
     print tcolor.OKGREEN,'Restore model from : ', PARAM_model_restore, tcolor.ENDC
     tensorflow_saver.restore( sess, PARAM_model_restore )

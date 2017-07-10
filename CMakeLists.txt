@@ -15,6 +15,7 @@ find_package(Eigen3 REQUIRED)
 find_package(Ceres REQUIRED)
 find_package(DBoW3 REQUIRED )
 find_package(OpenCV REQUIRED)
+find_package(ZLIB REQUIRED) #for cnpy.cpp
 
 set( CMAKE_CXX_FLAGS "-fpermissive -std=c++11" )
 
@@ -55,7 +56,8 @@ add_executable( toy_vertigo src/ceres_vertigo.cpp )
 add_executable( toy_vertigo_dcs src/ceres_vertigo_dyn_cov_scl.cpp )
 
 add_executable( dbow3_test src/dbow3_test.cpp )
-add_executable( dbow3_naive src/dbow3_naive.cpp )
+add_executable( dbow3_naive src/dbow3_naive.cpp src/cnpy.cpp ) #cnpy is for writing npy. borrowed from
+add_executable( pose_graph_opt_node src/pose_graph_opt_node.cpp )
 
 target_link_libraries( ls_pose_graph_opt ${CERES_LIBRARIES}  ${catkin_LIBRARIES} )
 target_link_libraries( toy_vertigo ${CERES_LIBRARIES}  ${catkin_LIBRARIES} )
@@ -63,3 +65,4 @@ target_link_libraries( toy_vertigo_dcs ${CERES_LIBRARIES}  ${catkin_LIBRARIES} )
 
 target_link_libraries( dbow3_test ${DBoW3_LIBRARIES} ${OpenCV_LIBRARIES} )
 target_link_libraries( dbow3_naive  ${OpenCV_LIBRARIES} ${DBoW3_LIBRARIES} ${catkin_LIBRARIES} )
+target_link_libraries( pose_graph_opt_node  ${OpenCV_LIBRARIES} ${DBoW3_LIBRARIES} ${catkin_LIBRARIES} )

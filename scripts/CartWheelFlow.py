@@ -621,6 +621,10 @@ class VGGDescriptor:
             sh = tf.shape(net)
             net = tf.reshape( net, [sh[0], sh[1]*sh[2] ]) # retrns 16x64*256
             net = tf.nn.l2_normalize( net, dim=1, name='normalization' )
+
+            # power normalization
+            net = tf.multiply( tf.sign(net), tf.pow( tf.abs(net),  tf.constant(0.5) ) )
+            net = tf.nn.l2_normalize( net, dim=1, name='normalization2' )
             return net
             # -------- ENDC ------- #
 
@@ -827,7 +831,9 @@ class VGGDescriptor:
         vec_of_1_256 = []
         for bi in range(b):
             diff_slice = tf.slice( diff_scaled, [bi*N,0], [N, D] )
-            vec_of_1_256.append( tf.reduce_sum( diff_slice, axis=0 ) )
+            # vec_of_1_256.append( tf.reduce_sum( diff_slice, axis=0 ) )
+            vec_of_1_256.append( tf.multiply( 1.0/N, tf.reduce_sum( diff_slice, axis=0 ) ) )
+
 
 
 

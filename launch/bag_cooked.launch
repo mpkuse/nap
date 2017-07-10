@@ -7,17 +7,48 @@ This can be visualized with rviz
 
 <!-- Input topics -->
 <!--<arg name="bag_color_im_topic" default="/mv_29900616/image_raw" />-->
-<arg name="bag_color_im_topic" default="/dji_sdk/image_raw_resized" />
-<arg name="bag_odometry_topic" default="/vins_estimator/odometry"/>
+
+
 <arg name="colocation_topic" default="/colocation_dbow"/>
 
 
 
 <!-- BAG -->
+
 <arg name="bag_base" default="/media/mpkuse/Bulk_Data/other_seqs/tony_bags/"/>
 <arg name="bag_name" default="dji_00_cooked.bag"/>
-<node name="rosbag" pkg="rosbag" type="play" args="-r 1  -d 10 $(arg bag_base)/$(arg bag_name)" output="log" />
+<arg name="bag_color_im_topic" default="/dji_sdk/image_raw_resized" />
+<arg name="bag_odometry_topic" default="/vins_estimator/odometry"/>
+<node name="rosbag" pkg="rosbag" type="play" args="-r 1 -d 10 $(arg bag_base)/$(arg bag_name)" output="log" />
 
+
+<!-- BAGs 01, captured 29th, June, 2017-->
+<!--<arg name="bag_base" default="/media/mpkuse/Bulk_Data/other_seqs/pointgrey_color_seq/"/>-->
+<!--<arg name="bag_name" default="cooked_2017-06-29-15-09-10.bag"/>-->
+<!--<arg name="bag_name" default="cooked_2017-06-29-15-16-50.bag"/>-->
+<!--<arg name="bag_name" default="cooked_2017-06-29-15-23-43.bag"/>-->
+<!--<arg name="bag_name" default="cooked_2017-06-29-15-29-46.bag"/>-->
+<!--<arg name="bag_name" default="cooked_2017-06-29-15-31-19.bag"/>-->
+<!-- END Bags01 -->
+
+<!-- Bags 02, captured 4th July, 2017 -->
+<!--<arg name="bag_base" default="/media/mpkuse/Bulk_Data/other_seqs/pointgrey_color_seq/bags02"/>-->
+<!--<arg name="bag_name" default="cooked_2017-07-04-16-32-46.bag"/>-->
+<!--<arg name="bag_name" default="cooked_2017-07-04-16-36-37.bag"/>-->
+<!--<arg name="bag_name" default="cooked_2017-07-04-16-39-32.bag"/>--> <!--ok with nap, also ok with dbow-->
+<!--<arg name="bag_name" default="cooked_2017-07-04-16-41-25.bag"/>--> <!-- the one with going over same place but with rotated camera. nap does not work, dbow works :( -->
+<!--<arg name="bag_name" default="cooked_2017-07-04-16-43-59.bag"/>--> <!-- nap gives false matches, dbow gives no matches-->
+<!--<arg name="bag_name" default="cooked_2017-07-04-16-51-41.bag"/>--><!-- long seq, dbow3 is able to identify just 1 closure, nap can identify more but some are false-alarms -->
+<!--<arg name="bag_name" default="cooked_2017-07-04-17-06-23.bag"/>-->
+
+
+<!--
+<arg name="bag_color_im_topic" default="/camera/image_raw" />
+<arg name="bag_odometry_topic" default="/vins_estimator/odometry"/>
+<node name="rosbag" pkg="rosbag" type="play" args="-r 1  -d 10 $(arg bag_base)/$(arg bag_name)" output="log" />
+-->
+<!-- END OF BAGS
+-->
 
 <!-- Nap Node -->
 <!--<node name="nap" pkg="nap" type="nap_geom_node.py" output="screen" >-->
@@ -35,9 +66,10 @@ This can be visualized with rviz
 </node>
 -->
 
+
 <!-- Colocation viz -->
 <!-- this node also subscribes to raw node msg (ie./colocation_viz/raw/node, /colocation_viz/raw/edge) -->
-<node name="colocation_viz2" pkg="nap" type="colocation_viz2.py" output="log" > <!-- subscribes to /vins_estimator/odometry -->
+<node name="colocation_viz2" pkg="nap" type="colocation_viz2.py" output="screen" > <!-- subscribes to /vins_estimator/odometry -->
   <remap to="$(arg bag_odometry_topic)" from="/vins_estimator/odometry"/>
   <remap to="$(arg colocation_topic)" from="/colocation" />
 </node>

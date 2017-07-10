@@ -19,6 +19,8 @@ import collections
 import numpy as np
 import code
 import cv2
+cv2.ocl.setUseOpenCL(False)
+
 from cv_bridge import CvBridge, CvBridgeError
 
 
@@ -221,10 +223,32 @@ def edge_callback( data ):
 def visual_edge_callback( data ):
     curr_image = CvBridge().imgmsg_to_cv2( data.curr_image, 'bgr8' )
     prev_image = CvBridge().imgmsg_to_cv2( data.prev_image, 'bgr8' )
+
+    # xtra_string = ""
+    # #---DEBUG - Geometric Verification with essential matrix
+    # print curr_image.shape, prev_image.shape
+    # code.interact( local=locals())
+
+    # kp1, des1 = orb.detectAndCompute(np.array(prev_image), None)
+    # kp2, des2 = orb.detectAndCompute(np.array(curr_image), None)
+    # print 'len(kp1) : ', len(kp1), '    des1.shape : ', des1.shape
+    # print 'len(kp2) : ', len(kp2), '    des2.shape : ', des2.shape
+    # matches_org = flann.knnMatch(des1.astype('float32'),des2.astype('float32'),k=2) #find 2 nearest neighbours
+    # __pt1, __pt2 = lowe_ratio_test( kp1, kp2, matches_org )
+    # E, mask = cv2.findEssentialMat( __pt1, __pt2 )
+    # nMatches = __pt1.shape[0]
+    # nInliers = 0
+    # if mask is not None:
+    #     nInliers = mask.sum()
+    # xtra_string = '::%d,%d' %(nInliers,nMatches)
+    # #---END
+
+
     curr_label = data.curr_label
     prev_label = data.prev_label
-    cv2.putText( curr_image, curr_label, (10,40), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255) )
-    cv2.putText( prev_image, prev_label, (10,40), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255) )
+    sc = curr_image.shape[0]/180. #scale of font and thickness
+    cv2.putText( curr_image, curr_label, (10,curr_image.shape[0]/2), cv2.FONT_HERSHEY_SIMPLEX, sc, (34,34,178), int(4*sc) )
+    cv2.putText( prev_image, prev_label, (10,curr_image.shape[0]/2), cv2.FONT_HERSHEY_SIMPLEX, sc, (34,34,178), int(4*sc) )
 
     catted = np.concatenate( (curr_image,prev_image), axis=1)
     msg_frame = CvBridge().cv2_to_imgmsg( catted, "bgr8" )
@@ -233,6 +257,9 @@ def visual_edge_callback( data ):
     # cv2.imshow( 'prev_image', prev_image )
     # cv2.imshow( 'cated', np.concatenate( (curr_image,prev_image), axis=1 ) )
     # cv2.waitKey(1)
+
+
+
 
 
 
