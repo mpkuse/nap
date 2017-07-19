@@ -54,8 +54,8 @@ PKG_PATH = rospkg.RosPack().get_path('nap')
 # PKG_PATH = '/home/mpkuse/catkin_ws/src/nap/'
 # PARAM_MODEL = PKG_PATH+'/tf.logs/netvlad_k48/model-13000' #PKG_PATH+'/tf.logs/netvlad_angular_loss_w_mini_dev/model-4000'
 # PARAM_MODEL = PKG_PATH+'/tf.logs/netvlad_k64_tokyoTM/model-3500' #trained with tokyo, normalization is simple '
-PARAM_MODEL = PKG_PATH+'/tf.logs/netvlad_k64_b20_tokyoTM_mean_aggregation/model-3750' #trained with mean aggregation in place of usual sum aggregation in netvlad_layer
-# PARAM_MODEL = PKG_PATH+'/tf.logs/netvlad_k64_b20_tokyoTM_pos_set_dev/model-4000' #trained with rotation without black borders and with pos-set-dev
+# PARAM_MODEL = PKG_PATH+'/tf.logs/netvlad_k64_b20_tokyoTM_mean_aggregation/model-3750' #trained with mean aggregation in place of usual sum aggregation in netvlad_layer
+PARAM_MODEL = PKG_PATH+'/tf.logs/netvlad_k64_b20_tokyoTM_pos_set_dev/model-4000' #trained with rotation without black borders and with pos-set-dev
 
 # Dont forget to load the eigen values, eigen vectors and mean
 
@@ -92,6 +92,89 @@ def publish_image( PUB, cv_image, t=None ):
     if t is not None:
         msg_frame.header.stamp = t
     PUB.publish( msg_frame )
+
+
+
+#--- Geometric Verification Functions ---#
+# Before publishing do a geometric verification with essential matrix
+def lowe_ratio_test( kp1, kp2, matches_org ):
+    """ Input keypoints and matches. Compute keypoints like : kp1, des1 = orb.detectAndCompute(im1, None)
+    Compute matches like : matches_org = flann.knnMatch(des1.astype('float32'),des2.astype('float32'),k=2) #find 2 nearest neighbours
+
+    Returns 2 Nx2 arrays. These arrays contains the correspondences in images. """
+    __pt1 = []
+    __pt2 = []
+    for m in matches_org:
+        if m[0].distance < 0.8 * m[1].distance: #good match
+            # print 'G', m[0].trainIdx, 'th keypoint from im1 <---->', m[0].queryIdx, 'th keypoint from im2'
+
+            _pt1 = np.array( kp1[ m[0].queryIdx ].pt ) #co-ordinate from 1st img
+            _pt2 = np.array( kp2[ m[0].trainIdx ].pt )#co-ordinate from 2nd img corresponding
+            #now _pt1 and _pt2 are corresponding co-oridnates
+
+            __pt1.append( np.array(_pt1) )
+            __pt2.append( np.array(_pt2) )
+
+            # cv2.circle( im1, (int(_pt1[0]), int(_pt1[1])), 3, (0,255,0), -1 )
+            # cv2.circle( im2, (int(_pt2[0]), int(_pt2[1])), 3, (0,255,0), -1 )
+
+            # cv2.circle( im1, _pt1, 3, (0,255,0), -1 )
+            # cv2.circle( im2, _pt2, 3, (0,255,0), -1 )
+            # cv2.imshow( 'im1', im1 )
+            # cv2.imshow( 'im2', im2 )
+            # cv2.waitKey(10)
+    __pt1 = np.array( __pt1)
+    __pt2 = np.array( __pt2)
+    return __pt1, __pt2
+
+def do_geometric_verification( i_L, i_aT ):
+    matches_org = flann.knnMatch(S_kp_desc[i_L].astype('float32'),S_kp_desc[i_aT].astype('float32'),k=2) #find 2 nearest neighbours
+    __pt1, __pt2 = lowe_ratio_test( S_kp[i_L], S_kp[i_aT], matches_org )
+
+    nMatches = __pt1.shape[0]
+    nInliers = 0
+
+    # Do essential Matrix verification only if u have more than 20 matches
+    if nMatches > 20:
+        E, mask = cv2.findEssentialMat( __pt1, __pt2 )
+        if mask is not None:
+            nInliers = mask.sum()
+    return nMatches, nInliers
+#--- END Geometric verification functions ---#
+
+
+#--- Nap Msg Creation ---#
+def make_nap_msg( i_curr, i_prev, edge_color=None):
+
+    nap_msg = NapMsg() #edge msg
+    nap_msg.c_timestamp = S_timestamp[i_curr]
+    nap_msg.prev_timestamp = S_timestamp[i_prev]
+    nap_msg.goodness = sim_scores_logistic[i_prev]
+
+    if edge_color is None:
+        edge_color = (0,1.0,0)
+
+    if len(edge_color) != 3:
+        edge_color = (0,1.0,0)
+
+    nap_msg.color_r = edge_color[0] #default color is green
+    nap_msg.color_g = edge_color[1]
+    nap_msg.color_b = edge_color[2]
+    return nap_msg
+
+def make_nap_visual_msg( i_curr, i_prev, str_curr, str_prev ):
+    nap_visual_edge_msg = NapVisualEdgeMsg()
+    nap_visual_edge_msg.c_timestamp = S_timestamp[i_curr]
+    nap_visual_edge_msg.prev_timestamp = S_timestamp[i_prev]
+    nap_visual_edge_msg.goodness = sim_scores_logistic[i_prev]
+    nap_visual_edge_msg.curr_image = CvBridge().cv2_to_imgmsg( S_thumbnail[i_curr].astype('uint8'), "bgr8" )
+    nap_visual_edge_msg.prev_image = CvBridge().cv2_to_imgmsg( S_thumbnail[i_prev].astype('uint8'), "bgr8" )
+    nap_visual_edge_msg.curr_label = str_curr #str(i_curr) #+ '::%d,%d' %(nInliers,nMatches)
+    nap_visual_edge_msg.prev_label = str_prev #str(i_prev)
+
+    return nap_visual_edge_msg
+
+#--- END Nap Msg ---#
 
 ########### Init PlaceRecognitionNetvlad ##########
 place_mod = PlaceRecognitionNetvlad(\
@@ -139,6 +222,7 @@ pub_time_queue_size = rospy.Publisher( '/time/queue_size', Float32, queue_size=1
 pub_time_desc_comp = rospy.Publisher( '/time/netvlad_comp', Float32, queue_size=1000)
 pub_time_dot_scoring = rospy.Publisher( '/time/dot_scoring', Float32, queue_size=1000)
 pub_time_seq_merging = rospy.Publisher( '/time/seq_merging', Float32, queue_size=1000)
+pub_time_geometric_verification = rospy.Publisher( '/time/geometric_verify', Float32, queue_size=1000)
 pub_time_publish = rospy.Publisher( '/time/publish', Float32, queue_size=1000)
 pub_time_total_loop = rospy.Publisher( '/time/total', Float32, queue_size=1000)
 
@@ -170,6 +254,7 @@ S_word = []
 S_timestamp = [] #np.zeros( 25000, dtype=rospy.Time )
 S_thumbnail = []
 S_lut = [] #only for debug, the cluster assgnment image (list of false color)
+S_lut_raw = [] # raw 1-channel cluster assignment
 loop_index = -1
 startTotalTime = time.time()
 
@@ -223,9 +308,11 @@ while not rospy.is_shutdown():
     # rospy.logdebug( 'Char Shape : %s' %(d_CHAR.shape) )
     print 'Main Thread : ', len(all_nodes)
 
-    lut = colorLUT.lut( place_mod.Assgn_matrix[0,:,:] )
-    S_lut.append( lut )
-    publish_image( pub_cluster_assgn_falsecolormap, lut, t=im_raw_timestamp )
+    if True: #Set this to true to false color Assgn_image and publish it.
+        lut = colorLUT.lut( place_mod.Assgn_matrix[0,:,:] )
+        S_lut.append( lut )
+        S_lut_raw.append( place_mod.Assgn_matrix[0,:,:]  )
+        publish_image( pub_cluster_assgn_falsecolormap, lut, t=im_raw_timestamp )
 
     #---------------------------- END  -----------------------------#
 
@@ -256,7 +343,7 @@ while not rospy.is_shutdown():
     DOT_char = np.dot( S_char[0:loop_index+1], np.transpose(S_char[loop_index]) )
     DOT_char = np.convolve( DOT_char, np.array([1,1,1,1,1,1,1])/7., 'same' )
 
-    sim_scores =  np.sqrt( 1.0 - np.minimum(1.0, DOT_word ) ) #minimum is added to ensure dot product doesnt go beyond 1.0 as it sometimes happens because of numerical issues, which inturn causes issues with sqrt
+    sim_scores = np.sqrt( 1.0 - np.minimum(1.0, DOT_word ) ) #minimum is added to ensure dot product doesnt go beyond 1.0 as it sometimes happens because of numerical issues, which inturn causes issues with sqrt
     sim_scores_char =  np.sqrt( 1.0 - np.minimum(1.0, DOT_char ) )
 
     sim_scores_logistic = place_mod.logistic( sim_scores ) #convert the raw Similarity scores above to likelihoods
@@ -402,7 +489,8 @@ while not rospy.is_shutdown():
     # print 'Added Node : ', loop_index
 
     node_msg = NapNodeMsg()
-    node_msg.node_timestamp = rospy.Time.from_sec( float(im_raw_timestamp.to_sec()) )
+    # node_msg.node_timestamp = rospy.Time.from_sec( float(im_raw_timestamp.to_sec()) )
+    node_msg.node_timestamp = im_raw_timestamp
     node_msg.node_label = str(loop_index)
     # n_gid = get_gid(all_nodes[loop_index])
     node_msg.node_label_str = str(loop_index)
@@ -426,128 +514,54 @@ while not rospy.is_shutdown():
 
     #------------- Publish Colocation (on loop closure ) ---------------#
     #------------------------------ Add Edge ---------------------------#
-    startPublish = time.time()
     L = loop_index #alias
-
+    startGeometricVerification = time.time()
     # Determination of edge using `sim_scores_logistic`
-    argT = np.where( sim_scores_logistic[0:L-2] > 0.50 )
+    argT = np.where( sim_scores_logistic[1:L] > 0.50 )
     if len(argT ) < 1:
         continue
-    for aT in argT[0]:
-        # print aT
-        # print '%d<--->%d' %(L,aT)
-        nap_msg = NapMsg() #edge msg
-        nap_msg.c_timestamp = rospy.Time.from_sec( float(S_timestamp[L].to_sec()) )
-        nap_msg.prev_timestamp = rospy.Time.from_sec( float(S_timestamp[aT].to_sec()) )
-        nap_msg.goodness = sim_scores_logistic[aT]
-        nap_msg.color_r = 0.0 #default color is green
-        nap_msg.color_g = 1.0
-        nap_msg.color_b = 0.0
 
-        if float(S_timestamp[L-1].to_sec() - S_timestamp[aT].to_sec())>10.:
-            # TODO : Before publishing do a geometric verification with essential matrix
-            def lowe_ratio_test( kp1, kp2, matches_org ):
-                """ Input keypoints and matches. Compute keypoints like : kp1, des1 = orb.detectAndCompute(im1, None)
-                Compute matches like : matches_org = flann.knnMatch(des1.astype('float32'),des2.astype('float32'),k=2) #find 2 nearest neighbours
-
-                Returns 2 Nx2 arrays. These arrays contains the correspondences in images. """
-                __pt1 = []
-                __pt2 = []
-                for m in matches_org:
-                    if m[0].distance < 0.8 * m[1].distance: #good match
-                        # print 'G', m[0].trainIdx, 'th keypoint from im1 <---->', m[0].queryIdx, 'th keypoint from im2'
-
-                        _pt1 = np.array( kp1[ m[0].queryIdx ].pt ) #co-ordinate from 1st img
-                        _pt2 = np.array( kp2[ m[0].trainIdx ].pt )#co-ordinate from 2nd img corresponding
-                        #now _pt1 and _pt2 are corresponding co-oridnates
-
-                        __pt1.append( np.array(_pt1) )
-                        __pt2.append( np.array(_pt2) )
-
-                        # cv2.circle( im1, (int(_pt1[0]), int(_pt1[1])), 3, (0,255,0), -1 )
-                        # cv2.circle( im2, (int(_pt2[0]), int(_pt2[1])), 3, (0,255,0), -1 )
-
-                        # cv2.circle( im1, _pt1, 3, (0,255,0), -1 )
-                        # cv2.circle( im2, _pt2, 3, (0,255,0), -1 )
-                        # cv2.imshow( 'im1', im1 )
-                        # cv2.imshow( 'im2', im2 )
-                        # cv2.waitKey(10)
-                __pt1 = np.array( __pt1)
-                __pt2 = np.array( __pt2)
-                return __pt1, __pt2
-
-            matches_org = flann.knnMatch(S_kp_desc[L].astype('float32'),S_kp_desc[aT].astype('float32'),k=2) #find 2 nearest neighbours
-            __pt1, __pt2 = lowe_ratio_test( S_kp[L], S_kp[aT], matches_org )
-
-
-            nMatches = __pt1.shape[0]
-            nInliers = 0
-
-            if nMatches > 20:
-                E, mask = cv2.findEssentialMat( __pt1, __pt2 )
-                if mask is not None:
-                    nInliers = mask.sum()
-
-            if nInliers < 20: #edge color is orange when loop-closure candidates are geometrically deficiant
-                nap_msg.color_r = 0.8
-                nap_msg.color_g = 0.4
-                nap_msg.color_b = 0.0
-            if nMatches < 20: #if matches are too less than yellow
-                nap_msg.color_r = 0.8
-                nap_msg.color_g = 0.8
-                nap_msg.color_b = 0.0
-
-
-            pub_edge_msg.publish( nap_msg ) #publish raw edges (all)
-            # print 'Add Edge : ', loop_index-1, aT
-
-            # Record this match in a file
-            loop_candidates.append( [L, aT, sim_scores_logistic[aT], nMatches, nInliers] )
-
-
-            # Publish Visual Edge - (basically copy of nap_msg but has correspoing image thumbnails as well for visualization)
-            nap_visual_edge_msg = NapVisualEdgeMsg()
-            nap_visual_edge_msg.c_timestamp = nap_msg.c_timestamp
-            nap_visual_edge_msg.prev_timestamp = nap_msg.prev_timestamp
-            nap_visual_edge_msg.goodness = nap_msg.goodness
-            nap_visual_edge_msg.curr_image = CvBridge().cv2_to_imgmsg( S_thumbnail[L].astype('uint8'), "bgr8" )
-            nap_visual_edge_msg.prev_image = CvBridge().cv2_to_imgmsg( S_thumbnail[aT].astype('uint8'), "bgr8" )
-            nap_visual_edge_msg.curr_label = str(L) + '::%d,%d' %(nInliers,nMatches)
-            nap_visual_edge_msg.prev_label = str(aT)
-            pub_visual_edge_msg.publish( nap_visual_edge_msg )
-
-            # # Msg for neural cluster assgnment false color image pair - commented to reduce load
-            # nap_visual_edge_neural_cluster_msg = NapVisualEdgeMsg()
-            # nap_visual_edge_neural_cluster_msg.c_timestamp = nap_msg.c_timestamp
-            # nap_visual_edge_neural_cluster_msg.prev_timestamp = nap_msg.prev_timestamp
-            # nap_visual_edge_neural_cluster_msg.goodness = nap_msg.goodness
-            # nap_visual_edge_neural_cluster_msg.curr_image = CvBridge().cv2_to_imgmsg( S_lut[L].astype('uint8'), "bgr8" )
-            # nap_visual_edge_neural_cluster_msg.prev_image = CvBridge().cv2_to_imgmsg( S_lut[aT].astype('uint8'), "bgr8" )
-            # nap_visual_edge_neural_cluster_msg.curr_label = str(L)
-            # nap_visual_edge_neural_cluster_msg.prev_label = str(aT)
-            # pub_visual_edge_cluster_assgn_msg.publish( nap_visual_edge_neural_cluster_msg )
-
-
-
-    # Determination of edge using char instead of word TODO`sim_scores_logistic`
-    if False:
-        argT = np.where( sim_scores_logistic_char[0:L-2] > 0.65 )
-        if len(argT ) < 1:
+    _now_edges = []
+    for aT in argT[0]: #Iterate through each match and collect candidates
+        # Avoid matches from near current
+        if float(S_timestamp[L].to_sec() - S_timestamp[aT].to_sec())<10.  or aT < 5:
             continue
-        for aT in argT[0]:
-            # print aT
-            # print '%d<--->%d' %(L,aT)
-            nap_msg = NapMsg() #edge msg
-            nap_msg.c_timestamp = rospy.Time.from_sec( float(S_timestamp[L].to_sec()) )
-            nap_msg.prev_timestamp = rospy.Time.from_sec( float(S_timestamp[aT].to_sec()) )
-            nap_msg.goodness = sim_scores_logistic_char[aT]
-            nap_msg.color_r = 1.0
-            nap_msg.color_g = 0.64
-            nap_msg.color_b = 0.0
 
-            if float(S_timestamp[L-1].to_sec() - S_timestamp[aT].to_sec())>10.:
-                pub_edge_msg.publish( nap_msg ) #publish raw edges (all)
-                # print 'Add Edge : ', loop_index-1, aT
+        # nMatches, nInliers = do_geometric_verification( L-1, aT)
+        nMatches = 25
+        nInliers = 25
+
+        # Record this match in a file
+        # print '%d<--->%d' %(L-1,aT)
+        loop_candidates.append( [L, aT, sim_scores_logistic[aT], nMatches, nInliers] )
+
+        if nInliers > 20:
+            _now_edges.append( (L-1, aT, nInliers) )
+
+
+    publish_time( pub_time_geometric_verification, 1000.*(time.time() - startGeometricVerification) )
+
+    startPublish = time.time()
+    if len(_now_edges) > 0:
+
+        sorted_by_inlier_count = sorted( _now_edges, key=lambda tup: tup[2] )
+        # for each_edge in sorted_by_inlier_count[-1:]: #publish only top-1 candidate
+        for each_edge in sorted_by_inlier_count: #publish all candidates
+            i_curr = each_edge[0]
+            i_prev = each_edge[1]
+            i_inliers = each_edge[2]
+            nap_msg = make_nap_msg( i_curr, i_prev, (0.6,1.0,0.6) )
+            # nap_visual_edge_msg = make_nap_visual_msg( i_curr, i_prev, "%d;;;%d" %(i_curr,i_inliers), str(i_prev) )
+
+            pub_edge_msg.publish( nap_msg )
+            # pub_visual_edge_msg.publish( nap_visual_edge_msg )
+
+
+
+
+
+
+    # TODO Determination of edge using char instead of word TODO`sim_scores_logistic`
 
 
 
@@ -560,10 +574,13 @@ print 'Quit...!'
 print 'Writing ', PKG_PATH+'/DUMP/S_word.npy'
 print 'Writing ', PKG_PATH+'/DUMP/S_char.npy'
 print 'Writing ', PKG_PATH+'/DUMP/S_thumbnail.npy'
-np.save( PKG_PATH+'/DUMP/S_word.npy', S_word[0:loop_index+1] )
-np.save( PKG_PATH+'/DUMP/S_char.npy', S_char[0:loop_index+1] )
-np.save( PKG_PATH+'/DUMP/S_timestamp.npy', S_timestamp[0:loop_index+1] )
-np.save( PKG_PATH+'/DUMP/S_thumbnail.npy', S_thumbnail )
+# TODO: write these data only if variable exisit. use 1-line if here.
+np.save( PKG_PATH+'/DUMP/S_word.npy', S_word[0:loop_index+1] ) if S_word in locals()
+np.save( PKG_PATH+'/DUMP/S_char.npy', S_char[0:loop_index+1] ) if S_char in locals() else "No var _ to write"
+np.save( PKG_PATH+'/DUMP/S_timestamp.npy', S_timestamp[0:loop_index+1] ) if S_timestamp in locals() else "No var _ to write"
+np.save( PKG_PATH+'/DUMP/S_thumbnail.npy', np.array(S_thumbnail) ) if S_thumbnail in locals() else "No var _ to write"
+np.save( PKG_PATH+'/DUMP/S_thumbnail_lut.npy', np.array(S_lut) ) if S_lut in locals() else "No var _ to write"
+np.save( PKG_PATH+'/DUMP/S_thumbnail_lut_raw.npy', np.array(S_lut_raw) ) if S_lut_raw in locals() else "No var _ to write"
 
 print 'Writing Loop Candidates : ', PKG_PATH+'/DUMP/loop_candidates.csv'
 np.savetxt( PKG_PATH+'/DUMP/loop_candidates.csv', loop_candidates, delimiter=',', comments='NAP loop_candidates' )

@@ -42,31 +42,31 @@ def load_json( file_name ):
 
 #### LOAD Data ####
 print 'Load Data'
-folder = '/DUMP/tpt_night_loop/'
+folder = '/DUMP/'
 S_char = np.load( PKG_PATH+folder+'S_char.npy' )        #N x 128
 S_word = np.load( PKG_PATH+folder+'S_word.npy' )        #N x 8192
 S_thumbs = np.load( PKG_PATH+folder+'S_thumbnail.npy' ) #N x 96 x 128 x 3
 
 
 #### Load Graph Data ####
-print 'Load Groupping Graph Data'
-internal_e = load_json( PKG_PATH+folder+'/internal_e.json' )
-n_components = load_json( PKG_PATH+folder+'/n_components.json' )
+# print 'Load Groupping Graph Data'
+# internal_e = load_json( PKG_PATH+folder+'/internal_e.json' )
+# n_components = load_json( PKG_PATH+folder+'/n_components.json' )
 #with open( PKG_PATH+folder+'all_nodes.pickle', 'r' ) as f:
 #    all_nodes = pickle.load( f )
 
 #### subset of key frames ####
-print 'Subset of S_word'
-key_frames =  sorted(internal_e)
-key_frames.append( S_word.shape[0] )
-# S_subset_indx = np.array( [k for k in key_frames[0:-1] ] )
-S_subset_indx =  np.array([str(k) for k in range(0,S_word.shape[0],5) ])
-
-# S_word_subset = np.array( [S_word[k,:] for k in key_frames[0:-1] ] )
-S_word_subset = np.array( [S_word[k,:] for k in range(0,S_word.shape[0],5) ] )
-
-# S_thumbs_subset = np.array([S_thumbs[k,:,:,:] for k in key_frames[0:-1] ])
-S_thumbs_subset = np.array([S_thumbs[k,:,:,:] for k in range(0,S_word.shape[0],5) ])
+# print 'Subset of S_word'
+# key_frames =  sorted(internal_e)
+# key_frames.append( S_word.shape[0] )
+# # S_subset_indx = np.array( [k for k in key_frames[0:-1] ] )
+# S_subset_indx =  np.array([str(k) for k in range(0,S_word.shape[0],5) ])
+#
+# # S_word_subset = np.array( [S_word[k,:] for k in key_frames[0:-1] ] )
+# S_word_subset = np.array( [S_word[k,:] for k in range(0,S_word.shape[0],5) ] )
+#
+# # S_thumbs_subset = np.array([S_thumbs[k,:,:,:] for k in key_frames[0:-1] ])
+# S_thumbs_subset = np.array([S_thumbs[k,:,:,:] for k in range(0,S_word.shape[0],5) ])
 
 
 
@@ -75,8 +75,8 @@ S_thumbs_subset = np.array([S_thumbs[k,:,:,:] for k in range(0,S_word.shape[0],5
 # He suggested PCA for dense data and trucated SVD for sparse data
 print 'Dim Red as suggested by Author of t-SNE'
 pca = PCA( n_components=50 )
-S_word_pca = pca.fit_transform( S_word_subset )
-# S_word_pca = pca.fit_transform( S_word )
+# S_word_pca = pca.fit_transform( S_word_subset )
+S_word_pca = pca.fit_transform( S_word )
 
 
 
@@ -91,10 +91,10 @@ out = model.fit_transform( S_word_pca )
 #### Visualize #####
 print 'plot'
 fig, ax = plt.subplots()
-# # imscatter(out[:,0], out[:,1], S_thumbs, zoom=0.5, ax=ax)
-imscatter(out[:,0], out[:,1], S_thumbs_subset , zoom=0.5, ax=ax)
+imscatter(out[:,0], out[:,1], S_thumbs, zoom=0.5, ax=ax)
+# imscatter(out[:,0], out[:,1], S_thumbs_subset , zoom=0.5, ax=ax)
 ax.plot(out[:,0], out[:,1], 'r.')
-for label, x,y in zip( S_subset_indx, out[:,0], out[:,1] ):
-    ax.annotate( label , xy=(x,y), xytext=(x,y), size=10 )
+# for label, x,y in zip( S_subset_indx, out[:,0], out[:,1] ):
+#     ax.annotate( label , xy=(x,y), xytext=(x,y), size=10 )
 # plt.show()
 mpld3.show()

@@ -14,26 +14,26 @@ This can be visualized with rviz
 
 
 <!-- BAG -->
-
+<!--
 <arg name="bag_base" default="/media/mpkuse/Bulk_Data/other_seqs/tony_bags/"/>
 <arg name="bag_name" default="dji_00_cooked.bag"/>
 <arg name="bag_color_im_topic" default="/dji_sdk/image_raw_resized" />
 <arg name="bag_odometry_topic" default="/vins_estimator/odometry"/>
 <node name="rosbag" pkg="rosbag" type="play" args="-r 1 -d 10 $(arg bag_base)/$(arg bag_name)" output="log" />
-
+-->
 
 <!-- BAGs 01, captured 29th, June, 2017-->
-<!--<arg name="bag_base" default="/media/mpkuse/Bulk_Data/other_seqs/pointgrey_color_seq/"/>-->
-<!--<arg name="bag_name" default="cooked_2017-06-29-15-09-10.bag"/>-->
+<arg name="bag_base" default="/media/mpkuse/Bulk_Data/other_seqs/pointgrey_color_seq/"/>
+<arg name="bag_name" default="cooked_2017-06-29-15-09-10.bag"/>
 <!--<arg name="bag_name" default="cooked_2017-06-29-15-16-50.bag"/>-->
-<!--<arg name="bag_name" default="cooked_2017-06-29-15-23-43.bag"/>-->
-<!--<arg name="bag_name" default="cooked_2017-06-29-15-29-46.bag"/>-->
+<!--<arg name="bag_name" default="cooked_2017-06-29-15-23-43.bag"/>--> <!--start walk from SENG to BASE and back-->
+<!--<arg name="bag_name" default="cooked_2017-06-29-15-29-46.bag"/>--> <!--uninteresting-->
 <!--<arg name="bag_name" default="cooked_2017-06-29-15-31-19.bag"/>-->
 <!-- END Bags01 -->
 
 <!-- Bags 02, captured 4th July, 2017 -->
 <!--<arg name="bag_base" default="/media/mpkuse/Bulk_Data/other_seqs/pointgrey_color_seq/bags02"/>-->
-<!--<arg name="bag_name" default="cooked_2017-07-04-16-32-46.bag"/>-->
+<!--<arg name="bag_name" default="cooked_2017-07-04-16-32-46.bag"/>--> <!--X-walk -->
 <!--<arg name="bag_name" default="cooked_2017-07-04-16-36-37.bag"/>-->
 <!--<arg name="bag_name" default="cooked_2017-07-04-16-39-32.bag"/>--> <!--ok with nap, also ok with dbow-->
 <!--<arg name="bag_name" default="cooked_2017-07-04-16-41-25.bag"/>--> <!-- the one with going over same place but with rotated camera. nap does not work, dbow works :( -->
@@ -42,11 +42,11 @@ This can be visualized with rviz
 <!--<arg name="bag_name" default="cooked_2017-07-04-17-06-23.bag"/>-->
 
 
-<!--
+
 <arg name="bag_color_im_topic" default="/camera/image_raw" />
 <arg name="bag_odometry_topic" default="/vins_estimator/odometry"/>
 <node name="rosbag" pkg="rosbag" type="play" args="-r 1  -d 10 $(arg bag_base)/$(arg bag_name)" output="log" />
--->
+
 <!-- END OF BAGS
 -->
 

@@ -101,9 +101,11 @@ class PlaceRecognitionNetvlad:
     def normalize_batch( self, im_batch ):
         im_batch_normalized = np.zeros(im_batch.shape)
         for b in range(im_batch.shape[0]):
-            im_batch_normalized[b,:,:,0] = self.zNormalize( im_batch[b,:,:,0])
-            im_batch_normalized[b,:,:,1] = self.zNormalize( im_batch[b,:,:,1])
-            im_batch_normalized[b,:,:,2] = self.zNormalize( im_batch[b,:,:,2])
+            for ch in range(im_batch.shape[3]):
+                im_batch_normalized[b,:,:,ch] = self.zNormalize( im_batch[b,:,:,ch])
+            # im_batch_normalized[b,:,:,0] = self.zNormalize( im_batch[b,:,:,0])
+            # im_batch_normalized[b,:,:,1] = self.zNormalize( im_batch[b,:,:,1])
+            # im_batch_normalized[b,:,:,2] = self.zNormalize( im_batch[b,:,:,2])
             # im_batch_normalized[b,:,:,:] = self.rgbnormalize( im_batch[b,:,:,:] )
 
 

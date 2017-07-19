@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(nap)
 
+set( CMAKE_CXX_STANDARD 11 )
+find_package(Threads)
 
 find_package(catkin REQUIRED COMPONENTS
   roscpp
@@ -65,4 +67,4 @@ target_link_libraries( toy_vertigo_dcs ${CERES_LIBRARIES}  ${catkin_LIBRARIES} )
 
 target_link_libraries( dbow3_test ${DBoW3_LIBRARIES} ${OpenCV_LIBRARIES} )
 target_link_libraries( dbow3_naive  ${OpenCV_LIBRARIES} ${DBoW3_LIBRARIES} ${catkin_LIBRARIES} )
-target_link_libraries( pose_graph_opt_node  ${OpenCV_LIBRARIES} ${DBoW3_LIBRARIES} ${catkin_LIBRARIES} )
+target_link_libraries( pose_graph_opt_node  ${OpenCV_LIBRARIES} ${DBoW3_LIBRARIES} ${catkin_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})

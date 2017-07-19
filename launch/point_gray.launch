@@ -1,0 +1,108 @@
+<launch>
+
+<!--  #################
+      ###### BAGS #####
+      ################# -->
+
+    <!-- BAG SET 01, captured 29th June, 2017 -->
+    <arg name="bag_path" default="/media/mpkuse/Bulk_Data/other_seqs/pointgrey_color_seq/" />
+    <arg name="bag_file" default="2017-06-29-15-09-10.bag" comment="OK, on stairs for quick testing"/>
+    <!-- <arg name="bag_file" default="2017-06-29-15-11-31.bag"/> -->
+    <!--<arg name="bag_file" default="2017-06-29-15-16-50.bag"/>-->
+    <!-- <arg name="bag_file" default="2017-06-29-15-23-43.bag" comment="ok"/>-->
+    <!--<arg name="bag_file" default="2017-06-29-15-29-46.bag" comment="traj ok, but not ok to test netvlad"/>-->
+    <!-- <arg name="bag_file" default="2017-06-29-15-31-19.bag"/> -->
+    <!-- END OF BAG 01 -->
+
+    <!-- Bag set 02, captured 5th July, 2017 -->
+    <!-- <arg name="bag_path" default="/media/mpkuse/Bulk_Data/other_seqs/pointgrey_color_seq/bags02/" /> -->
+    <!--<arg name="bag_file" default="2017-07-04-16-28-55.bag" />--> <!-- in lift -->
+    <!-- <arg name="bag_file" default="2017-07-04-16-32-46.bag" /> -->
+    <!--<arg name="bag_file" default="2017-07-04-16-36-37.bag" />-->
+    <!--<arg name="bag_file" default="2017-07-04-16-39-32.bag" />-->
+    <!-- <arg name="bag_file" default="2017-07-04-16-41-25.bag" /> -->
+    <!-- <arg name="bag_file" default="2017-07-04-16-43-59.bag" /> -->
+    <!--<arg name="bag_file" default="2017-07-04-16-51-41.bag" />-->
+    <!--<arg name="bag_file" default="2017-07-04-17-06-23.bag" />-->
+    <!-- END OF BAG 02 -->
+
+
+
+    <node pkg="rosbag" type="play" name="rosbag" args="-d 10  $(arg bag_path)/$(arg bag_file)" output="log"/>
+    <!--<node name="recorder" pkg="rosbag" type="record" args="-O $(arg bag_path)/cooked_$(arg bag_file) /camera/image_raw /imu/imu /vins_estimator/odometry"/>-->
+    <!--<node name="recorder" pkg="rosbag" type="record" args="-O $(arg bag_path)/all_cooked_$(arg bag_file) -a "/>-->
+
+<!-- ##### END BAGS #### -->
+
+
+
+<!-- ##################
+     ###### VINS ######
+     ################## -->
+    <arg name="config_path" default = "$(find feature_tracker)/../config/point_gray/point_gray_config.yaml" />
+    <arg name="vins_path" default = "$(find feature_tracker)/../config/../" />
+
+    <node name="feature_tracker" pkg="feature_tracker" type="feature_tracker" output="log">
+        <param name="config_file" type="string" value="$(arg config_path)" />
+        <param name="vins_folder" type="string" value="$(arg vins_path)" />
+    </node>
+
+    <node name="vins_estimator" pkg="vins_estimator" type="vins_estimator" output="log">
+       <param name="config_file" type="string" value="$(arg config_path)" />
+       <param name="vins_folder" type="string" value="$(arg vins_path)" />
+    </node>
+<!-- ##### END VINS ##### -->
+
+
+
+
+<!--  #############################
+      ##### Place Recognition #####
+      ############################# -->
+      <!--<arg name="bag_color_im_topic" default="/camera/image_raw" />--> <!-- All input color images -->
+      <arg name="bag_color_im_topic" default="/vins_estimator/keyframe_image" /> <!-- Key frames only -->
+
+      <node name="nap" pkg="nap" type="nap_graph_modelling.py" output="screen" >
+        <remap to="$(arg bag_color_im_topic)" from="/semi_keyframes"/>
+        <!-- @Qin Tong, uncomment next time to set the published edges into your node -->
+         <remap to="/colocation" from="/raw_graph_edge"/>
+      </node>
+
+<!-- ##### END Place Recognition ##### -->
+
+
+
+<!-- #####################################################
+     ##### Pose Graph Optimization (Work in progress)#####
+     #####################################################
+            subscribes to `vins/camera_pose`, `3d_point_cloud`, `napMsg`  -->
+    <node name="pgraph_opt" pkg="nap" type="pose_graph_opt_node" output="log">
+        <param name="config_file" type="string" value="$(arg config_path)" />
+        <remap from="/raw_graph_edge" to="/colocation" />
+    </node>
+
+<!-- ##### END Pose Graph Optimization ##### -->
+
+
+
+<!--  #########################
+      ##### Visualization #####
+      ######################### -->
+
+    <!-- Qin Tong's Visualization -->
+    <!--<node name="rvizvisualisation" pkg="rviz" type="rviz" output="log" args="-d $(find vins_estimator)/../config/vins_rviz_config.rviz" />-->
+
+
+    <!--<node name="rvizvisualisation" pkg="rviz" type="rviz" output="log" args="-d $(find nap)/rviz/my_pose_graph.rviz" />-->
+
+    <!-- Display/Publish the colocation image. Subscribes to /raw_graph_visual_edge -->
+    <node name="colocation_viz_lite" pkg="nap" type="colocation_viz_lite.py" output="log" />
+
+
+<!-- ##### End Visualization ##### -->
+
+
+
+
+
+</launch>
