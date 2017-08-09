@@ -48,6 +48,7 @@ class PlaceRecognitionNetvlad:
         #
         # Setup internal Image queue
         self.im_queue = Queue.Queue()
+        self.im_queue_full_res = Queue.Queue()
         self.im_timestamp_queue = Queue.Queue()
         self.call_q = 0
         self.PARAM_CALLBACK_SKIP = PARAM_CALLBACK_SKIP
@@ -80,6 +81,9 @@ class PlaceRecognitionNetvlad:
 
         if self.call_q%n_SKIP == 0: #only use 1 out of 10 images
             # self.im_queue.put( cv_image )
+            print 'Original Image size : ', cv_image.shape
+            if self.im_queue_full_res is not None:
+                    self.im_queue_full_res.put(cv_image )
             self.im_queue.put(cv2.resize(cv_image, (320,240) ) )
             self.im_timestamp_queue.put(data.header.stamp)
         self.call_q = self.call_q + 1

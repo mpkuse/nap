@@ -12,7 +12,8 @@
     for appearence. 2 types of merges. a) seq merge b) loop-merge.
     Each time instant is a graph node represented with union-set data structure.
     The main threads does a seq merge. Another thread runs in bg and does
-    merges async
+    merges async. This is currently out of favour for a simple brute-force dot product
+    strategy.
 
         Author  : Manohar Kuse <mpkuse@connect.ust.hk>
         Created : 3rd Apr, 2017
@@ -55,7 +56,7 @@ PKG_PATH = rospkg.RosPack().get_path('nap')
 # PARAM_MODEL = PKG_PATH+'/tf.logs/netvlad_k48/model-13000' #PKG_PATH+'/tf.logs/netvlad_angular_loss_w_mini_dev/model-4000'
 # PARAM_MODEL = PKG_PATH+'/tf.logs/netvlad_k64_tokyoTM/model-3500' #trained with tokyo, normalization is simple '
 # PARAM_MODEL = PKG_PATH+'/tf.logs/netvlad_k64_b20_tokyoTM_mean_aggregation/model-3750' #trained with mean aggregation in place of usual sum aggregation in netvlad_layer
-PARAM_MODEL = PKG_PATH+'/tf.logs/netvlad_k64_b20_tokyoTM_pos_set_dev/model-4000' #trained with rotation without black borders and with pos-set-dev
+PARAM_MODEL = PKG_PATH+'/tf.logs/netvlad_k64_b20_tokyoTM_pos_set_dev/model-6500' #trained with rotation without black borders and with pos-set-dev
 
 # Dont forget to load the eigen values, eigen vectors and mean
 
@@ -253,6 +254,7 @@ S_word = []
 
 S_timestamp = [] #np.zeros( 25000, dtype=rospy.Time )
 S_thumbnail = []
+S_thumbnail_full_res = []
 S_lut = [] #only for debug, the cluster assgnment image (list of false color)
 S_lut_raw = [] # raw 1-channel cluster assignment
 loop_index = -1
@@ -272,7 +274,9 @@ while not rospy.is_shutdown():
     publish_time( pub_time_total_loop, 1000.*(time.time() - startTotalTime) ) #this has been put like to use startTotalTime from prev iteration
     startTotalTime = time.time()
     #------------------- Queue book-keeping---------------------#
-    rospy.loginfo( '---\nQueue Size : %d, %d' %( place_mod.im_queue.qsize(), place_mod.im_timestamp_queue.qsize()) )
+    rospy.loginfo( '---Queue Size : %d, %d' %( place_mod.im_queue.qsize(), place_mod.im_timestamp_queue.qsize()) )
+    if place_mod.im_queue_full_res is not None:
+        rospy.loginfo( '---Full Res Queue : %d' %(place_mod.im_queue_full_res.qsize())  )
     if place_mod.im_queue.qsize() < 1 and place_mod.im_timestamp_queue.qsize() < 1:
         rospy.logdebug( 'Empty Queue...Waiting' )
         continue
@@ -282,6 +286,9 @@ while not rospy.is_shutdown():
     # Get Image & TimeStamp
     im_raw = place_mod.im_queue.get()
     print 'im.size : ', im_raw.shape
+    if place_mod.im_queue_full_res is not None:
+        im_raw_full_res = place_mod.im_queue_full_res.get()
+        print 'im_full_res.size : ', im_raw_full_res.shape
     im_raw_timestamp = place_mod.im_timestamp_queue.get()
 
     loop_index += 1
@@ -335,6 +342,8 @@ while not rospy.is_shutdown():
     # S_thumbnail.append(  cv2.resize( im_raw.astype('uint8'), (128,96) ) )#, fx=0.2, fy=0.2 ) )
     S_thumbnail.append(  cv2.resize( im_raw.astype('uint8'), (320,240) ) )#, fx=0.2, fy=0.2 ) )
 
+    if place_mod.im_queue_full_res is not None:
+        S_thumbnail_full_res.append( im_raw_full_res.astype('uint8') )
 
     # DOT = np.dot( S_char[0:loop_index+1,:], S_char[loop_index,:] )
     # DOT_word = np.dot( S_word[0:loop_index+1,:], S_word[loop_index,:] )
@@ -573,14 +582,25 @@ while not rospy.is_shutdown():
 print 'Quit...!'
 print 'Writing ', PKG_PATH+'/DUMP/S_word.npy'
 print 'Writing ', PKG_PATH+'/DUMP/S_char.npy'
+print 'Writing ', PKG_PATH+'/DUMP/S_timestamp.npy'
 print 'Writing ', PKG_PATH+'/DUMP/S_thumbnail.npy'
+print 'Writing ', PKG_PATH+'/DUMP/S_thumbnail_lut.npy'
+print 'Writing ', PKG_PATH+'/DUMP/S_thumbnail_lut_raw.npy'
+
 # TODO: write these data only if variable exisit. use 1-line if here.
-np.save( PKG_PATH+'/DUMP/S_word.npy', S_word[0:loop_index+1] ) if S_word in locals()
-np.save( PKG_PATH+'/DUMP/S_char.npy', S_char[0:loop_index+1] ) if S_char in locals() else "No var _ to write"
-np.save( PKG_PATH+'/DUMP/S_timestamp.npy', S_timestamp[0:loop_index+1] ) if S_timestamp in locals() else "No var _ to write"
-np.save( PKG_PATH+'/DUMP/S_thumbnail.npy', np.array(S_thumbnail) ) if S_thumbnail in locals() else "No var _ to write"
-np.save( PKG_PATH+'/DUMP/S_thumbnail_lut.npy', np.array(S_lut) ) if S_lut in locals() else "No var _ to write"
-np.save( PKG_PATH+'/DUMP/S_thumbnail_lut_raw.npy', np.array(S_lut_raw) ) if S_lut_raw in locals() else "No var _ to write"
+np.save( PKG_PATH+'/DUMP/S_word.npy', S_word[0:loop_index+1] )
+np.save( PKG_PATH+'/DUMP/S_char.npy', S_char[0:loop_index+1] )
+np.save( PKG_PATH+'/DUMP/S_timestamp.npy', S_timestamp[0:loop_index+1] )
+np.save( PKG_PATH+'/DUMP/S_thumbnail.npy', np.array(S_thumbnail) )
+np.save( PKG_PATH+'/DUMP/S_thumbnail_lut.npy', np.array(S_lut) )
+np.save( PKG_PATH+'/DUMP/S_thumbnail_lut_raw.npy', np.array(S_lut_raw) )
+
+if place_mod.im_queue_full_res is not None:
+    print 'Writing ', PKG_PATH+'/DUMP/S_thumbnail_full_res.npy'
+    np.save( PKG_PATH+'/DUMP/S_thumbnail_full_res.npy', np.array(S_thumbnail_full_res) )
+else:
+    print 'Not writing full res images'
+
 
 print 'Writing Loop Candidates : ', PKG_PATH+'/DUMP/loop_candidates.csv'
 np.savetxt( PKG_PATH+'/DUMP/loop_candidates.csv', loop_candidates, delimiter=',', comments='NAP loop_candidates' )

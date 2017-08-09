@@ -5,24 +5,24 @@
       ################# -->
 
     <!-- BAG SET 01, captured 29th June, 2017 -->
-    <arg name="bag_path" default="/media/mpkuse/Bulk_Data/other_seqs/pointgrey_color_seq/" />
-    <arg name="bag_file" default="2017-06-29-15-09-10.bag" comment="OK, on stairs for quick testing"/>
+    <!-- <arg name="bag_path" default="/media/mpkuse/Bulk_Data/other_seqs/pointgrey_color_seq/" /> -->
+    <!-- <arg name="bag_file" default="2017-06-29-15-09-10.bag" doc="OK, on stairs for quick testing"/> -->
     <!-- <arg name="bag_file" default="2017-06-29-15-11-31.bag"/> -->
-    <!--<arg name="bag_file" default="2017-06-29-15-16-50.bag"/>-->
-    <!-- <arg name="bag_file" default="2017-06-29-15-23-43.bag" comment="ok"/>-->
-    <!--<arg name="bag_file" default="2017-06-29-15-29-46.bag" comment="traj ok, but not ok to test netvlad"/>-->
+    <!-- <arg name="bag_file" default="2017-06-29-15-16-50.bag" doc="start from UG flr of cyt to lawn and back. not a good seq to test with"/> -->
+    <!-- <arg name="bag_file" default="2017-06-29-15-23-43.bag" doc="ok"/> -->
+    <!--<arg name="bag_file" default="2017-06-29-15-29-46.bag" doc="traj ok, but not ok to test netvlad"/>-->
     <!-- <arg name="bag_file" default="2017-06-29-15-31-19.bag"/> -->
     <!-- END OF BAG 01 -->
 
     <!-- Bag set 02, captured 5th July, 2017 -->
-    <!-- <arg name="bag_path" default="/media/mpkuse/Bulk_Data/other_seqs/pointgrey_color_seq/bags02/" /> -->
-    <!--<arg name="bag_file" default="2017-07-04-16-28-55.bag" />--> <!-- in lift -->
+    <arg name="bag_path" default="/media/mpkuse/Bulk_Data/other_seqs/pointgrey_color_seq/bags02/" />
+    <!--<arg name="bag_file" default="2017-07-04-16-28-55.bag" doc="in lift"/>-->
     <!-- <arg name="bag_file" default="2017-07-04-16-32-46.bag" /> -->
-    <!--<arg name="bag_file" default="2017-07-04-16-36-37.bag" />-->
-    <!--<arg name="bag_file" default="2017-07-04-16-39-32.bag" />-->
+    <!-- <arg name="bag_file" default="2017-07-04-16-36-37.bag" doc="bad for testing" /> -->
+    <!-- <arg name="bag_file" default="2017-07-04-16-39-32.bag" /> -->
     <!-- <arg name="bag_file" default="2017-07-04-16-41-25.bag" /> -->
-    <!-- <arg name="bag_file" default="2017-07-04-16-43-59.bag" /> -->
-    <!--<arg name="bag_file" default="2017-07-04-16-51-41.bag" />-->
+    <arg name="bag_file" default="2017-07-04-16-43-59.bag" />
+    <!-- <arg name="bag_file" default="2017-07-04-16-51-41.bag" /> -->
     <!--<arg name="bag_file" default="2017-07-04-17-06-23.bag" />-->
     <!-- END OF BAG 02 -->
 
