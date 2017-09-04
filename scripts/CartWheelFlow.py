@@ -591,29 +591,57 @@ class VGGDescriptor:
 
     # vggnet16. is_training is a placeholder boolean
     def vgg16( self, inputs, is_training ):
+        # with slim.arg_scope([slim.conv2d, slim.fully_connected],\
+        #                   activation_fn=tf.nn.relu,\
+        #                   weights_initializer=tf.contrib.layers.xavier_initializer_conv2d(),\
+        #                   weights_regularizer=slim.l2_regularizer(0.001),
+        #                   normalizer_fn=slim.batch_norm, \
+        #                   normalizer_params={'is_training':is_training, 'decay': 0.9, 'updates_collections': None, 'scale': True}\
+        #                   ):
+        #     # tf.summary.histogram( 'xxxx_inputs', inputs )
+        #     net = slim.repeat(inputs, 2, slim.conv2d, 64, [3, 3], scope='conv1')
+        #     # tf.summary.histogram( 'xxxx_blk1', net )
+        #     net = slim.max_pool2d(net, [2, 2], scope='pool1')
+        #     net = slim.repeat(net, 2, slim.conv2d, 128, [3, 3], scope='conv2')
+        #     # tf.summary.histogram( 'xxxx_blk2', net )
+        #     net = slim.max_pool2d(net, [2, 2], scope='pool2')
+        #
+        #     # net = slim.repeat(net, 1, slim.conv2d, 256, [3, 3], scope='conv3')    #with relu and with BN
+        #     net = slim.conv2d( net, 256, [3,3], activation_fn=None, scope='conv3' ) #w/o relu at the end. with BN. #TODO Possibly also remove BN from last one
+        #     # tf.summary.histogram( 'xxxx_blk3', net )
+
+        # ResNet - mini
+        u = [64, 128] #original
+        m = [3,3,3] #original
         with slim.arg_scope([slim.conv2d, slim.fully_connected],\
                           activation_fn=tf.nn.relu,\
                           weights_initializer=tf.contrib.layers.xavier_initializer_conv2d(),\
-                          weights_regularizer=slim.l2_regularizer(0.001),
+                          weights_regularizer=slim.l2_regularizer(0.000005),
                           normalizer_fn=slim.batch_norm, \
                           normalizer_params={'is_training':is_training, 'decay': 0.9, 'updates_collections': None, 'scale': True}\
                           ):
+
+            net = slim.conv2d( inputs, 64, [7,7], scope='conv0' )
+
             # tf.summary.histogram( 'xxxx_inputs', inputs )
-            net = slim.repeat(inputs, 2, slim.conv2d, 64, [3, 3], scope='conv1')
+            net_out = net + slim.repeat(net, 2, slim.conv2d, 64, [m[0], m[0]], scope='conv1') #u=64 m=[3,3]
+            net = net_out
             # tf.summary.histogram( 'xxxx_blk1', net )
             net = slim.max_pool2d(net, [2, 2], scope='pool1')
-            net = slim.repeat(net, 2, slim.conv2d, 128, [3, 3], scope='conv2')
+
+            net = slim.conv2d( net, 128, [3,3], scope='conv2__x' )
+            net_out = net + slim.repeat(net, 2, slim.conv2d, 128, [m[1], m[1]], scope='conv2') #u=128, m=[3,3]
+            net = net_out
             # tf.summary.histogram( 'xxxx_blk2', net )
             net = slim.max_pool2d(net, [2, 2], scope='pool2')
 
-            # net = slim.repeat(net, 1, slim.conv2d, 256, [3, 3], scope='conv3')    #with relu and with BN
-            net = slim.conv2d( net, 256, [3,3], activation_fn=None, scope='conv3' ) #w/o relu at the end. with BN. #TODO Possibly also remove BN from last one
+            # net = slim.repeat(net, 1, slim.conv2d, self.D, [3, 3], scope='conv3')    #with relu and with BN
+            net = slim.conv2d( net, self._D, [m[2],m[2]], activation_fn=None, scope='conv3' ) #256 #w/o relu at the end. with BN. #TODO Possibly also remove BN from last one
             # tf.summary.histogram( 'xxxx_blk3', net )
 
             # net is now 16x60x80x256
 
-            # MAX POOLING
-            # TODO: To be replaced with NetVLAD-layer
+
 
             # ------ NetVLAD ------ #
             net = self.netvlad_layer( net ) #16x64x256, used 32 cluster instead of 64 for computation reason

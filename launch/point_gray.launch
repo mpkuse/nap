@@ -1,5 +1,21 @@
 <launch>
 
+<!-- ##################
+     #### Live Run ####
+     ################## -->
+     <!-- NOTE
+        Chk USBFS memory (default is 16, not suitable for point grey cam):
+          $cat /sys/module/usbcore/parameters/usbfs_memory_mb
+
+        Set USBFS memory
+          $sudo sh -c 'echo 1024 > /sys/module/usbcore/parameters/usbfs_memory_mb'
+
+        run point grey cam
+          $roslaunch pointgrey_camera_driver camera.launch
+
+
+     -->
+
 <!--  #################
       ###### BAGS #####
       ################# -->
@@ -11,21 +27,29 @@
     <!-- <arg name="bag_file" default="2017-06-29-15-16-50.bag" doc="start from UG flr of cyt to lawn and back. not a good seq to test with"/> -->
     <!-- <arg name="bag_file" default="2017-06-29-15-23-43.bag" doc="ok"/> -->
     <!--<arg name="bag_file" default="2017-06-29-15-29-46.bag" doc="traj ok, but not ok to test netvlad"/>-->
-    <!-- <arg name="bag_file" default="2017-06-29-15-31-19.bag"/> -->
+    <!-- <arg name="bag_file" default="2017-06-29-15-31-19.bag" doc="dont use"/> -->
     <!-- END OF BAG 01 -->
 
     <!-- Bag set 02, captured 5th July, 2017 -->
-    <arg name="bag_path" default="/media/mpkuse/Bulk_Data/other_seqs/pointgrey_color_seq/bags02/" />
+    <!-- <arg name="bag_path" default="/media/mpkuse/Bulk_Data/other_seqs/pointgrey_color_seq/bags02/" /> -->
     <!--<arg name="bag_file" default="2017-07-04-16-28-55.bag" doc="in lift"/>-->
     <!-- <arg name="bag_file" default="2017-07-04-16-32-46.bag" /> -->
     <!-- <arg name="bag_file" default="2017-07-04-16-36-37.bag" doc="bad for testing" /> -->
     <!-- <arg name="bag_file" default="2017-07-04-16-39-32.bag" /> -->
     <!-- <arg name="bag_file" default="2017-07-04-16-41-25.bag" /> -->
-    <arg name="bag_file" default="2017-07-04-16-43-59.bag" />
+    <!-- <arg name="bag_file" default="2017-07-04-16-43-59.bag" /> -->
     <!-- <arg name="bag_file" default="2017-07-04-16-51-41.bag" /> -->
     <!--<arg name="bag_file" default="2017-07-04-17-06-23.bag" />-->
     <!-- END OF BAG 02 -->
 
+
+    <!-- Bag set 03, Captured on 16th Aug, 2017 -->
+    <arg name="bag_path" default="/media/mpkuse/Bulk_Data/other_seqs/pointgrey_color_seq/bag03/" />
+    <!-- <arg name="bag_file" default="2017-08-16-14-50-54.bag" doc="on stairs, bad for depth initialization, best dont use"/> -->
+    <!-- <arg name="bag_file" default="2017-08-16-14-54-01.bag" doc="start UG outside CYT, takes stairs down to enterprise center walk back" /> -->
+    <arg name="bag_file" default="2017-08-16-15-00-56.bag" doc="start from SENG towards BASE. Good results!"/>
+    <!-- <arg name="bag_file" default="2017-08-16-15-06-12.bag" doc="Walking in BASE. Alright! but a little short the seq. 1 wrong"/> -->
+    <!-- <arg name="bag_file" default="2017-08-16-15-09-15.bag" /> -->
 
 
     <node pkg="rosbag" type="play" name="rosbag" args="-d 10  $(arg bag_path)/$(arg bag_file)" output="log"/>
@@ -59,14 +83,28 @@
 <!--  #############################
       ##### Place Recognition #####
       ############################# -->
-      <!--<arg name="bag_color_im_topic" default="/camera/image_raw" />--> <!-- All input color images -->
       <arg name="bag_color_im_topic" default="/vins_estimator/keyframe_image" /> <!-- Key frames only -->
+      <!--<arg name="bag_color_im_topic" default="/camera/image_raw" />--><!-- All input color images -->
 
-      <node name="nap" pkg="nap" type="nap_graph_modelling.py" output="screen" >
+      <!--NAP Node -->
+      <!-- <node name="nap" pkg="nap" type="nap_graph_modelling.py" output="screen" >
         <remap to="$(arg bag_color_im_topic)" from="/semi_keyframes"/>
-        <!-- @Qin Tong, uncomment next time to set the published edges into your node -->
          <remap to="/colocation" from="/raw_graph_edge"/>
+      </node> -->
+
+
+      <!-- DBOW node -->
+      <!-- <node name="dbow_node" pkg="nap" type="dbow3_naive" output="screen">
+        <remap to="$(arg bag_color_im_topic)" from="/color_image_inp" />
+        <remap from="/colocation_dbow" to="/colocation" />
+      </node> -->
+
+      <!-- DBOW node by Qin Tong -->
+      <!-- TODO: In tony's node add code to writes images to file and also writeout all loop_candidates. But essentially this is same as my DBOW node -->
+      <node name="dbow_qintony_node" pkg="loop_detector" type="loop_detector" output="log">
       </node>
+
+
 
 <!-- ##### END Place Recognition ##### -->
 

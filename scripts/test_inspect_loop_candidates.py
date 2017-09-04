@@ -21,9 +21,14 @@ IMAGE_FILE_NPY_lut = '/home/mpkuse/catkin_ws/src/nap/DUMP/S_thumbnail_lut.npy'
 IMAGE_FILE_NPY_lut_raw = '/home/mpkuse/catkin_ws/src/nap/DUMP/S_thumbnail_lut_raw.npy'
 LOOP_CANDIDATES_NPY = '/home/mpkuse/catkin_ws/src/nap/DUMP/loop_candidates.csv'
 
+FULL_RES_IMAGE_FILE_NPY = '/home/mpkuse/catkin_ws/src/nap/DUMP/S_thumbnail_full_res.npy'
+
+
 print 'Reading : ', IMAGE_FILE_NPY
 S_thumbnails = np.load(IMAGE_FILE_NPY)
+print 'Reading : ', IMAGE_FILE_NPY_lut
 S_thumbnails_lut = np.load(IMAGE_FILE_NPY_lut)
+print 'Reading : ', IMAGE_FILE_NPY_lut_raw
 S_thumbnails_lut_raw = np.load(IMAGE_FILE_NPY_lut_raw)
 print 'S_thumbnails.shape : ', S_thumbnails.shape
 # for i in range(S_thumbnails.shape[0]):
@@ -32,6 +37,11 @@ print 'S_thumbnails.shape : ', S_thumbnails.shape
 #     if cv2.waitKey(0) == 27:
 #         break
 # quit()
+
+
+print 'Reading : ', FULL_RES_IMAGE_FILE_NPY
+S_full_res = np.load(FULL_RES_IMAGE_FILE_NPY)
+
 
 print 'Reading : ', LOOP_CANDIDATES_NPY
 loop_candidates = np.loadtxt( LOOP_CANDIDATES_NPY, delimiter=',' )
@@ -61,13 +71,11 @@ for i,l in enumerate(loop_candidates):
     print '%04d of %04d] curr=%04d, prev=%04d, score=%4.2f, nMatch=%3d, nConsistentMatch=%3d' %(i, loop_candidates.shape[0],curr,prev,score,nMatches,nConsistentMatches)
     # if nMatches > 10:
     # if score > 0.0:
-    if flag is True and score>0.4:
+    flag = True #just remove this if u want to group matches
+    if flag is True and score>0.5:
         flag = False
-        cv2.imshow( 'curr', S_thumbnails[curr, :,:,:] )
-        cv2.imshow( 'prev', S_thumbnails[prev, :,:,:] )
 
-        # cv2.imshow( 'curr_lut', cv2.resize( S_thumbnails_lut[curr, :,:,:], (320,240)) )
-        # cv2.imshow( 'prev_lut', cv2.resize( S_thumbnails_lut[prev, :,:,:], (320,240)) )
+
         #
         # alpha_curr = 0.45*S_thumbnails[curr, :,:,:] + 0.35*cv2.resize( S_thumbnails_lut[curr, :,:,:], (320,240))
         # alpha_prev = 0.45*S_thumbnails[prev, :,:,:] + 0.35*cv2.resize( S_thumbnails_lut[prev, :,:,:], (320,240))
@@ -78,12 +86,27 @@ for i,l in enumerate(loop_candidates):
         #
         #
         #
-        # VV.set_im( S_thumbnails[curr, :,:,:] , S_thumbnails[prev, :,:,:] )
-        # VV.set_im_lut( cv2.resize(S_thumbnails_lut[curr, :,:,:], (320,240), interpolation=cv2.INTER_NEAREST), cv2.resize(S_thumbnails_lut[prev, :,:,:], (320,240), interpolation=cv2.INTER_NEAREST))
-        # VV.set_im_lut_raw( cv2.resize(S_thumbnails_lut_raw[curr, :,:], (320,240), interpolation=cv2.INTER_NEAREST), cv2.resize(S_thumbnails_lut_raw[prev, :,:], (320,240), interpolation=cv2.INTER_NEAREST))
-        # VV.obliq_geometry_verify(  )
-        # # VV.simple_verify()
+        VV.set_im( S_thumbnails[curr, :,:,:] , S_thumbnails[prev, :,:,:] )
+        VV.set_im_lut( cv2.resize(S_thumbnails_lut[curr, :,:,:], (320,240), interpolation=cv2.INTER_NEAREST), cv2.resize(S_thumbnails_lut[prev, :,:,:], (320,240), interpolation=cv2.INTER_NEAREST))
+        VV.set_im_lut_raw( cv2.resize(S_thumbnails_lut_raw[curr, :,:], (320,240), interpolation=cv2.INTER_NEAREST), cv2.resize(S_thumbnails_lut_raw[prev, :,:], (320,240), interpolation=cv2.INTER_NEAREST))
+        nMatches, nInliers = VV.simple_verify(features='orb', debug_images=False)
+        # VV.simple_verify(features='surf')
 
+        if nInliers < 20:
+            cv2.imshow( 'curr', S_thumbnails[curr, :,:,:] )
+            cv2.imshow( 'prev', S_thumbnails[prev, :,:,:] )
 
-        if cv2.waitKey(0) == 27:
-            break
+            cv2.imshow( 'curr_lut', cv2.resize( S_thumbnails_lut[curr, :,:,:], (320,240)) )
+            cv2.imshow( 'prev_lut', cv2.resize( S_thumbnails_lut[prev, :,:,:], (320,240)) )
+
+            nMatches, nInliers, canvas = VV.simple_verify(features='orb', debug_images=True)
+            # VV.do_daisy()
+            # cv2.imshow( 'canvas', canvas )
+
+            cv2.moveWindow( 'prev', 350, 0 )
+            cv2.moveWindow( 'curr_lut', 0, 350 )
+            cv2.moveWindow( 'prev_lut', 350, 350 )
+            cv2.moveWindow( 'canvas', 0, 750 )
+
+            if (cv2.waitKey(0) & 0xFF) == ord('q'):
+                break

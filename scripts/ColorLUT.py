@@ -81,3 +81,6 @@ class ColorLUT:
         B = (self._color[:,2])[ im ]
         lut = np.dstack( (B,G,R) )  #opencv array now
         return np.array(lut)
+
+    def get_color( self, i ):
+        return self._color[i].astype('int32')
