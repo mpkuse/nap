@@ -54,6 +54,8 @@ class GeometricVerification:
     def set_im(self,im1, im2):
         self.im1 = im1
         self.im2 = im2
+        self.daisy_im1 = None
+        self.daisy_im2 = None
 
     def set_im_lut(self,im1_lut, im2_lut):
         self.im1_lut = im1_lut
@@ -96,6 +98,7 @@ class GeometricVerification:
         return __pt1, __pt2
 
     def _print_time(self, msg, startT, endT):
+        return
         print tcol.OKBLUE, '%8.2f :%s (ms)'  %( 1000. * (endT - startT), msg ), tcol.ENDC
 
     # Features : ['orb', 'surf']
@@ -435,6 +438,13 @@ class GeometricVerification:
             return OU
 
 
+    # Return the daisy image for input image
+    def static_get_daisy_descriptor_mat( self, xim ):
+        xim_gray = cv2.cvtColor( xim, cv2.COLOR_BGR2GRAY ).astype('float64')
+        output = self.dai.hook( xim_gray.flatten(), xim_gray.shape )
+        output = np.array( output ).reshape( xim_gray.shape[0], xim_gray.shape[1], -1 )
+        return output
+
     def get_whole_image_daisy(self, im_no):
         # cv2.imshow( 'do_daisy_im1', self.im1 )
         # cv2.imshow( 'do_daisy_im2', self.im2 )
@@ -465,7 +475,7 @@ class GeometricVerification:
         # Lowe's ratio test
         for i, (m,n) in enumerate( matches ):
             #print i, m.trainIdx, m.queryIdx, m.distance, n.trainIdx, n.queryIdx, n.distance
-            if m.distance < 0.7 * n.distance:
+            if m.distance < 0.8 * n.distance:
                 M.append( m )
 
         # print '%d of %d pass lowe\'s ratio test' %( len(M), len(matches) )
@@ -492,7 +502,11 @@ class GeometricVerification:
             # cv2.line( canvas, (a,b), (c+self.im1.shape[1],d), (0,255,0) )
         # cv2.imshow( 'canvas_dense', canvas )
         # return canvas, pts_A, pts_B
+
+
         return pts_A, pts_B
+
+
 
 
     # This function will compute the daisy matches, given the cluster assignments
@@ -512,6 +526,8 @@ class GeometricVerification:
         startDaisy = time.time()
         D_curr = self.get_whole_image_daisy( im_no=1 )
         D_prev = self.get_whole_image_daisy( im_no=2 )
+        self.daisy_im1 = D_curr
+        self.daisy_im2 = D_prev
         self._print_time( 'Daisy (2 images)', startDaisy, time.time() )
 
         # Step-2 : Given a k which is in both images, compare clusters with daisy. To do that do NN followd by Lowe's ratio test etc
@@ -549,8 +565,8 @@ class GeometricVerification:
             # DEBUG
             if DEBUG:
                 print 'k=%d returned %d matches' %(k, len(_pts_A) )
-                xim1 = self.s_overlay( self.im1, np.int0(Z_curr==k) )
-                xim2 = self.s_overlay( self.im2, np.int0(Z_prev==k) )
+                xim1 = self.s_overlay( self.im1, np.int0(Z_curr==k), 0.7 )
+                xim2 = self.s_overlay( self.im2, np.int0(Z_prev==k), 0.7 )
                 # xcanvas = self.plot_point_sets( self.im1, _pts_A, self.im2, _pts_B)
                 xcanvas = self.plot_point_sets( xim1, _pts_A, xim2, _pts_B)
                 cv2.imshow( 'xcanvas', xcanvas)
@@ -562,7 +578,7 @@ class GeometricVerification:
 
 
         # DEBUG, checking pts_A, pts_B
-        if DEBUG or True:
+        if DEBUG:
             print 'Total Matches : %d' %(len(pts_A))
             xcanvas = self.plot_point_sets( self.im1, pts_A, self.im2, pts_B)
             cv2.imshow( 'full_xcanvas', xcanvas)
@@ -571,14 +587,22 @@ class GeometricVerification:
         # End DEBUG
 
 
+        # Step-3 : Essential Matrix Text
+        E, mask = cv2.findFundamentalMat( np.array( pts_A ), np.array( pts_B ), param1=5 )
+        print 'Total Dense Matches : ', len(pts_A)
+        print 'Total Verified Dense Matches : ', mask.sum()
         # code.interact( local=locals() )
 
-        return pts_A, pts_B
+
+        return pts_A, pts_B, mask
 
 
-    def plot_point_sets( self, im1, pt1, im2, pt2 ):
+    def plot_point_sets( self, im1, pt1, im2, pt2, mask=None ):
         xcanvas = np.concatenate( (im1, im2), axis=1 )
         for xi in range( len(pt1) ):
+            if (mask is not None) and (mask[xi,0] == 0):
+                continue
+
             cv2.circle( xcanvas, pt1[xi], 4, (255,0,255) )
             ptb = tuple(np.array(pt2[xi]) + [im1.shape[1],0])
             cv2.circle( xcanvas, ptb, 4, (255,0,255) )
@@ -592,3 +616,122 @@ class GeometricVerification:
 
         out_im = alpha*im1 + (1 - alpha)*cv2.resize(out_imcurr,  (im1.shape[1], im1.shape[0])  )
         return out_im.astype('uint8')
+
+
+
+
+    # grid : [ [curr, prev], [curr-1  X ] ]
+    def plot_3way_match( self, curr_im, pts_curr, prev_im, pts_prev, curr_m_im, pts_curr_m ):
+
+        r1 = np.concatenate( ( curr_im, prev_im ), axis=1 )
+        r2 = np.concatenate( ( curr_m_im, np.zeros( curr_im.shape, dtype='uint8' ) ), axis=1 )
+        gridd = np.concatenate( (r1,r2), axis=0 )
+
+        print 'pts_curr.shape   ', len(pts_curr)
+        print 'pts_prev.shape   ', len(pts_prev)
+        print 'pts_curr_m.shape ', len(pts_curr_m)
+        # all 3 should have same number of points
+
+        for xi in range( len(pts_curr) ):
+            cv2.circle( gridd, pts_curr[xi], 4, (0,255,0) )
+            ptb = tuple(np.array(pts_prev[xi]) + [curr_im.shape[1],0])
+            cv2.circle( gridd, ptb, 4, (0,255,0) )
+            cv2.line( gridd, pts_curr[xi], ptb, (255,0,0) )
+
+        for xi in range( len(pts_curr) ):
+            # cv2.circle( gridd, pts_curr[xi], 4, (0,255,0) )
+            ptb = tuple(np.array(pts_curr_m[xi]) + [0,curr_im.shape[0]])
+            cv2.circle( gridd, ptb, 4, (0,255,0) )
+            cv2.line( gridd, pts_curr[xi], ptb, (255,30,255) )
+
+
+        return gridd
+
+
+    # Given the matches between curr and prev. expand these matches onto curr-1.
+    # Main purpose is to get a 3-way matches for pose computation. The way this
+    # is done is for each match between curr and prev, find the NN in curr_m_im
+    # around the neighbourhood of 40x40 in daisy space.
+    #
+    #   pts_curr, pts_prev, mask_c_p : output from daisy_dense_matches()
+    #   curr_m_im : curr-1 image
+    def expand_matches_to_curr_m( self, pts_curr, pts_prev, mask_c_p,   curr_m_im):
+
+        DEBUG = False
+        PARAM_W = 20
+
+        masked_pts_curr = list( pts_curr[i] for i in np.where( mask_c_p[:,0] == 1 )[0] )
+        masked_pts_prev = list( pts_prev[i] for i in np.where( mask_c_p[:,0] == 1 )[0] )
+
+        _pts_curr = np.array( masked_pts_curr )
+
+        D_pts_curr = self.daisy_im1[ _pts_curr[:,1], _pts_curr[:,0], : ] #assuming im1 is curr
+
+        if DEBUG:
+            print 'using a neighbooirhood of %d' %(2*PARAM_W + 1)
+            xcanvas_c_p = self.plot_point_sets( self.im1, pts_curr, self.im2, pts_prev, mask_c_p)
+            cv2.imshow( 'xcanvas_c_p', xcanvas_c_p)
+
+        #
+        # Alternate Step-2:: Find the matched points in curr (from step-1) in c-1. Using a
+        # bounding box around each point
+        #   INPUTS : curr_m_im, _pts_curr, D_pts_curr
+        #   OUTPUT : _pts_curr_m
+        internalDaisy = time.time()
+        daisy_c_m = self.static_get_daisy_descriptor_mat(  curr_m_im  )#Daisy of (curr-1)
+        if DEBUG:
+            print 'in expand_matches_to_curr_m, daisy took %4.2f ms' %( 1000. * (time.time() - internalDaisy) )
+
+
+        FLANN_INDEX_KDTREE = 0
+        index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 5)
+        search_params = dict(checks=50)   # or pass empty dictionary
+        flann = cv2.FlannBasedMatcher(index_params,search_params)
+
+        _pts_curr_m = []
+        for h in range(_pts_curr.shape[0]): # loop over each match (between curr and prev)
+            # get daisy descriptors in WxW neighbourhood. For a co-ordinate in curr
+            # I assume itz match can be found in a WxW neighbourhood in curr-1 image.
+            # This assumption is valid since curr and curr-1 are adjustcent keyframes.
+            # NOTE: All this can be confusing, be careful!
+
+            _W = PARAM_W #20
+            row_range = range( max(0,_pts_curr[h,1]-_W),  min(curr_m_im.shape[0], _pts_curr[h,1]+_W) )
+            col_range = range( max(0,_pts_curr[h,0]-_W),  min(curr_m_im.shape[1], _pts_curr[h,0]+_W) )
+            g = np.meshgrid( row_range, col_range )
+            positions = np.vstack( map(np.ravel, g) ) #2x400, these are in cartisian-indexing-convention
+
+
+            D_positions = daisy_c_m[positions[0,:], positions[1,:],:] #400x20
+            if DEBUG:
+                print 'D_positions.shape :', D_positions.shape
+
+
+            if DEBUG:
+                y = self.im1.copy() #curr_im
+                z = curr_m_im.copy() #curr_m_im
+                for p in range( positions.shape[1] ):
+                    cv2.circle( y, (positions[1,p], positions[0,p]), 1, (255,0,0) )
+
+                cv2.circle( y, (_pts_curr[h,0],_pts_curr[h,1]), 1, (0,0,255) )
+                cv2.imshow( 'curr_im_debug', y )
+
+
+
+
+
+            matches = flann.knnMatch(np.expand_dims(D_pts_curr[h,:], axis=0).astype('float32'),D_positions.astype('float32'),k=1)
+            matches = matches[0][0]
+
+            if DEBUG:
+                print 'match : %d <--%4.2f--> %d' %(matches.queryIdx, matches.distance, matches.trainIdx )
+                cv2.circle( z, tuple(positions[[1,0],matches.trainIdx]), 2, (0,0,255) )
+                cv2.imshow( 'curr-1 debug', z )
+                print 'Press <Space> for next match'
+                cv2.waitKey(0)
+
+
+            _pts_curr_m.append( tuple(positions[[1,0],matches.trainIdx]) )
+
+
+        return _pts_curr_m

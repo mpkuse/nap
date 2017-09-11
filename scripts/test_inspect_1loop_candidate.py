@@ -81,8 +81,18 @@ VV.set_im_lut( S_thumbnails_lut[curr, :,:,:] , S_thumbnails_lut[prev, :,:,:]  )
 VV.set_im_lut_raw( S_thumbnails_lut_raw[curr,:,:] , S_thumbnails_lut_raw[prev,:,:] )
 nMatches, nInliners = VV.simple_verify(features='orb')
 
+# TODO: If nInliers too less than attempt this.
+pts_curr, pts_prev, mask = VV.daisy_dense_matches()
 
-pts_curr, pts_prev = VV.daisy_dense_matches()
+xcanvas = VV.plot_point_sets( VV.im1, pts_curr, VV.im2, pts_prev)
+xcanvas_verified = VV.plot_point_sets( VV.im1, pts_curr, VV.im2, pts_prev, mask)
+
+cv2.imshow( 'xcanvas', xcanvas )
+cv2.imshow( 'xcanvas_verified', xcanvas_verified )
+cv2.moveWindow( 'xcanvas', 800, 0)
+cv2.moveWindow( 'xcanvas_verified', 800, 400)
+cv2.waitKey(0)
+
 
 quit()
 

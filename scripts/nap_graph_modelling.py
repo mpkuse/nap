@@ -79,7 +79,7 @@ PARAM_FPS = 25
 
 #### Loading the PCA matrix. In particular top 600 precomputed eigen vectors and eig values
 print 'Loading the precomputed top eigen values, eigen vectors and mean'
-ipca_uu = np.load( PKG_PATH+'/tf.logs/netvlad_k64_tokyoTM/db_xl/eig_val_top600.npy')
+ipca_uu = np.load( PKG_PATH+'/tf.logs/netvlad_k64_tokyoTM/db_xl/eig_val_top600.npy') #currently not in use. TODO, remove this as in the future we plan to use FAISS for product quantization to improve scalability
 ipca_vv = np.load( PKG_PATH+'/tf.logs/netvlad_k64_tokyoTM/db_xl/eig_vec_top600.npy')
 ipca_learned_mean = np.load( PKG_PATH+'/tf.logs/netvlad_k64_tokyoTM/db_xl/M_mean.npy')
 ipca_P = np.dot( np.diag( ipca_uu[-50:]), np.transpose(ipca_vv[:,-50:]) )

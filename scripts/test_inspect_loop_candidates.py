@@ -12,7 +12,7 @@ import numpy as np
 import cv2
 import code
 cv2.ocl.setUseOpenCL(False)
-
+import time
 from GeometricVerification import GeometricVerification
 
 
@@ -22,6 +22,13 @@ IMAGE_FILE_NPY_lut_raw = '/home/mpkuse/catkin_ws/src/nap/DUMP/S_thumbnail_lut_ra
 LOOP_CANDIDATES_NPY = '/home/mpkuse/catkin_ws/src/nap/DUMP/loop_candidates.csv'
 
 FULL_RES_IMAGE_FILE_NPY = '/home/mpkuse/catkin_ws/src/nap/DUMP/S_thumbnail_full_res.npy'
+
+
+
+import TerminalColors
+tcol = TerminalColors.bcolors()
+def print_time(msg, startT, endT):
+    print tcol.OKBLUE, '%8.2f :%s (ms)'  %( 1000. * (endT - startT), msg ), tcol.ENDC
 
 
 print 'Reading : ', IMAGE_FILE_NPY
@@ -87,8 +94,10 @@ for i,l in enumerate(loop_candidates):
         #
         #
         VV.set_im( S_thumbnails[curr, :,:,:] , S_thumbnails[prev, :,:,:] )
-        VV.set_im_lut( cv2.resize(S_thumbnails_lut[curr, :,:,:], (320,240), interpolation=cv2.INTER_NEAREST), cv2.resize(S_thumbnails_lut[prev, :,:,:], (320,240), interpolation=cv2.INTER_NEAREST))
-        VV.set_im_lut_raw( cv2.resize(S_thumbnails_lut_raw[curr, :,:], (320,240), interpolation=cv2.INTER_NEAREST), cv2.resize(S_thumbnails_lut_raw[prev, :,:], (320,240), interpolation=cv2.INTER_NEAREST))
+        # VV.set_im_lut( cv2.resize(S_thumbnails_lut[curr, :,:,:], (320,240), interpolation=cv2.INTER_NEAREST), cv2.resize(S_thumbnails_lut[prev, :,:,:], (320,240), interpolation=cv2.INTER_NEAREST))
+        # VV.set_im_lut_raw( cv2.resize(S_thumbnails_lut_raw[curr, :,:], (320,240), interpolation=cv2.INTER_NEAREST), cv2.resize(S_thumbnails_lut_raw[prev, :,:], (320,240), interpolation=cv2.INTER_NEAREST))
+        VV.set_im_lut( S_thumbnails_lut[curr, :,:,:] , S_thumbnails_lut[prev, :,:,:]  )
+        VV.set_im_lut_raw( S_thumbnails_lut_raw[curr,:,:] , S_thumbnails_lut_raw[prev,:,:] )
         nMatches, nInliers = VV.simple_verify(features='orb', debug_images=False)
         # VV.simple_verify(features='surf')
 
@@ -100,8 +109,31 @@ for i,l in enumerate(loop_candidates):
             cv2.imshow( 'prev_lut', cv2.resize( S_thumbnails_lut[prev, :,:,:], (320,240)) )
 
             nMatches, nInliers, canvas = VV.simple_verify(features='orb', debug_images=True)
-            # VV.do_daisy()
-            # cv2.imshow( 'canvas', canvas )
+
+            # # Do Daisy - uncomment this to get it working
+            # # !(curr <--> prev)
+            # startVeri1 = time.time()
+            # VV.set_im( S_thumbnails[curr, :,:,:] , S_thumbnails[prev, :,:,:] )
+            # VV.set_im_lut( S_thumbnails_lut[curr, :,:,:] , S_thumbnails_lut[prev, :,:,:]  )
+            # VV.set_im_lut_raw( S_thumbnails_lut_raw[curr,:,:] , S_thumbnails_lut_raw[prev,:,:] )
+            # pts_curr, pts_prev, mask = VV.daisy_dense_matches()
+            # xcanvas_verified1 = VV.plot_point_sets( VV.im1, pts_curr, VV.im2, pts_prev, mask)
+            # print_time( 'curr <--> prev', startVeri1, time.time()  )
+            #
+            # # !(curr <--> prev)
+            # startVeri2 = time.time()
+            # VV.set_im( S_thumbnails[curr-1, :,:,:] , S_thumbnails[curr, :,:,:] )
+            # VV.set_im_lut( S_thumbnails_lut[curr-1, :,:,:] , S_thumbnails_lut[curr, :,:,:]  )
+            # VV.set_im_lut_raw( S_thumbnails_lut_raw[curr-1,:,:] , S_thumbnails_lut_raw[curr,:,:] )
+            # pts_curr, pts_prev, mask = VV.daisy_dense_matches()
+            # xcanvas_verified2 = VV.plot_point_sets( VV.im1, pts_curr, VV.im2, pts_prev, mask)
+            # print_time( 'curr-1 <--> curr', startVeri2, time.time()  )
+            #
+            # cv2.imshow( 'xcanvas_verified1 curr to prev', xcanvas_verified1 )
+            # cv2.imshow( 'xcanvas_verified2 curr-1 to prev', xcanvas_verified2 )
+            # cv2.moveWindow( 'xcanvas_verified1 curr to prev', 800, 0)
+            # cv2.moveWindow( 'xcanvas_verified2 curr-1 to prev', 800, 400)
+            # # END Daisy
 
             cv2.moveWindow( 'prev', 350, 0 )
             cv2.moveWindow( 'curr_lut', 0, 350 )
