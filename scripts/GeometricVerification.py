@@ -511,8 +511,9 @@ class GeometricVerification:
 
     # This function will compute the daisy matches, given the cluster assignments
     # from netvlad and dense daisy. Need to set_im() and set_im_lut() before calling this
-    def daisy_dense_matches(self):
-        DEBUG = False
+    def daisy_dense_matches(self, DEBUG=False):
+        # DEBUG = True # in debug mode 4 things are returned, : m1, m2, mask and [xcanvas]
+        #               in non-debug mode 3 things r returned
 
 
         # Get prominent_clusters
@@ -548,6 +549,7 @@ class GeometricVerification:
         pts_A = []
         pts_B = []
         k_intersection = set(Z_curr_uniq).intersection( set(Z_prev_uniq) )
+        xcanvas_array = []
         for k in k_intersection:
             H_curr = np.where( Z_curr==k ) #co-ordinates. these co-ordinates need testing
             desc_c = np.array( D_curr[ H_curr[0]*4, H_curr[1]*4 ] ) # This is since D_curr is (240,320) and H_curr is (60,80)
@@ -571,6 +573,7 @@ class GeometricVerification:
                 xcanvas = self.plot_point_sets( xim1, _pts_A, xim2, _pts_B)
                 cv2.imshow( 'xcanvas', xcanvas)
                 cv2.waitKey(0)
+                xcanvas_array.append( xcanvas )
             # END Debug
 
 
@@ -594,8 +597,10 @@ class GeometricVerification:
         # code.interact( local=locals() )
 
 
-        return pts_A, pts_B, mask
-
+        if DEBUG:
+            return pts_A, pts_B, mask, xcanvas_array
+        else:
+            return pts_A, pts_B, mask
 
     def plot_point_sets( self, im1, pt1, im2, pt2, mask=None ):
         xcanvas = np.concatenate( (im1, im2), axis=1 )
@@ -619,13 +624,79 @@ class GeometricVerification:
 
 
 
+    # Same as plot_3way_match() grid is made with 2x larger images and
+    # index numbers are marked as well
+    def plot_3way_match_upscale( self, curr_im, pts_curr, prev_im, pts_prev, curr_m_im, pts_curr_m  ):
+        f = 2
+
+        LINE = False
+
+        r1 = np.concatenate( ( cv2.resize(curr_im, (0,0), fx=f, fy=f), cv2.resize(prev_im, (0,0), fx=f, fy=f) ), axis=1 )
+        r2 = np.concatenate( ( cv2.resize(curr_m_im,(0,0), fx=f, fy=f), np.zeros( cv2.resize(curr_im,(0,0), fx=f, fy=f).shape, dtype='uint8' ) ), axis=1 )
+        gridd = np.concatenate( (r1,r2), axis=0 )
+
+
+
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        for xi in range( len(pts_curr) ):
+            ptA = ( pts_curr[xi][0] *f, pts_curr[xi][1] * f )
+            cv2.circle( gridd, ptA, 3, (0,255,0), -1 )
+            cv2.putText( gridd, str(xi), ptA, font, 0.4, (0,0,255) )
+
+            ptB = tuple(np.array(pts_prev[xi])*f + [curr_im.shape[1]*f,0])
+            cv2.circle( gridd, ptB, 3, (0,255,0), -1 )
+            cv2.putText( gridd, str(xi), ptB, font, 0.4, (0,0,255) )
+            if LINE:
+                cv2.line( gridd, ptA, ptB, (255,0,0) )
+
+
+            ptC = tuple(np.array(pts_curr_m[xi])*f + [0,curr_im.shape[0]*f])
+            cv2.circle( gridd, ptC, 3, (0,255,0), -1 )
+            cv2.putText( gridd, str(xi), ptC, font, 0.4, (0,0,255) )
+            if LINE:
+                cv2.line( gridd, ptA, ptC, (255,30,255) )
+
+        # cv2.imshow( 'bigshow', gridd )
+        return gridd
+
 
     # grid : [ [curr, prev], [curr-1  X ] ]
     def plot_3way_match( self, curr_im, pts_curr, prev_im, pts_prev, curr_m_im, pts_curr_m ):
 
+        DEBUG = False
+
         r1 = np.concatenate( ( curr_im, prev_im ), axis=1 )
         r2 = np.concatenate( ( curr_m_im, np.zeros( curr_im.shape, dtype='uint8' ) ), axis=1 )
         gridd = np.concatenate( (r1,r2), axis=0 )
+
+        if DEBUG:
+            ncorrect = 0
+            for xi in range( len(pts_curr) ):
+                gridd_debug = np.concatenate( (r1,r2), axis=0 )
+
+                cv2.circle( gridd_debug, pts_curr[xi], 4, (0,255,0) )
+                ptb = tuple(np.array(pts_prev[xi]) + [curr_im.shape[1],0])
+                cv2.circle( gridd_debug, ptb, 4, (0,255,0) )
+                cv2.line( gridd_debug, pts_curr[xi], ptb, (255,0,0) )
+
+                ptb = tuple(np.array(pts_curr_m[xi]) + [0,curr_im.shape[0]])
+                cv2.circle( gridd_debug, ptb, 4, (0,255,0) )
+                cv2.line( gridd_debug, pts_curr[xi], ptb, (255,30,255) )
+
+                cv2.imshow( 'gridd', gridd_debug )
+
+                key = cv2.waitKey(0)
+                print '%d of %d q:quit ; c:mark as correct match ; <space>:continue' %(xi, len(pts_curr))
+                if ( key & 0xFF) == ord( 'q' ):
+                    break
+
+                if ( key & 0xFF) == ord( 'c' ):
+                    ncorrect += 1
+
+            print 'Total Marked as correct : %d of %d' %(ncorrect, len(pts_curr))
+
+
+
 
         print 'pts_curr.shape   ', len(pts_curr)
         print 'pts_prev.shape   ', len(pts_prev)
@@ -638,11 +709,12 @@ class GeometricVerification:
             cv2.circle( gridd, ptb, 4, (0,255,0) )
             cv2.line( gridd, pts_curr[xi], ptb, (255,0,0) )
 
-        for xi in range( len(pts_curr) ):
+        # for xi in range( len(pts_curr) ):
             # cv2.circle( gridd, pts_curr[xi], 4, (0,255,0) )
             ptb = tuple(np.array(pts_curr_m[xi]) + [0,curr_im.shape[0]])
             cv2.circle( gridd, ptb, 4, (0,255,0) )
             cv2.line( gridd, pts_curr[xi], ptb, (255,30,255) )
+
 
 
         return gridd

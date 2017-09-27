@@ -526,7 +526,7 @@ while not rospy.is_shutdown():
     L = loop_index #alias
     startGeometricVerification = time.time()
     # Determination of edge using `sim_scores_logistic`
-    argT = np.where( sim_scores_logistic[1:L] > 0.50 )
+    argT = np.where( sim_scores_logistic[1:L] > 0.54 )
     if len(argT ) < 1:
         continue
 
@@ -560,10 +560,10 @@ while not rospy.is_shutdown():
             i_prev = each_edge[1]
             i_inliers = each_edge[2]
             nap_msg = make_nap_msg( i_curr, i_prev, (0.6,1.0,0.6) )
-            # nap_visual_edge_msg = make_nap_visual_msg( i_curr, i_prev, "%d;;;%d" %(i_curr,i_inliers), str(i_prev) )
+            nap_visual_edge_msg = make_nap_visual_msg( i_curr, i_prev, "%d" %(i_curr), str(i_prev) )
 
             pub_edge_msg.publish( nap_msg )
-            # pub_visual_edge_msg.publish( nap_visual_edge_msg )
+            pub_visual_edge_msg.publish( nap_visual_edge_msg )
 
 
 

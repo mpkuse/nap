@@ -81,9 +81,21 @@ VV = GeometricVerification()
 #
 VV.set_im( curr_im, prev_im )
 VV.set_im_lut_raw( lut_raw_curr_im, lut_raw_prev_im )
-pts_curr, pts_prev, mask_c_p = VV.daisy_dense_matches()
+nMatches, nInliners = VV.simple_verify(features='orb')
+print 'Sparse Matching : nMatches=%d, nInliners=%d' %(nMatches, nInliners)
 
-# Match expansion onto curr-1
+
+# pts_curr, pts_prev, mask_c_p = VV.daisy_dense_matches()
+pts_curr, pts_prev, mask_c_p, xcanvas_array = VV.daisy_dense_matches(DEBUG=True)
+xcanvas_c_p = VV.plot_point_sets( VV.im1, pts_curr, VV.im2, pts_prev, mask_c_p)
+
+print 'len(xcanvas_array)', len(xcanvas_array), xcanvas_array[0].shape
+
+
+#
+# Step-2:
+# Match expansion onto curr-1 using (curr,prev)
+#
 startMatchExpansion = time.time()
 _pts_curr_m = VV.expand_matches_to_curr_m( pts_curr, pts_prev, mask_c_p,  curr_m_im )
 print 'Time taken for match expansion : %4.2f' %( 1000.*(time.time() - startMatchExpansion) )
@@ -91,8 +103,27 @@ print 'Time taken for match expansion : %4.2f' %( 1000.*(time.time() - startMatc
 masked_pts_curr = list( pts_curr[i] for i in np.where( mask_c_p[:,0] == 1 )[0] )
 masked_pts_prev = list( pts_prev[i] for i in np.where( mask_c_p[:,0] == 1 )[0] )
 gridd = VV.plot_3way_match( curr_im, masked_pts_curr, prev_im, masked_pts_prev, curr_m_im, _pts_curr_m )
+bigshow = VV.plot_3way_match_upscale( curr_im, masked_pts_curr, prev_im, masked_pts_prev, curr_m_im, _pts_curr_m )
 cv2.imshow( 'gridd', gridd )
+cv2.imshow( 'bigshow', bigshow )
 cv2.waitKey(0)
+
+
+# Write debug things to disk.
+ROOT='/home/mpkuse/plotting_tmp/3way/'
+for i in range(len(xcanvas_array)):
+    cv2.imwrite( ROOT+str(i)+'.png', xcanvas_array[i] )
+cv2.imwrite( ROOT+'gridd.png', gridd )
+cv2.imwrite( ROOT+'bigshow.png', bigshow )
+cv2.imwrite( ROOT+'org.png', np.concatenate((curr_im, prev_im), axis=1 ) )
+cv2.imwrite( ROOT+'2way_c_p.png', xcanvas_c_p )
+
+#
+# Step-3: Relative pose
+# 3.1 Triangulate pts in curr-1 and curr.
+# 3.2 pnp( 3d pts from (3.1) ,  prev )
+
+
 
 quit()
 

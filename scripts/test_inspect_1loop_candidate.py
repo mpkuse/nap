@@ -81,7 +81,8 @@ VV.set_im_lut( S_thumbnails_lut[curr, :,:,:] , S_thumbnails_lut[prev, :,:,:]  )
 VV.set_im_lut_raw( S_thumbnails_lut_raw[curr,:,:] , S_thumbnails_lut_raw[prev,:,:] )
 nMatches, nInliners = VV.simple_verify(features='orb')
 
-# TODO: If nInliers too less than attempt this.
+# TODO: If nInliers too less than attempt this. In this function set DEBUG=True to get
+# debug output.
 pts_curr, pts_prev, mask = VV.daisy_dense_matches()
 
 xcanvas = VV.plot_point_sets( VV.im1, pts_curr, VV.im2, pts_prev)

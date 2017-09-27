@@ -493,7 +493,7 @@ public:
     marker.id = 0;
     marker.type = visualization_msgs::Marker::ARROW;
     marker.action = visualization_msgs::Marker::ADD;
-    marker.scale.x = 0.02;
+    marker.scale.x = 0.18; //0.02
     marker.scale.y = 0.05;
     marker.scale.z = 0.06;
     marker.color.a = .6; // Don't forget to set the alpha!

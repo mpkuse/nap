@@ -162,7 +162,7 @@ public:
     // Publish NapMsg
     for( int i=0 ; i < ret.size() ; i++ )
     {
-      if( ret[i].Score > 0.055 )
+      if( ret[i].Score > 0.075 ) //0.055
       {
         nap::NapMsg coloc_msg;
         coloc_msg.c_timestamp = msg->header.stamp;

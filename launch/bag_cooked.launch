@@ -53,18 +53,17 @@ This can be visualized with rviz
 <!-- Nap Node -->
 <!--<node name="nap" pkg="nap" type="nap_geom_node.py" output="screen" >-->
 
-<node name="nap" pkg="nap" type="nap_graph_modelling.py" output="screen" >
+<!-- <node name="nap" pkg="nap" type="nap_graph_modelling.py" output="screen" >
   <remap to="$(arg bag_color_im_topic)" from="/semi_keyframes"/>
-</node>
+</node> -->
 
 
 
 <!-- DBOW node -->
-<!--
 <node name="dbow_node" pkg="nap" type="dbow3_naive" output="screen">
   <remap to="$(arg bag_color_im_topic)" from="/color_image_inp" />
 </node>
--->
+
 
 
 <!-- Colocation viz -->
