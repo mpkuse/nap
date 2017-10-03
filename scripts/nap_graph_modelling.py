@@ -37,11 +37,15 @@ from std_msgs.msg import Float32
 from nap.msg import NapMsg
 from nap.msg import NapNodeMsg
 from nap.msg import NapVisualEdgeMsg
-
+from geometry_msgs.msg import Point32
 
 from PlaceRecognitionNetvlad import PlaceRecognitionNetvlad
 from FastPlotter import FastPlotter
 
+from GeometricVerification import GeometricVerification
+
+
+# Consider removing, not in use
 from GraphMerging import Node
 from GraphMerging import get_gid
 from GraphMerging import NonSeqMergeThread
@@ -187,6 +191,10 @@ place_mod = PlaceRecognitionNetvlad(\
 # place_mod.load_siamese_dim_red_module( PARAM_MODEL_DIM_RED, PARAM_NETVLAD_WORD_DIM, 1024, PARAM_NETVLAD_CHAR_DIM  )
 
 ############# GEOMETRIC VERIFICATION #################
+VV = GeometricVerification()
+
+
+# Consider removal. All this is taken care off in class GeometricVerification
 # Key point detector (geometric verification)
 orb = cv2.ORB_create()
 
@@ -537,14 +545,19 @@ while not rospy.is_shutdown():
             continue
 
         # nMatches, nInliers = do_geometric_verification( L-1, aT)
-        nMatches = 25
-        nInliers = 25
+        # Do simple verification using,  S_thumbnail[i_curr] and S_thumbnail[i_prev] and class GeometricVerification
+        VV.set_im( S_thumbnail[L], S_thumbnail[aT] )
+        nMatches, nInliers = VV.simple_verify(features='orb')
+        # nMatches = 25
+        # nInliers = 25
+        # Another possibility is to not do any verification here. And randomly choose 1 pair for 3way matching.
+
 
         # Record this match in a file
         # print '%d<--->%d' %(L-1,aT)
         loop_candidates.append( [L, aT, sim_scores_logistic[aT], nMatches, nInliers] )
 
-        if nInliers > 20:
+        if nInliers > 0:
             _now_edges.append( (L-1, aT, nInliers) )
 
 
@@ -554,19 +567,80 @@ while not rospy.is_shutdown():
     if len(_now_edges) > 0:
 
         sorted_by_inlier_count = sorted( _now_edges, key=lambda tup: tup[2] )
-        # for each_edge in sorted_by_inlier_count[-1:]: #publish only top-1 candidate
-        for each_edge in sorted_by_inlier_count: #publish all candidates
+        for each_edge in sorted_by_inlier_count[-1:]: #publish only top-1 candidate
+        # for each_edge in sorted_by_inlier_count: #publish all candidates
             i_curr = each_edge[0]
             i_prev = each_edge[1]
             i_inliers = each_edge[2]
+
+
             nap_msg = make_nap_msg( i_curr, i_prev, (0.6,1.0,0.6) )
-            nap_visual_edge_msg = make_nap_visual_msg( i_curr, i_prev, "%d" %(i_curr), str(i_prev) )
+            nap_msg.n_sparse_matches = i_inliers
+
+            #TODO: If nInliners more than 20 simply publish edge.
+            #       If nInliers less than 20 attempt a 3-way match. Fill in the 3-way match in nap_msg
+            if i_inliers < 200: #later make it 20
+                #
+                # Do 3-Way Matching
+                #
+                print tcol.OKBLUE, S_thumbnail[i_curr].astype('uint8').shape
+                print S_thumbnail[i_prev].astype('uint8').shape, tcol.ENDC
+                curr_im = S_thumbnail[i_curr].astype('uint8')
+                prev_im = S_thumbnail[i_prev].astype('uint8')
+                curr_m_im = S_thumbnail[i_curr-1].astype('uint8')
+                t_curr = S_timestamp[i_curr]
+                t_prev = S_timestamp[i_prev]
+                t_curr_m = S_timestamp[i_curr-1]
+                #Imp Note : curr-1 is actually curr-PARAM_CALLBACK_SKIP. However posegraph opt will have all the keyframes. Best practice I think is to also put 3 timestamps of the images used.
+
+                # Step-1: Compute dense matches between curr and prev --> SetA
+                VV.set_im( curr_im, prev_im )
+                VV.set_im_lut_raw( S_lut_raw[i_curr], S_lut_raw[i_prev] )
+
+
+                pts_curr, pts_prev, mask_c_p = VV.daisy_dense_matches()
+                xcanvas_c_p = VV.plot_point_sets( VV.im1, pts_curr, VV.im2, pts_prev, mask_c_p)
+
+                # print 'Write : ', '/home/mpkuse/Desktop/a/%d.jpg' %(loop_index)
+                # cv2.imwrite( '/home/mpkuse/Desktop/a/%d.jpg' %(loop_index), xcanvas_c_p )
+
+
+                # Step-2: Match expansion
+                _pts_curr_m = VV.expand_matches_to_curr_m( pts_curr, pts_prev, mask_c_p, curr_m_im  )
+
+                masked_pts_curr = list( pts_curr[i] for i in np.where( mask_c_p[:,0] == 1 )[0] )
+                masked_pts_prev = list( pts_prev[i] for i in np.where( mask_c_p[:,0] == 1 )[0] )
+                gridd = VV.plot_3way_match( curr_im, masked_pts_curr, prev_im, masked_pts_prev, curr_m_im, _pts_curr_m )
+
+                # print 'Write : ',  '/home/mpkuse/Desktop/a/%d_3way.jpg' %(loop_index)
+                # cv2.imwrite( '/home/mpkuse/Desktop/a/%d_3way.jpg' %(loop_index), gridd )
+
+
+
+                # Fill the nap message with 3-way matches.
+                # Relative pose was not computed here on purpose. This was because to Triangulate,
+                # we need SLAM pose between curr and curr-1. So instead of subscribing it here, we do it in pose-graph-opt node
+                for ji in range( len(_pts_curr_m) ):
+                    pt_curr = masked_pts_curr[ji]
+                    pt_prev = masked_pts_prev[ji]
+                    pt_curr_m = _pts_curr_m[ji]
+
+                    nap_msg.curr.append(   Point32(pt_curr[0], pt_curr[1],-1) )
+                    nap_msg.prev.append(   Point32(pt_prev[0], pt_prev[1],-1) )
+                    nap_msg.curr_m.append( Point32(pt_curr_m[0], pt_curr_m[1],-1) )
+
+                nap_msg.t_curr = t_curr
+                nap_msg.t_prev = t_prev
+                nap_msg.t_curr_m = t_curr_m
+
+
 
             pub_edge_msg.publish( nap_msg )
+
+
+            # Comment following 2 lines to not debug-publish loop-candidate
+            nap_visual_edge_msg = make_nap_visual_msg( i_curr, i_prev, "%d,%d" %(i_curr,i_inliers), str(i_prev) )
             pub_visual_edge_msg.publish( nap_visual_edge_msg )
-
-
-
 
 
 

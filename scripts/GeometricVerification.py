@@ -276,11 +276,9 @@ class GeometricVerification:
 
         if im_no == 1:
             im = self.im1
-            im_lut = self.im1_lut
             im_lut_raw = self.im1_lut_raw
         elif im_no==2:
             im = self.im2
-            im_lut = self.im2_lut
             im_lut_raw = self.im2_lut_raw
         else:
             print tcol.FAIL, 'fail. In valid im_no in prominent_clusters()', tcol.ENDC
@@ -514,6 +512,14 @@ class GeometricVerification:
     def daisy_dense_matches(self, DEBUG=False):
         # DEBUG = True # in debug mode 4 things are returned, : m1, m2, mask and [xcanvas]
         #               in non-debug mode 3 things r returned
+        assert self.im1 is not None, "GeometricVerification.daisy_dense_matches(): im1 was not set. "
+        assert self.im2 is not None, "GeometricVerification.daisy_dense_matches(): im2 was not set. "
+        assert self.im1_lut_raw is not None, "GeometricVerification.daisy_dense_matches(): im1_lut_raw was not set. "
+        assert self.im2_lut_raw is not None, "GeometricVerification.daisy_dense_matches(): im2_lut_raw was not set. "
+
+        if DEBUG:
+            assert self.im1_lut is not None, "GeometricVerification.daisy_dense_matches(): im1_lut was not set. "
+            assert self.im2_lut is not None, "GeometricVerification.daisy_dense_matches(): im2_lut was not set. "
 
 
         # Get prominent_clusters
@@ -665,8 +671,12 @@ class GeometricVerification:
 
         DEBUG = False
 
+        zero_image = np.zeros( curr_im.shape, dtype='uint8' )
+        cv2.putText( zero_image, str(len(pts_curr)), (10,200), cv2.FONT_HERSHEY_SIMPLEX, 2, 255 )
+
+
         r1 = np.concatenate( ( curr_im, prev_im ), axis=1 )
-        r2 = np.concatenate( ( curr_m_im, np.zeros( curr_im.shape, dtype='uint8' ) ), axis=1 )
+        r2 = np.concatenate( ( curr_m_im, zero_image ), axis=1 )
         gridd = np.concatenate( (r1,r2), axis=0 )
 
         if DEBUG:

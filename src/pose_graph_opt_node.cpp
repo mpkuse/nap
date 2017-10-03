@@ -56,6 +56,13 @@ using namespace Eigen;
 
 using namespace std;
 
+
+// CLasses In this Node
+#include "Node.h"
+#include "Edge.h"
+#include "PinholeCamera.h"
+#include "DataManager.h"
+
 namespace Color {
     enum Code {
         FG_RED      = 31,
@@ -78,9 +85,177 @@ namespace Color {
     };
 
     Modifier red(FG_RED);
+    Modifier green(FG_GREEN);
     Modifier def(FG_DEFAULT);
 }
 
+// NOTE: Mark for removal
+
+/*
+class PinholeCamera {
+
+public:
+  PinholeCamera()
+  {
+    mValid = false;
+  }
+  PinholeCamera( string config_file )
+  {
+
+    cv::FileStorage fs( config_file, cv::FileStorage::READ );
+    if( !fs.isOpened() )
+    {
+      ROS_ERROR( "Cannot open config file : %s", config_file.c_str() );
+      ROS_ERROR( "Quit");
+      mValid = false;
+      exit(1);
+    }
+    this->config_file_name = string(config_file);
+
+    cout << "---Camera Config---\n";
+    fs["model_type"] >> config_model_type;     cout << "config_model_type:"<< config_model_type << endl;
+    fs["camera_name"] >> config_camera_name;   cout << "config_camera_name:" << config_camera_name << endl;
+    fs["image_width"] >> config_image_width;   cout << "config_image_width:" << config_image_width << endl;
+    fs["image_height"] >> config_image_height; cout << "config_image_height:" << config_image_height << endl;
+
+
+    fs["projection_parameters"]["fx"] >> _fx;
+    fs["projection_parameters"]["fy"] >> _fy;
+    fs["projection_parameters"]["cx"] >> _cx;
+    fs["projection_parameters"]["cy"] >> _cy;
+    cout << "projection_parameters :: " << _fx << " " << _fy << " " << _cx << " " << _cy << " " << endl;
+
+    fs["distortion_parameters"]["k1"] >> _k1;
+    fs["distortion_parameters"]["k2"] >> _k2;
+    fs["distortion_parameters"]["p1"] >> _p1;
+    fs["distortion_parameters"]["p2"] >> _p2;
+    cout << "distortion_parameters :: " << _k1 << " " << _k2 << " " << _p1 << " " << _p2 << " " << endl;
+    cout << "---    ---\n";
+
+    // Define the 3x3 Projection matrix eigen and/or cv::Mat.
+    m_K = cv::Mat::zeros( 3,3,CV_32F );
+    m_K.at<float>(0,0) = _fx;
+    m_K.at<float>(1,1) = _fy;
+    m_K.at<float>(0,2) = _cx;
+    m_K.at<float>(1,2) = _cy;
+    m_K.at<float>(2,2) = 1.0;
+
+    m_D = cv::Mat::zeros( 4, 1, CV_32F );
+    m_D.at<float>(0,0) = _k1;
+    m_D.at<float>(1,0) = _k2;
+    m_D.at<float>(2,0) = _p1;
+    m_D.at<float>(3,0) = _p2;
+    cout << "m_K" << m_K << endl;
+    cout << "m_D" << m_D << endl;
+
+    // Define 4x1 vector of distortion params eigen and/or cv::Mat.
+    e_K << _fx, 0.0, _cx,
+          0.0,  _fy, _cy,
+          0.0, 0.0, 1.0;
+
+    e_D << _k1 , _k2, _p1 , _p2;
+    cout << "e_K" << m_K << endl;
+    cout << "e_D" << m_D << endl;
+    mValid = true;
+
+  }
+
+  cv::Mat m_K; //3x3
+  cv::Mat m_D; //4x1
+
+  Matrix3d e_K;
+  Vector4d e_D;
+
+  bool isValid()
+  {
+    return mValid;
+  }
+
+  double fx() { return _fx; }
+  double fy() { return _fy; }
+  double cx() { return _cx; }
+  double cy() { return _cy; }
+  double k1() { return _k1; }
+  double k2() { return _k2; }
+  double p1() { return _p1; }
+  double p2() { return _p2; }
+
+  string getModelType() { return config_model_type; }
+  string getCameraName() { return config_camera_name; }
+  string getConfigFileName() { return config_file_name; }
+  int getImageWidth() { return config_image_width; }
+  int getImageHeight() { return config_image_height; }
+
+  int getImageRows() { return this->getImageHeight(); }
+  int getImageCols() { return this->getImageWidth(); }
+
+  // Given N 3D points,  3xN matrix, or 4xN matrix (homogeneous)
+  // project these points using this camera.
+  // TODO: Extend this function to include extrinsics (given as arguments)
+  void perspectiveProject3DPoints( cv::Mat& _3dpts )
+  {
+      cout << "Not Implemented";
+  }
+
+  // Given
+  // void triangulatePoints( const Node * nC,  const cv::Mat& mat_pts_curr,
+  //                         const Node * nCM, const cv::Mat& mat_pts_curr_m )
+  // {
+  //   // node curr (nC) is assumed to be at [I|0]
+  //   // K [ I | 0 ]
+  //   MatrixXd I_0;
+  //   I_0 = Matrix4d::Identity().topLeftCorner<3,4>();
+  //   MatrixXd P1 = camera.e_K * I_0; //3x4
+  //
+  // }
+
+
+
+private:
+  string config_model_type, config_camera_name;
+  string config_file_name;
+  int config_image_width, config_image_height;
+
+  double _fx, _fy, _cx, _cy;
+  double _k1, _k2, _p1, _p2;
+
+  bool mValid;
+
+
+
+  // // given a 2xN input cv::Mat converts to 1xN 2-channel output. also assumes CV_32F type
+  // void _1channel_to_2channel( const cv::Mat& input, cv::Mat& output )
+  // {
+  //   assert( input.rows() == 2 && input.channels()==1 );
+  //   output = cv::Mat( 1, input.cols, CV_32FC2 );
+  //   for( int l=0 ; l<input.cols ; l++ )
+  //   {
+  //     output.at<cv::Vec2f>(0,l)[0] = input.at<float>(0,l);
+  //     output.at<cv::Vec2f>(0,l)[1] = input.at<float>(1,l);
+  //   }
+  //
+  // }
+  //
+  //
+  //
+  // // given a 1xN 2-channel input cv::Mat converts to 2xN,also assumes CV_32F type
+  // void _2channel_to_1channel( const cv::Mat& input, cv::Mat& output )
+  // {
+  //   assert( input.rows() == 1 && input.channels()==2 );
+  //   output = cv::Mat( 2, input.cols, CV_32FC );
+  //   for( int l=0 ; l<input.cols ; l++ )
+  //   {
+  //     output.at<float>(0,l) = input.at<cv::Vec2f>(0,l)[0];
+  //     output.at<float>(1,l) = input.at<cv::Vec2f>(0,l)[1];
+  //   }
+  //  }
+
+};
+*/
+
+// NOTE: Mark for removal
+
+/*
 class Node
 {
 public:
@@ -89,6 +264,10 @@ public:
     this->time_stamp = ros::Time(time_stamp);
     this->time_pose = ros::Time(time_stamp);
     this->pose = geometry_msgs::Pose(pose);
+
+    // TODO
+    // Consider also storing original poses. e_p and e_q can be evolving poses (ie. optimization variables)
+    // Basically need to revisit this when getting it to work with ceres
 
     // opt_position = new double[3];
     // opt_position[0] = pose.pose.position.x;
@@ -172,7 +351,6 @@ public:
   }
 
   // image
-
   void setImage( ros::Time time, const cv::Mat& im )
   {
     image = cv::Mat(im.clone());
@@ -188,10 +366,16 @@ private:
   cv::Mat image;
 
 };
+*/
 
+// NOTE: Mark for removal
 
+/*
 #define EDGE_TYPE_ODOMETRY 0
 #define EDGE_TYPE_LOOP_CLOSURE 1
+
+#define EDGE_TYPE_LOOP_SUBTYPE_BASIC 10 //Has enough sparse matches
+#define EDGE_TYPE_LOOP_SUBTYPE_3WAY 11 //need 3 way matching, not enough sparse-feature matches
 class Edge {
 public:
   Edge( const Node *a, int a_id, const Node * b, int b_id, int type )
@@ -208,14 +392,54 @@ public:
 
   }
 
+  void setEdgeTimeStamps( ros::Time time_a, ros::Time time_b )
+  {
+    this->a_timestamp = time_a;
+    this->b_timestamp = time_b;
+  }
+
+  // Given the pose in frame of b. In other words, relative pose of a in frame
+  // of reference of b. This is a 4x4 matrix, top-left 3x3 represents rotation part.
+  // 4th col represents translation.
+  void setEdgeRelPose( const Matrix4d& b_T_a )
+  {
+    e_p << b_T_a(0,3), b_T_a(1,3), b_T_a(2,3);
+    e_q = Quaterniond( b_T_a.topLeftCorner<3,3>() );
+  }
+
+  // Convert the stored pose into matrix and return. Note that the
+  // stored pose is b_T_a, ie. pose of a in reference frame b.
+  void getEdgeRelPose( Matrix4d& M )
+  {
+    M = Matrix4d::Zero();
+    M.col(3) << e_p, 1.0;
+    Matrix3d R = e_q.toRotationMatrix();
+    M.topLeftCorner<3,3>() = e_q.toRotationMatrix();
+  }
+
+
+  void setLoopEdgeSubtype( int sub_type )
+  {
+    if( this->type == EDGE_TYPE_LOOP_CLOSURE )
+    {
+      this->sub_type = sub_type;
+    }
+  }
+
 const Node *a, *b; //nodes
 int type;
+int sub_type;
 int a_id, b_id;
+ros::Time a_timestamp, b_timestamp;
+
 Vector3d e_p;
 Quaterniond e_q;
 };
+*/
 
+// NOTE: Mark for removal. Careful! Some might might be recyclable
 
+/*
 class DataManager
 {
 public:
@@ -226,44 +450,69 @@ public:
 
   }
 
+  void setCamera( PinholeCamera& camera )
+  {
+    this->camera = camera;
+
+    cout << "--- Camera Params from DataManager ---\n";
+    cout << "K\n" << this->camera.e_K << endl;
+    cout << "D\n" << this->camera.e_D << endl;
+    cout << "--- END\n";
+  }
+
+
   ~DataManager()
   {
-    string file_name = ros::package::getPath( "nap" ) + "/DUMP/pose_graph.g2o.csv";
-    ofstream fp_pose_graph;
-    fp_pose_graph.open( file_name );
-    cout << "Write file with " << nNodes.size() << " entries\n";
+    cout << "In ~DataManager\n";
 
+    string file_name = ros::package::getPath( "nap" ) + "/DUMP_pose_graph/pose_graph.nodes.csv";
+    ofstream fp_nodes;
+    fp_nodes.open( file_name );
+    cout << "Write file (" <<  file_name << ") with " << nNodes.size() << " entries\n";
+
+
+    fp_nodes << "#i, t, x, y, z, q.x, q.y, q.z, q.w\n";
     for( int i=0 ; i<nNodes.size() ; i++ )
     {
       Node * n = nNodes[i];
-      fp_pose_graph << "NODE, "<<i << ", " << n->time_stamp.sec <<":" << n->time_stamp.nsec << ", "
-          << n->e_p[0] << ", " << n->e_p[1] << ", " << n->e_p[2] << ", "
-          << n->e_q.x() << ", " << n->e_q.y() << ", "<< n->e_q.z() << ", "<< n->e_q.w() << ", "
-          << endl;
-          // << n->getX()<< ", " << n->getY()<< ", " << n->getZ()<< ", "
-          // << n->getQX()<< ", " << n->getQY()<< ", " << n->getQZ()<< ", " << n->getQW() <<endl;
+      fp_nodes <<  i << ", " << n->time_stamp  << endl;
+                // << e_p[0] << ", " << e_p[1] << ", "<< e_p[2] << ", "
+                // << e_q.x() << ", "<< e_q.y() << ", "<< e_q.x() << ", "<< e_q.x() << endl;
     }
+    fp_nodes.close();
 
 
+    // Write Odometry Edges
+    file_name = ros::package::getPath( "nap" ) + "/DUMP_pose_graph/pose_graph.odomedges.csv";
+    ofstream fp_odom_edge;
+    fp_odom_edge.open( file_name );
+    cout << "Write file (" <<  file_name << ") with " << odometryEdges.size() << " entries\n";
+
+    fp_odom_edge << "#i, i_c, i_p, t_c, t_p\n";
     for( int i=0 ; i<odometryEdges.size() ; i++ )
     {
       Edge * e = odometryEdges[i];
-      fp_pose_graph << "EDGE " << e->a_id << "  " << e->b_id << " ::: ";
-      fp_pose_graph << "(";
-      fp_pose_graph <<  e->a->e_p[0] << ", ";
-      fp_pose_graph <<  e->a->e_p[1] << ", ";
-      fp_pose_graph <<  e->a->e_p[2] << ", ";
-      fp_pose_graph << ");";
-
-
-      fp_pose_graph << "(";
-      fp_pose_graph << e->b->e_p[0] << ", ";
-      fp_pose_graph << e->b->e_p[1] << ", ";
-      fp_pose_graph << e->b->e_p[2] << ", ";
-      fp_pose_graph << ");\n";
+      fp_odom_edge << i << ", "<< e->a_id << ", "<< e->a_timestamp
+                        << ", "<< e->b_id << ", "<< e->b_timestamp << endl;
     }
+    fp_odom_edge.close();
 
-    fp_pose_graph.close();
+
+    // Write Loop Closure Edges
+    file_name = ros::package::getPath( "nap" ) + "/DUMP_pose_graph/pose_graph.loopedges.csv";
+    ofstream fp_loop_edge;
+    fp_loop_edge.open( file_name );
+    cout << "Write file (" <<  file_name << ") with " << loopClosureEdges.size() << " entries\n";
+
+    fp_loop_edge << "#i, i_c, i_p, t_c, t_p\n";
+    for( int i=0 ; i<loopClosureEdges.size() ; i++ )
+    {
+      Edge * e = loopClosureEdges[i];
+      fp_loop_edge << i << ", "<< e->a_id << ", "<< e->a_timestamp
+                        << ", "<< e->b_id << ", "<< e->b_timestamp << endl;
+    }
+    fp_loop_edge.close();
+
 
   }
 
@@ -305,11 +554,12 @@ public:
   void image_callback( const sensor_msgs::ImageConstPtr& msg )
   {
     int i_ = find_indexof_node(msg->header.stamp);
-    ROS_INFO( "Received - Image - %d", i_ );
+    ROS_DEBUG( "Received - Image - %d", i_ );
 
-    cv::Mat image;
+    cv::Mat image, image_resized;
     try{
       image = cv_bridge::toCvCopy( msg, sensor_msgs::image_encodings::BGR8 )->image;
+      cv::resize( image, image_resized, cv::Size(320,240) );
     }
     catch( cv_bridge::Exception& e)
     {
@@ -318,13 +568,15 @@ public:
 
     if( i_ < 0 )
     {
-      unclaimed_im.push( image.clone() );
+      // unclaimed_im.push( image.clone() );
+      unclaimed_im.push( image_resized.clone() );
       unclaimed_im_time.push( ros::Time(msg->header.stamp) );
       flush_unclaimed_im();
     }
     else
     {
-      nNodes[i_]->setImage( msg->header.stamp, image );
+      // nNodes[i_]->setImage( msg->header.stamp, image );
+      nNodes[i_]->setImage( msg->header.stamp, image_resized );
 
     }
 
@@ -361,26 +613,231 @@ public:
 
   }
 
+
   void place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
   {
     ROS_INFO( "Received - NapMsg");
-    // TODO
-    // read current and previous timestamps.
     // cout << msg->c_timestamp << " " << msg->prev_timestamp << endl;
 
-
+    //
     // Look it up in nodes list (iterate over nodelist)
     int i_curr = find_indexof_node(msg->c_timestamp);
     int i_prev = find_indexof_node(msg->prev_timestamp);
-    ROS_INFO( "%d <--> %d", i_curr, i_prev );
+    cout << i_curr << "<-->" << i_prev << endl;
+    // cout <<  msg->c_timestamp << "<-->" << msg->prev_timestamp << endl;
+    cout <<  msg->c_timestamp-nNodes[0]->time_stamp << "<-->" << msg->prev_timestamp-nNodes[0]->time_stamp << endl;
+    cout << "Last Node timestamp : "<< nNodes.back()->time_stamp - nNodes[0]->time_stamp << endl;
     if( i_curr < 0 || i_prev < 0 )
       return;
 
 
+    //
     // make vector of loop closure edges
     Edge * e = new Edge( nNodes[i_curr], i_curr, nNodes[i_prev], i_prev, EDGE_TYPE_LOOP_CLOSURE );
+    e->setEdgeTimeStamps(msg->c_timestamp, msg->prev_timestamp);
+
+
+    ///////////////////////////////////
+    // Relative Pose Computation     //
+    //////////////////////////////////
+    cout << "n_sparse_matches : " << msg->n_sparse_matches << endl;
+    cout << "3way match sizes : " << msg->curr.size() << " " << msg->prev.size() << " " << msg->curr_m.size() << endl;
+
+      ////////////////////
+      //---- case-a : If 3way matching is empty : do ordinary way to compute relative pose. Borrow code from Qin
+      ///////////////////
+    if( msg->n_sparse_matches >= 200 )
+    {
+      // TODO: Put Qin Tong's code here. ie. rel pose computation when we have sufficient number of matches
+      e->setLoopEdgeSubtype(EDGE_TYPE_LOOP_SUBTYPE_BASIC);
+      cout << "Do Qin Tong's Code here, for computation of relative pose\n";
+    }
+    ////////////////////
+    //---- case-b : If 3way matching is not empty : i) Triangulate curr-1 and curr. ii) pnp( 3d pts from (i) ,  prev )
+    ////////////////////
+    else if( msg->n_sparse_matches < 200 && msg->curr.size() > 0 && msg->curr.size() == msg->prev.size() && msg->curr.size() == msg->curr_m.size()  )
+    {
+      e->setLoopEdgeSubtype(EDGE_TYPE_LOOP_SUBTYPE_3WAY);
+
+#define DEBUG_3WAY_POSE_COMPUTATION
+
+      // Collect 2d points from the msg, corresponding to 3-way matching
+      // and make them as  cv::Mat 2xN. Note that these points are (x,y) and not (rows, cols)
+      cv::Mat mat_pts_curr, mat_pts_prev, mat_pts_curr_m;
+      this->extract_3way_matches_from_napmsg(msg, mat_pts_curr, mat_pts_prev, mat_pts_curr_m);
+
+
+
+      // Undistort observed points
+      cv::Mat distorted_pts_curr, distorted_pts_prev, distorted_pts_curr_m;
+      this->extract_3way_matches_from_napmsg_as2channel(msg, distorted_pts_curr, distorted_pts_prev, distorted_pts_curr_m);
+
+      cv::Mat undistort_pts_curr, undistort_pts_prev, undistort_pts_curr_m;
+      cv::Mat undistort_R, undistort_P;
+      cout << "distorted_pts_curr " << distorted_pts_curr.rows << " "<< distorted_pts_curr.cols << " "<< distorted_pts_curr.channels() << endl;
+      cout << "distorted_pts_prev " << distorted_pts_prev.rows << " "<< distorted_pts_prev.cols << " "<< distorted_pts_prev.channels() << endl;
+      cout << "distorted_pts_curr_m " << distorted_pts_curr_m.rows << " "<< distorted_pts_curr_m.cols << " "<< distorted_pts_curr_m.channels() << endl;
+      cv::undistortPoints(  distorted_pts_curr, undistort_pts_curr, camera.m_K, camera.m_D);
+      cv::undistortPoints(  distorted_pts_prev, undistort_pts_prev, camera.m_K, camera.m_D);
+      cv::undistortPoints(  distorted_pts_curr_m, undistort_pts_curr_m, camera.m_K, camera.m_D, undistort_R, undistort_P);
+      cout << "undistort_pts_curr " << undistort_pts_curr.rows << " "<< undistort_pts_curr.cols << " " << undistort_pts_curr.channels() << endl;
+      cout << "undistort_pts_prev " << undistort_pts_prev.rows << " "<< undistort_pts_prev.cols << " " << undistort_pts_prev.channels() << endl;
+      cout << "undistort_pts_curr_m " << undistort_pts_curr_m.rows << " "<< undistort_pts_curr_m.cols << " " << undistort_pts_curr_m.channels() << endl;
+
+
+
+      // Get nodes from the timestamps
+      int ix_curr = find_indexof_node(msg->t_curr);
+      int ix_prev = find_indexof_node(msg->t_prev);
+      int ix_curr_m = find_indexof_node(msg->t_curr_m);
+
+
+
+
+      //DEBUG: Get the 3 images, we have 3way matches. plot these points on images.
+
+#ifdef DEBUG_3WAY_POSE_COMPUTATION
+      //TODO: Assert that ix_* are not -1
+      if( ix_curr < 0 || ix_prev < 0 || ix_curr_m < 0 ){
+        cout << "ERROR in place_recog_callback. Possibly invalid timestamps in napMsg. ie. cannot find the timestamps specified in the message in the pose-graph\n";
+        exit(1);
+      }
+
+      cv::Mat curr_im, prev_im, curr_m_im;
+
+      // Collect Images - for debug
+      curr_im = this->nNodes[ix_curr]->getImageRef();
+      prev_im = this->nNodes[ix_prev]->getImageRef();
+      curr_m_im = this->nNodes[ix_curr_m]->getImageRef();
+
+
+      cv::Mat dst, dst2;
+      this->plot_3way_match( curr_im, mat_pts_curr, prev_im, mat_pts_prev, curr_m_im, mat_pts_curr_m, dst );
+      char fname[200];
+      sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d.jpg", i_curr, i_prev );
+      cout << "Writing file : " << fname << endl;
+      cv::imwrite( fname, dst );
+
+      this->plot_3way_match( curr_im, distorted_pts_curr, prev_im, distorted_pts_prev, curr_m_im, distorted_pts_curr_m, dst2 );
+      sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_2ch_%d_%d.jpg", i_curr, i_prev );
+      cout << "Writing file : " << fname << endl;
+      cv::imwrite( fname, dst2 );
+
+
+          //              //
+          //  END DEBUG   //
+#endif
+
+      //TODO: Computation of pose using curr, prev, curr-1 dense-point matches
+      //
+      //    step-1: Triangulation using, ix_curr, ix_curr_m
+      //      Input  : pts_curr, pts_curr_m, Camera_Intrinsic, curr_T_{curr_m}
+      //      Output : vector<cv::Point3d> of above points.
+
+      // K [ I | 0 ]
+      MatrixXd I_0;
+      I_0 = Matrix4d::Identity().topLeftCorner<3,4>();
+      MatrixXd P1 = camera.e_K * I_0; //3x4
+
+      // K [ ^{c-1}T_c ] ==> K [ inv( ^wT_{c-1} ) * ^wT_c ]
+      Matrix4d w_T_cm;
+      nNodes[ix_curr_m]->getCurrTransform(w_T_cm);//4x4
+      Matrix4d w_T_c;
+      nNodes[ix_curr]->getCurrTransform(w_T_c);//4x4
+
+      MatrixXd Tr;
+      Tr = w_T_cm.inverse() * w_T_c; //relative transform
+      MatrixXd P2 = camera.e_K * Tr.topLeftCorner<3,4>(); //3x4
+
+
+      cv::Mat out3dPts;
+      //remember, eigen stores matrix as col-major and opencv stores as row-major. Becareful with opencv-eigen conversions
+      cv::Mat xP1(3,4,CV_64F );
+      cv::Mat xP2(3,4,CV_64F );
+      cv::eigen2cv( P1, xP1 );
+      cv::eigen2cv( P2, xP2 );
+      cv::Mat xP1_cv32fc, xP2_cv32fc;
+      xP1.convertTo(xP1_cv32fc, CV_32FC1 );
+      xP2.convertTo(xP2_cv32fc, CV_32FC1 );
+
+
+      // cv::triangulatePoints( cv::eigen2cv(P1), cv::eigen2cv(P2),  pts_curr, pts_curr_m,   out3dPts );
+      // cv::triangulatePoints( xP1, xP2,  pts_curr, pts_curr_m,   out3dPts );
+      cv::triangulatePoints( xP1, xP2,  mat_pts_curr, mat_pts_curr_m,   out3dPts );
+
+
+
+      #ifdef DEBUG_3WAY_POSE_COMPUTATION
+      //       //
+      // DEBUG - Write OpenCV YAML File //
+      cout << "xP1.type" << xP1.type() << endl;
+      cout << "xP2.type" << xP2.type() << endl;
+      cout << "xP1_cv32fc.type" << xP1_cv32fc.type() << endl;
+      cout << "xP1_cv32fc.type" << xP1_cv32fc.type() << endl;
+      cout << "pts_curr.type" << mat_pts_curr.type() << endl;
+      cout << "pts_curr_m.type" << mat_pts_curr_m.type() << endl;
+      cout << "out3dPts.type" << out3dPts.type() << endl;
+      cout << "camera.m_K.type" << camera.m_K.type() << endl;
+
+      sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d.opencv", i_curr, i_prev );
+      cout << "Writing : " << fname << endl;
+      cv::FileStorage tmp_fp( fname, cv::FileStorage::WRITE );
+      tmp_fp << "out3dPts" << out3dPts;
+
+      tmp_fp << "reproj_out3dPts_on_C" <<  (xP1_cv32fc * out3dPts);
+      tmp_fp << "reproj_out3dPts_on_CM" <<  (xP2_cv32fc * out3dPts);
+      tmp_fp << "xP1" << xP1;
+      tmp_fp << "xP2" << xP2;
+
+
+      tmp_fp << "pts_curr" << mat_pts_curr;
+      tmp_fp << "pts_curr_m" << mat_pts_curr_m;
+
+
+      tmp_fp << "distorted_pts_curr" << distorted_pts_curr;
+      tmp_fp << "distorted_pts_curr_m" << distorted_pts_curr_m;
+      tmp_fp << "undistort_pts_curr" << undistort_pts_curr;
+      tmp_fp << "undistort_pts_curr_m" << undistort_pts_curr_m;
+      tmp_fp << "undistort_R" << undistort_R;
+      tmp_fp << "undistort_P" << undistort_P;
+
+
+      cv::Mat grey_curr_im, grey_curr_m_im;
+      cv::cvtColor(curr_im, grey_curr_im, cv::COLOR_BGR2GRAY);
+      cv::cvtColor(curr_m_im, grey_curr_m_im, cv::COLOR_BGR2GRAY);
+      tmp_fp << "curr_im" << grey_curr_im;
+      tmp_fp << "curr_m_im" << grey_curr_m_im;
+
+      tmp_fp << "K" << camera.m_K;
+      tmp_fp << "D" << camera.m_D;
+
+      cv::Mat __w_T_c( w_T_c.rows(), w_T_c.cols(), CV_64F );
+      cv::eigen2cv( w_T_c, __w_T_c );
+      tmp_fp << "w_T_c" << __w_T_c;
+      cv::Mat __w_T_cm( w_T_cm.rows(), w_T_cm.cols(), CV_64F );
+      cv::eigen2cv( w_T_cm, __w_T_cm );
+      tmp_fp << "w_T_cm" << __w_T_cm;
+      tmp_fp.release();
+
+      //           //
+      // END DEBUG //
+      #endif
+
+
+      //
+      //    step-2: pnp. Using 3d pts from step1 and pts_prev
+      //
+
+    }
+    else {
+      ROS_ERROR( "in place_recog_callback: Error computing rel pose. Edge added without pose. This might be fatal!");
+    }
+
+
+
+
     loopClosureEdges.push_back( e );
-    odometryEdges.push_back(e) ;
+
   }
 
   // void camera_pose_callback( const geometry_msgs::PoseStamped::ConstPtr& msg )
@@ -395,7 +852,7 @@ public:
 
     // ALSO add odometry edges to 1 previous.
     int N = nNodes.size();
-    int prev_k = 2;
+    int prev_k = 1;
     if( N <= prev_k )
       return;
 
@@ -405,14 +862,31 @@ public:
 
     for( int i=0 ; i<prev_k ; i++ )
     {
-      Edge * e = new Edge( nNodes[N-1], N-1, nNodes[N-2-i], N-2-i, EDGE_TYPE_ODOMETRY );
+      Node * a_node = nNodes[N-1];
+      Node * b_node = nNodes[N-2-i];
+      Edge * e = new Edge( a_node, N-1, b_node, N-2-i, EDGE_TYPE_ODOMETRY );
+      e->setEdgeTimeStamps(nNodes[N-1]->time_stamp, nNodes[N-2-i]->time_stamp);
+
+      // TODO add relative transform as edge-inferred (using poses from corresponding edges)
+      // ^{w}T_a; a:= N-1
+      Matrix4d w_T_a;
+      a_node->getCurrTransform( w_T_a );
+
+
+      // ^{w}T_b; b:= N-2-i
+      Matrix4d w_T_b;
+      b_node->getCurrTransform( w_T_b );
+
+
+      // ^{b}T_a = inv[ ^{w}T_b ] * ^{w}T_a
+      Matrix4d b_T_a = w_T_b.inverse() * w_T_a;
+
+      // Set
+      e->setEdgeRelPose(b_T_a);
+
       odometryEdges.push_back( e );
     }
 
-    // TODO add relative transform as edge-inferred (using poses from corresponding edges)
-
-
-    // Using 3d points, Matches between 2 images and PnP determine relative pose of the edge (observed)
 
   }
 
@@ -425,7 +899,8 @@ public:
     {
       ROS_INFO( "PUBLISH" );
       publish_pose_graph_nodes();
-      publish_pose_graph_edges();
+      publish_pose_graph_edges(this->odometryEdges);
+      publish_pose_graph_edges(this->loopClosureEdges);
       this_thread::sleep_for(chrono::milliseconds(100) );
     }
   }
@@ -433,7 +908,8 @@ public:
   void publish_once()
   {
     publish_pose_graph_nodes();
-    publish_pose_graph_edges();
+    publish_pose_graph_edges( this->odometryEdges );
+    publish_pose_graph_edges( this->loopClosureEdges );
   }
 
   void publish_pose_graph_nodes()
@@ -445,21 +921,18 @@ public:
     marker.id = 0;
     marker.type = visualization_msgs::Marker::SPHERE;
     marker.action = visualization_msgs::Marker::ADD;
-    marker.scale.x = 0.1;
-    marker.scale.y = 0.1;
-    marker.scale.z = 0.1;
+    marker.scale.x = 0.05;
+    marker.scale.y = 0.05;
+    marker.scale.z = 0.05;
     marker.color.a = .6; // Don't forget to set the alpha!
 
-    for( int i=0; i<nNodes.size() ; i+=1 )
+    int nSze = nNodes.size();
+    // for( int i=0; i<nNodes.size() ; i+=1 )
+    for( int i=max(0,nSze-10); i<nNodes.size() ; i++ ) //optimization trick: only publish last 10. assuming others are already on rviz
     {
       marker.color.r = 0.0;marker.color.g = 0.0;marker.color.b = 0.0; //default color of node
 
       Node * n = nNodes[i];
-      if( n->getImageRef().data == NULL ) //no image, then dark green color
-      { marker.color.g = 0.8; }
-
-      if( n->ptCld.cols() == 0 ) //no point cloud then
-      { marker.color.r = 0.8; }
 
       // Publish Sphere
       marker.type = visualization_msgs::Marker::SPHERE;
@@ -472,28 +945,41 @@ public:
       marker.pose.orientation.y = 0.;
       marker.pose.orientation.z = 0.;
       marker.pose.orientation.w = 1.;
+      marker.color.r = 0.0; marker.color.g = 0.0; marker.color.b = 0.0;
+      marker.scale.x = .05;marker.scale.y = .05;marker.scale.z = .05;
       pub_pgraph.publish( marker );
 
       // Publish Text
       marker.type = visualization_msgs::Marker::TEXT_VIEW_FACING;
       marker.id = i;
       marker.ns = "text_label";
+      marker.scale.z = .03;
+
+      // pink color text if node doesnt contain images
+      if( n->getImageRef().data == NULL )
+      { marker.color.r = 1.0;  marker.color.g = .4;  marker.color.b = .4; }
+      else
       { marker.color.r = 1.0;  marker.color.g = 1.0;  marker.color.b = 1.0; } //text in white color
-      marker.text = std::to_string(i)+std::string(":")+std::to_string(n->ptCld.cols())+std::string(":")+((n->getImageRef().data)?"I":"~I");
+      // marker.text = std::to_string(i)+std::string(":")+std::to_string(n->ptCld.cols())+std::string(":")+((n->getImageRef().data)?"I":"~I");
+
+      std::stringstream buffer;
+      buffer << i << ":" << n->time_stamp - nNodes[0]->time_stamp;
+      // buffer << i << ":" << n->time_stamp - nNodes[0]->time_stamp << ":" << n->time_image- nNodes[0]->time_stamp  ;
+      marker.text = buffer.str();
+      // marker.text = std::to_string(i)+std::string(":")+std::to_string( n->time_stamp );
       pub_pgraph.publish( marker );
     }
   }
 
-  void publish_pose_graph_edges()
+  void publish_pose_graph_edges( const std::vector<Edge*>& x_edges )
   {
     visualization_msgs::Marker marker;
     marker.header.frame_id = "world";
     marker.header.stamp = ros::Time::now();
-    marker.ns = "odometry_edges";
     marker.id = 0;
     marker.type = visualization_msgs::Marker::ARROW;
     marker.action = visualization_msgs::Marker::ADD;
-    marker.scale.x = 0.18; //0.02
+    marker.scale.x = 0.018; //0.02
     marker.scale.y = 0.05;
     marker.scale.z = 0.06;
     marker.color.a = .6; // Don't forget to set the alpha!
@@ -501,9 +987,12 @@ public:
     marker.color.g = 1.0;
     marker.color.b = 0.0;
     // cout << "There are "<< odometryEdges.size() << " edges\n";
-    for( int i=0 ; i<odometryEdges.size() ; i++ )
+
+    int nSze = x_edges.size();
+    // for( int i=0 ; i<x_edges.size() ; i++ )
+    for( int i=max(0,nSze-10) ; i<x_edges.size() ; i++ ) //optimization trick,
     {
-      Edge * e = odometryEdges[i];
+      Edge * e = x_edges[i];
       marker.id = i;
       geometry_msgs::Point start;
       start.x = e->a->e_p[0];
@@ -518,12 +1007,24 @@ public:
       marker.points.push_back(start);
       marker.points.push_back(end);
 
-      if( e->type == EDGE_TYPE_ODOMETRY )
-      {    marker.color.r = 0.0; marker.color.g = 1.0; marker.color.b = 0.0;}
-      else if( e->type == EDGE_TYPE_LOOP_CLOSURE && e->a->ptCld.cols() != 0 && e->b->ptCld.cols() != 0 /*e->a->image.data != NULL && e->b->image.data != NULL*/ )
-      {    marker.color.r = 1.0; marker.color.g = 1.0; marker.color.b = 0.0;}
+      if( e->type == EDGE_TYPE_ODOMETRY ) //green - odometry edge
+      {    marker.color.r = 0.0; marker.color.g = 1.0; marker.color.b = 0.0;    marker.ns = "odom_edges";}
       else if( e->type == EDGE_TYPE_LOOP_CLOSURE )
-      {    marker.color.r = 1.0; marker.color.g = 0.0; marker.color.b = 0.0;}
+      {
+        if( e->sub_type == EDGE_TYPE_LOOP_SUBTYPE_BASIC ) // basic loop-edge in red
+        { marker.color.r = 1.0; marker.color.g = 0.0; marker.color.b = 0.0; marker.ns = "loop_edges"; }
+        else {
+          if( e->sub_type == EDGE_TYPE_LOOP_SUBTYPE_3WAY ) // 3way matched loop-edge in pink
+          { marker.color.r = 1.0; marker.color.g = 0.0; marker.color.b = 1.0; marker.ns = "loop_edges"; }
+          else //other edge subtype in white
+          { marker.color.r = 1.0; marker.color.g = 1.0; marker.color.b = 1.0; marker.ns = "loop_edges"; }
+        }
+
+
+      }
+      else
+      {    marker.color.r = 1.0; marker.color.g = 1.0; marker.color.b = 1.0; marker.ns = "x_edges";}
+
       pub_pgraph.publish( marker );
     }
   }
@@ -539,10 +1040,12 @@ private:
     for( int i=0 ; i<nNodes.size() ; i++ )
     {
       diff = nNodes[i]->time_stamp - stamp;
+
       // cout << i << " "<< diff.sec << " " << diff.nsec << endl;
-      if( abs(diff.sec) <= int32_t(0) && abs(diff.nsec) < int32_t(50000000) ) {
-      // if( abs(diff.sec) <= int32_t(0) ) {
-        // ROS_INFO( "Found at i=%d", i );
+
+      // if( abs(diff.sec) <= int32_t(0) && abs(diff.nsec) < int32_t(1000000) ) {
+      // if( abs(diff.sec) <= int32_t(0) && abs(diff.nsec) == int32_t(0) ) {
+      if( diff < ros::Duration(0.0001) && diff > ros::Duration(-0.0001) ){
         return i;
       }
     }
@@ -620,86 +1123,107 @@ private:
 
   }
 
-  // Publisher
-  ros::NodeHandle nh;
-  ros::Publisher pub_pgraph;
-};
 
-class PinholeCamera
-{
-public:
-  PinholeCamera( string config_file )
+// image, 2xN, image, 2xN, image 2xN, out_image
+// or
+// image, 1xN 2 channel, image 1xN 2 channel, image 1xN 2 channel
+  void plot_3way_match( const cv::Mat& curr_im, const cv::Mat& mat_pts_curr,
+                        const cv::Mat& prev_im, const cv::Mat& mat_pts_prev,
+                        const cv::Mat& curr_m_im, const cv::Mat& mat_pts_curr_m,
+                        cv::Mat& dst)
   {
+    cv::Mat zre = cv::Mat(curr_im.rows, curr_im.cols, CV_8UC3, cv::Scalar(128,128,128) );
 
-    cv::FileStorage fs( config_file, cv::FileStorage::READ );
-    if( !fs.isOpened() )
+    cv::Mat dst_row1, dst_row2;
+    cv::hconcat(curr_im, prev_im, dst_row1);
+    cv::hconcat(curr_m_im, zre, dst_row2);
+    cv::vconcat(dst_row1, dst_row2, dst);
+
+
+
+    // Draw Matches
+    cv::Point2d p_curr, p_prev, p_curr_m;
+    for( int kl=0 ; kl<mat_pts_curr.cols ; kl++ )
     {
-      ROS_ERROR( "Cannot open config file : %s", config_file.c_str() );
-      ROS_ERROR( "Quit");
-      exit(1);
+      if( mat_pts_curr.channels() == 2 ){
+        p_curr = cv::Point2d(mat_pts_curr.at<cv::Vec2f>(0,kl)[0], mat_pts_curr.at<cv::Vec2f>(0,kl)[1] );
+        p_prev = cv::Point2d(mat_pts_prev.at<cv::Vec2f>(0,kl)[0], mat_pts_prev.at<cv::Vec2f>(0,kl)[1] );
+        p_curr_m = cv::Point2d(mat_pts_curr_m.at<cv::Vec2f>(0,kl)[0], mat_pts_curr_m.at<cv::Vec2f>(0,kl)[1] );
+      }
+      else {
+        p_curr = cv::Point2d(mat_pts_curr.at<float>(0,kl),mat_pts_curr.at<float>(1,kl) );
+        p_prev = cv::Point2d(mat_pts_prev.at<float>(0,kl),mat_pts_prev.at<float>(1,kl) );
+        p_curr_m = cv::Point2d(mat_pts_curr_m.at<float>(0,kl),mat_pts_curr_m.at<float>(1,kl) );
+      }
+
+      cv::circle( dst, p_curr, 4, cv::Scalar(255,0,0) );
+      cv::circle( dst, p_prev+cv::Point2d(curr_im.cols,0), 4, cv::Scalar(0,255,0) );
+      cv::circle( dst, p_curr_m+cv::Point2d(0,curr_im.rows), 4, cv::Scalar(0,0,255) );
+      cv::line( dst,  p_curr, p_prev+cv::Point2d(curr_im.cols,0), cv::Scalar(255,0,0) );
+      cv::line( dst,  p_curr, p_curr_m+cv::Point2d(0,curr_im.rows), cv::Scalar(255,30,255) );
+
+      // cv::circle( dst, cv::Point2d(pts_curr[kl]), 4, cv::Scalar(255,0,0) );
+      // cv::circle( dst, cv::Point2d(pts_prev[kl])+cv::Point2d(curr_im.cols,0), 4, cv::Scalar(0,255,0) );
+      // cv::circle( dst, cv::Point2d(pts_curr_m[kl])+cv::Point2d(0,curr_im.rows), 4, cv::Scalar(0,0,255) );
+      // cv::line( dst,  cv::Point2d(pts_curr[kl]), cv::Point2d(pts_prev[kl])+cv::Point2d(curr_im.cols,0), cv::Scalar(255,0,0) );
+      // cv::line( dst,  cv::Point2d(pts_curr[kl]), cv::Point2d(pts_curr_m[kl])+cv::Point2d(0,curr_im.rows), cv::Scalar(255,30,255) );
     }
-
-    cout << "---Camera Config---\n";
-    fs["model_type"] >> config_model_type;     cout << "config_model_type:"<< config_model_type << endl;
-    fs["camera_name"] >> config_camera_name;   cout << "config_camera_name:" << config_camera_name << endl;
-    fs["image_width"] >> config_image_width;   cout << "config_image_width:" << config_image_width << endl;
-    fs["image_height"] >> config_image_height; cout << "config_image_height:" << config_image_height << endl;
+  }
 
 
-    fs["projection_parameters"]["fx"] >> _fx;
-    fs["projection_parameters"]["fy"] >> _fy;
-    fs["projection_parameters"]["cx"] >> _cx;
-    fs["projection_parameters"]["cy"] >> _cy;
-    cout << "projection_parameters :: " << _fx << " " << _fy << " " << _cx << " " << _cy << " " << endl;
+  // msg --> Received with callback
+  // mat_ptr_curr, mat_pts_prev, mat_pts_curr_m --> 2xN outputs
+  void extract_3way_matches_from_napmsg( const nap::NapMsg::ConstPtr& msg,
+        cv::Mat&mat_pts_curr, cv::Mat& mat_pts_prev, cv::Mat& mat_pts_curr_m )
+  {
+    mat_pts_curr = cv::Mat(2,msg->curr.size(),CV_32F); //a redundancy. may be in the future consider removing one of them
+    mat_pts_prev = cv::Mat(2,msg->prev.size(),CV_32F);
+    mat_pts_curr_m = cv::Mat(2,msg->curr_m.size(),CV_32F);
+    for( int kl=0 ; kl<msg->curr.size() ; kl++ )
+    {
+      mat_pts_curr.at<float>(0,kl) = (float)msg->curr[kl].x;
+      mat_pts_curr.at<float>(1,kl) = (float)msg->curr[kl].y;
+      mat_pts_prev.at<float>(0,kl) = (float)msg->prev[kl].x;
+      mat_pts_prev.at<float>(1,kl) = (float)msg->prev[kl].y;
+      mat_pts_curr_m.at<float>(0,kl) = (float)msg->curr_m[kl].x;
+      mat_pts_curr_m.at<float>(1,kl) = (float)msg->curr_m[kl].y;
+    }
+  }
 
-    fs["distortion_parameters"]["k1"] >> _k1;
-    fs["distortion_parameters"]["k2"] >> _k2;
-    fs["distortion_parameters"]["p1"] >> _p1;
-    fs["distortion_parameters"]["p2"] >> _p2;
-    cout << "distortion_parameters :: " << _k1 << " " << _k2 << " " << _p1 << " " << _p2 << " " << endl;
-    cout << "---    ---\n";
+  // msg --> Received with callback
+  // mat_ptr_curr, mat_pts_prev, mat_pts_curr_m --> 1xN  2 channel outputs
+  void extract_3way_matches_from_napmsg_as2channel( const nap::NapMsg::ConstPtr& msg,
+        cv::Mat&mat_pts_curr, cv::Mat& mat_pts_prev, cv::Mat& mat_pts_curr_m )
+  {
+    mat_pts_curr = cv::Mat(1,msg->curr.size(),CV_32FC2); //a redundancy. may be in the future consider removing one of them
+    mat_pts_prev = cv::Mat(1,msg->prev.size(),CV_32FC2);
+    mat_pts_curr_m = cv::Mat(1,msg->curr_m.size(),CV_32FC2);
+    for( int kl=0 ; kl<msg->curr.size() ; kl++ )
+    {
+      mat_pts_curr.at<cv::Vec2f>(0,kl)[0] = (float)msg->curr[kl].x;
+      mat_pts_curr.at<cv::Vec2f>(0,kl)[1] = (float)msg->curr[kl].y;
+      mat_pts_prev.at<cv::Vec2f>(0,kl)[0] = (float)msg->prev[kl].x;
+      mat_pts_prev.at<cv::Vec2f>(0,kl)[1] = (float)msg->prev[kl].y;
+      mat_pts_curr_m.at<cv::Vec2f>(0,kl)[0] = (float)msg->curr_m[kl].x;
+      mat_pts_curr_m.at<cv::Vec2f>(0,kl)[1] = (float)msg->curr_m[kl].y;
+    }
+  }
 
-    // TODO: Define the 3x3 Projection matrix eigen and/or cv::Mat.
-    m_K = cv::Mat::zeros( 3,3,CV_64F );
-    m_K.at<double>(0,0) = _fx;
-    m_K.at<double>(1,1) = _fy;
-    m_K.at<double>(0,2) = _cx;
-    m_K.at<double>(1,2) = _cy;
-    m_K.at<double>(2,2) = 1.0;
 
-    m_D = cv::Mat::zeros( 4, 1, CV_64F );
-    m_D.at<double>(0,0) = _k1;
-    m_D.at<double>(1,0) = _k2;
-    m_D.at<double>(2,0) = _p1;
-    m_D.at<double>(3,0) = _p2;
-    cout << "m_K" << m_K << endl;
-    cout << "m_D" << m_D << endl;
-
-    // TODO : Define 4x1 vector of distortion params eigen and/or cv::Mat.
-    e_K << _fx, 0.0, _cx,
-          0.0,  _fy, _cy,
-          0.0, 0.0, 1.0;
-
-    e_D << _k1 , _k2, _p1 , _p2;
-    cout << "e_K" << m_K << endl;
-    cout << "e_D" << m_D << endl;
 
   }
 
-  string config_model_type, config_camera_name;
-  int config_image_width, config_image_height;
+  // Publisher
+  ros::NodeHandle nh;
+  ros::Publisher pub_pgraph;
 
-  double _fx, _fy, _cx, _cy;
-  double _k1, _k2, _p1, _p2;
 
-  cv::Mat m_K; //3x3
-  cv::Mat m_D; //4x1
-
-  Matrix3d e_K;
-  Vector4d e_D;
-
+  // Camera
+  PinholeCamera camera;
 };
+*/
 
+/*
 void undistort( const PinholeCamera& cam, const MatrixXd& Xd, MatrixXd& Xdd )
 {
   Xdd = MatrixXd( Xd.rows(), Xd.cols() );
@@ -711,6 +1235,7 @@ void undistort( const PinholeCamera& cam, const MatrixXd& Xd, MatrixXd& Xdd )
     Xdd(1,i) = Xd(1,i) * c + 2.0*cam._p2*Xd(0,i)*Xd(1,i) + cam._p1*(r2 + 2.0*Xd(1,i)*Xd(1,i));
   }
 }
+*/
 
 void print_matrix( string msg, const Eigen::Ref<const MatrixXd>& M, const Eigen::IOFormat& fmt )
 {
@@ -734,6 +1259,12 @@ int main(int argc, char ** argv )
 
   //--- DataManager ---//
   DataManager dataManager = DataManager(nh);
+  dataManager.setCamera(camera);
+
+  //--- Pose Graph Visual Marker ---//
+  string rviz_pose_graph_topic = string( "/mish/pose_nodes" );
+  ROS_INFO( "Publish Pose Graph Visual Marker to %s", rviz_pose_graph_topic.c_str() );
+  dataManager.setVisualizationTopic( rviz_pose_graph_topic );
 
 
 
@@ -744,30 +1275,26 @@ int main(int argc, char ** argv )
   ROS_INFO( "Subscribe to %s", camera_pose_topic.c_str() );
   ros::Subscriber sub_odometry = nh.subscribe( camera_pose_topic, 1000, &DataManager::camera_pose_callback, &dataManager );
 
+
   string place_recognition_topic = string("/raw_graph_edge");
   // string place_recognition_topic = string("/colocation");
   ROS_INFO( "Subscribed to %s", place_recognition_topic.c_str() );
   ros::Subscriber sub_place_recognition = nh.subscribe( place_recognition_topic, 1000, &DataManager::place_recog_callback, &dataManager );
 
   //
-  string point_cloud_topic = string( "/vins_estimator/point_cloud_no_loop" );
-  ROS_INFO( "Subscribed to %s", point_cloud_topic.c_str() );
-  ros::Subscriber sub_pcl_topic = nh.subscribe( point_cloud_topic, 1000, &DataManager::point_cloud_callback, &dataManager );
+  // string point_cloud_topic = string( "/vins_estimator/point_cloud_no_loop" );
+  // ROS_INFO( "Subscribed to %s", point_cloud_topic.c_str() );
+  // ros::Subscriber sub_pcl_topic = nh.subscribe( point_cloud_topic, 1000, &DataManager::point_cloud_callback, &dataManager );
 
   //
+  //   This is not a requirement for core computation. But is subscribed for debug reasons. Especially to verify correctness of 3way matches
   string image_topic = string( "/vins_estimator/keyframe_image");
   ROS_INFO( "Subscribed to %s", image_topic.c_str() );
   ros::Subscriber sub_image = nh.subscribe( image_topic, 1000, &DataManager::image_callback, &dataManager );
 
-  //
-  // string noloop_path_topic = string( "/vins_estimator/path_no_loop");
-  // ROS_INFO( "Subscribed to %s", noloop_path_topic.c_str() );
-  // ros::Subscriber sub_noloop_path = nh.subscribe( noloop_path_topic, 1000, &DataManager::noloop_path_callback, &dataManager );
-
-
 
   //--- END Subscribes ---//
-  std::cout<< "Hello world\n";
+  std::cout<< Color::green <<  "Pose Graph Optimization Node by mpkuse!" << Color::def << endl;
 
 
   // Setup publisher thread
@@ -778,8 +1305,6 @@ int main(int argc, char ** argv )
   ros::Rate loop_rate(40);
   while( ros::ok() )
   {
-    // dataManager.publish_pose_graph_nodes();
-    // dataManager.publish_pose_graph_edges();
     dataManager.publish_once();
     // ROS_INFO( "spinOnce");
 
@@ -794,8 +1319,10 @@ int main(int argc, char ** argv )
 
   //---------DONE
   return 0;
+}
 
-
+// NOTE: Mark for removal
+/*
   //
   // Loop through all nodes
   //
@@ -924,5 +1451,4 @@ int main(int argc, char ** argv )
     cv::imwrite(fname, wrim );
   }
   cout << "END\n";
-
-}
+*/

@@ -85,11 +85,11 @@ nMatches, nInliners = VV.simple_verify(features='orb')
 print 'Sparse Matching : nMatches=%d, nInliners=%d' %(nMatches, nInliners)
 
 
-# pts_curr, pts_prev, mask_c_p = VV.daisy_dense_matches()
-pts_curr, pts_prev, mask_c_p, xcanvas_array = VV.daisy_dense_matches(DEBUG=True)
+pts_curr, pts_prev, mask_c_p = VV.daisy_dense_matches()
+# pts_curr, pts_prev, mask_c_p, xcanvas_array = VV.daisy_dense_matches(DEBUG=True)
 xcanvas_c_p = VV.plot_point_sets( VV.im1, pts_curr, VV.im2, pts_prev, mask_c_p)
 
-print 'len(xcanvas_array)', len(xcanvas_array), xcanvas_array[0].shape
+# print 'len(xcanvas_array)', len(xcanvas_array), xcanvas_array[0].shape
 
 
 #
@@ -109,20 +109,15 @@ cv2.imshow( 'bigshow', bigshow )
 cv2.waitKey(0)
 
 
-# Write debug things to disk.
-ROOT='/home/mpkuse/plotting_tmp/3way/'
-for i in range(len(xcanvas_array)):
-    cv2.imwrite( ROOT+str(i)+'.png', xcanvas_array[i] )
-cv2.imwrite( ROOT+'gridd.png', gridd )
-cv2.imwrite( ROOT+'bigshow.png', bigshow )
-cv2.imwrite( ROOT+'org.png', np.concatenate((curr_im, prev_im), axis=1 ) )
-cv2.imwrite( ROOT+'2way_c_p.png', xcanvas_c_p )
-
 #
 # Step-3: Relative pose
-# 3.1 Triangulate pts in curr-1 and curr.
-# 3.2 pnp( 3d pts from (3.1) ,  prev )
+# Note : At this stage 3 already have a 3-way match : ie. masked_pts_curr <--> masked_pts_prev <--> _pts_curr_m
 
+# 3.1 Triangulate pts in curr-1 and curr.
+
+
+# 3.2 pnp( 3d pts from (3.1) ,  prev )
+code.interact( local=locals() )
 
 
 quit()

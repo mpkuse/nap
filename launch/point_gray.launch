@@ -87,9 +87,9 @@
       <!--<arg name="bag_color_im_topic" default="/camera/image_raw" />--><!-- All input color images -->
 
       <!--NAP Node -->
-      <node name="nap" pkg="nap" type="nap_graph_modelling.py" output="screen" >
+      <node name="nap" pkg="nap" type="nap_graph_modelling.py" output="log" >
         <remap to="$(arg bag_color_im_topic)" from="/semi_keyframes"/>
-         <remap to="/colocation" from="/raw_graph_edge"/>
+         <!--<remap to="/colocation" from="/raw_graph_edge"/>-->
       </node>
 
 
@@ -114,9 +114,9 @@
      ##### Pose Graph Optimization (Work in progress)#####
      #####################################################
             subscribes to `vins/camera_pose`, `3d_point_cloud`, `napMsg`  -->
-    <node name="pgraph_opt" pkg="nap" type="pose_graph_opt_node" output="log">
+    <node name="pgraph_opt" pkg="nap" type="pose_graph_opt_node" output="screen">
         <param name="config_file" type="string" value="$(arg config_path)" />
-        <remap from="/raw_graph_edge" to="/colocation" />
+        <!-- <remap from="/raw_graph_edge" to="/colocation" /> -->
     </node>
 
 <!-- ##### END Pose Graph Optimization ##### -->

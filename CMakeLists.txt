@@ -37,6 +37,7 @@ generate_messages(
   DEPENDENCIES
   std_msgs
   sensor_msgs
+  geometry_msgs
 )
 
 
@@ -59,7 +60,17 @@ add_executable( toy_vertigo_dcs src/ceres_vertigo_dyn_cov_scl.cpp )
 
 add_executable( dbow3_test src/dbow3_test.cpp )
 add_executable( dbow3_naive src/dbow3_naive.cpp src/cnpy.cpp ) #cnpy is for writing npy. borrowed from
-add_executable( pose_graph_opt_node src/pose_graph_opt_node.cpp )
+
+add_executable( pose_graph_opt_node
+                    src/pose_graph_opt_node.cpp
+                    src/Node.cpp
+                    src/Edge.cpp
+                    src/PinholeCamera.cpp
+                    src/DataManager_core.cpp
+                    src/DataManager_rviz_visualization.cpp
+                    src/DataManager_looppose_computation.cpp
+                    src/DataManager_ceres.cpp
+              )
 
 target_link_libraries( ls_pose_graph_opt ${CERES_LIBRARIES}  ${catkin_LIBRARIES} )
 target_link_libraries( toy_vertigo ${CERES_LIBRARIES}  ${catkin_LIBRARIES} )
