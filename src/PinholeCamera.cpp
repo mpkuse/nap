@@ -90,12 +90,114 @@ void PinholeCamera::_2channel_to_1channel( const cv::Mat& input, cv::Mat& output
 
 
 //////////////////////////////////////////
-void PinholeCamera::perspectiveProject3DPoints( cv::Mat& _3dpts )
+void PinholeCamera::perspectiveProject3DPoints( cv::Mat& _3dpts,
+                                  cv::Mat& out_pts )
 {
-    cout << "Not Implemented perspectiveProject3DPoints";
+    // cout << "Not Implemented perspectiveProject3DPoints\n";
+
+    // //call opencv's projectPoints()
+    // cv::Mat rVec = cv::Mat::zeros( 3,1, CV_32F );
+    // cv::Mat tVec = cv::Mat::zeros( 3,1, CV_32F );
+    // out_pts = cv::Mat( 2, _3dpts.cols, CV_32FC1 );
+    //
+    //
+    // print_cvmat_info( "_3dpts", _3dpts );
+    // print_cvmat_info( "rVec", rVec );
+    // print_cvmat_info( "tVec", tVec );
+    // print_cvmat_info( "m_K", m_K );
+    // print_cvmat_info( "m_D", m_D );
+    // print_cvmat_info( "out_pts", out_pts );
+    // cv::projectPoints( _3dpts, rVec, tVec, m_K, m_D, out_pts );
+    // return;
+
+    // DIY - Do It Yourself Projection
+    MatrixXf c_X;
+    cv::cv2eigen( _3dpts, c_X ); //3xN
+    // c_X.row(0).array() /= c_X.row(3).array();
+    // c_X.row(1).array() /= c_X.row(3).array();
+    // c_X.row(2).array() /= c_X.row(3).array();
+    // c_X.row(3).array() /= c_X.row(3).array();
+
+    Matrix3f cam_intrin;
+    cv::cv2eigen( m_K, cam_intrin );
+
+    Vector4f cam_dist;
+    cv::cv2eigen( m_D, cam_dist );
+
+
+    // K [ I | 0 ]
+    MatrixXf I_0;
+    I_0 = Matrix4f::Identity().topLeftCorner<3,4>();
+    MatrixXf P1;
+    P1 = cam_intrin * I_0; //3x4
+
+    // Project and Perspective Divide
+    MatrixXf im_pts;
+    im_pts = P1 * c_X;
+    im_pts.row(0).array() /= im_pts.row(2).array();
+    im_pts.row(1).array() /= im_pts.row(2).array();
+    im_pts.row(2).array() /= im_pts.row(2).array();
+
+    // Apply Distortion
+    MatrixXf *Xdd = new MatrixXf( im_pts.rows(), im_pts.cols() );
+    for( int i=0 ; i<im_pts.cols() ; i++)
+    {
+      float r2 = im_pts(0,i)*im_pts(0,i) + im_pts(1,i)*im_pts(1,i);
+      float c = 1.0f + (float)k1()*r2 + (float)k2()*r2*r2;
+      (*Xdd)(0,i) = im_pts(0,i) * c + 2.0f*(float)p1()*im_pts(0,i)*im_pts(1,i) + (float)p2()*(r2 + 2.0*im_pts(0,i)*im_pts(0,i));
+      (*Xdd)(1,i) = im_pts(1,i) * c + 2.0f*(float)p2()*im_pts(0,i)*im_pts(1,i) + (float)p1()*(r2 + 2.0*im_pts(1,i)*im_pts(1,i));
+    }
+
+
+    // cv::eigen2cv( im_pts, out_pts );
+    cv::eigen2cv( (*Xdd), out_pts );
+
 }
 
-void PinholeCamera::triangulatePoints(  )
+
+
+void PinholeCamera::undistortPointSet( const cv::Mat& pts_observed_image_space, cv::Mat& pts_undistorted_image_space )
 {
-    cout << "Not Implemented triangulatePoints";
+  // cout << "Not Implemented undistort_points\n";
+
+  cv::Mat _in, _out;
+  _1channel_to_2channel( pts_observed_image_space, _in );
+
+  // this is because, undistort function takes in a 1xN 2channel input
+  //call opencv's undistortPoints()
+  cv::undistortPoints( _in, _out, m_K,  m_D, cv::Mat::eye(3,3, CV_32F), m_K );
+
+
+  _2channel_to_1channel( _out, pts_undistorted_image_space );
+
+}
+
+
+
+void PinholeCamera::print_cvmat_info( string msg, const cv::Mat& A )
+{
+  cout << msg << ":" << "rows=" << A.rows << ", cols=" << A.cols << ", ch=" << A.channels() << ", type=" << type2str( A.type() ) << endl;
+}
+
+string PinholeCamera::type2str(int type) {
+  string r;
+
+  uchar depth = type & CV_MAT_DEPTH_MASK;
+  uchar chans = 1 + (type >> CV_CN_SHIFT);
+
+  switch ( depth ) {
+    case CV_8U:  r = "8U"; break;
+    case CV_8S:  r = "8S"; break;
+    case CV_16U: r = "16U"; break;
+    case CV_16S: r = "16S"; break;
+    case CV_32S: r = "32S"; break;
+    case CV_32F: r = "32F"; break;
+    case CV_64F: r = "64F"; break;
+    default:     r = "User"; break;
+  }
+
+  r += "C";
+  r += (chans+'0');
+
+  return r;
 }

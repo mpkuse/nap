@@ -606,6 +606,7 @@ while not rospy.is_shutdown():
 
 
                 # Step-2: Match expansion
+                # TODO: Before expanding matches, try cv2.correctMatches() which minimizes the reprojection errors. Try it out, might help reduce false matches even more based on reprojection.
                 _pts_curr_m = VV.expand_matches_to_curr_m( pts_curr, pts_prev, mask_c_p, curr_m_im  )
 
                 masked_pts_curr = list( pts_curr[i] for i in np.where( mask_c_p[:,0] == 1 )[0] )

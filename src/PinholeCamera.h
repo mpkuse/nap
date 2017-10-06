@@ -77,10 +77,18 @@ public:
   // Given N 3D points,  3xN matrix, or 4xN matrix (homogeneous)
   // project these points using this camera.
   // TODO: Extend this function to include extrinsics (given as arguments)
-  void perspectiveProject3DPoints( cv::Mat& _3dpts );
+  void perspectiveProject3DPoints( cv::Mat& _3dpts, cv::Mat& out_pts );
 
 
-  void triangulatePoints();
+  // Given an input pointset 2xN 1-channel matrix, returns a 2xN 1-channel matrix
+  // containing undistorted points on input
+  // [Input]
+  //    point set in observed image space
+  // [Output]
+  //    point set in undistorted image space
+  void undistortPointSet( const cv::Mat& pts_observed_image_space, cv::Mat& pts_undistorted_image_space );
+
+
 
 private:
   string config_model_type, config_camera_name;
@@ -100,4 +108,7 @@ private:
 
   // given a 1xN 2-channel input cv::Mat converts to 2xN,also assumes CV_32F type
   void _2channel_to_1channel( const cv::Mat& input, cv::Mat& output );
+
+  void print_cvmat_info( string msg, const cv::Mat& A );
+  string type2str( int );
 };

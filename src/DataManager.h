@@ -121,18 +121,30 @@ public:
   void publish_pose_graph_edges( const std::vector<Edge*>& x_edges ); //< publishes the given edge set
 
 
+  // ////////////////////////////   //
+  //  Relative Pose Computation     //
+  // ////////////////////////////   //
+
+  void pose_from_2way_matching( const nap::NapMsg::ConstPtr& msg, Matrix4d& cm_T_c );
+  void pose_from_3way_matching( const nap::NapMsg::ConstPtr& msg, Matrix4d& cm_T_c );
+
+
+
+
+
+
+private:
 
   //
   // Core Data variables
   //
-  // TODO: Consider making these private
   vector<Node*> nNodes; //list of notes
   vector<Edge*> odometryEdges; //list of odometry edges
   vector<Edge*> loopClosureEdges; //List of closure edges
 
-private:
-
+  //
   // Buffer Utilities
+  //
   int find_indexof_node( ros::Time stamp );
 
   std::queue<cv::Mat> unclaimed_im;
@@ -143,6 +155,52 @@ private:
   std::queue<ros::Time> unclaimed_pt_cld_time;
   void flush_unclaimed_pt_cld();
 
+  void print_cvmat_info( string msg, const cv::Mat& A );
+  string type2str( int );
+
+  //
+  // rel pose computation utils
+  //
+
+  // msg --> Received with callback
+  // mat_ptr_curr, mat_pts_prev, mat_pts_curr_m --> 2xN outputs
+  void extract_3way_matches_from_napmsg( const nap::NapMsg::ConstPtr& msg,
+        cv::Mat&mat_pts_curr, cv::Mat& mat_pts_prev, cv::Mat& mat_pts_curr_m );
+
+  // image, 2xN, image, 2xN, image 2xN, out_image
+  // or
+  // image, 1xN 2 channel, image 1xN 2 channel, image 1xN 2 channel
+  void plot_3way_match( const cv::Mat& curr_im, const cv::Mat& mat_pts_curr,
+                        const cv::Mat& prev_im, const cv::Mat& mat_pts_prev,
+                        const cv::Mat& curr_m_im, const cv::Mat& mat_pts_curr_m,
+                        cv::Mat& dst);
+
+
+  // My wrapper for cv2.triangulatePoints()
+  // [Input]
+  // ix_curr        : index of node corresponding to curr
+  // mat_pts_curr   : 2xN matrix representing point matches in curr
+  // ix_curr_m      : index of node corresponding to curr-1
+  // mat_pts_curr_m : 2xN matrix representing point matches in curr-1
+  // [Output]
+  // c_3dpts        : 3D points in co-ordinate frame of curr
+  void triangulate_points( int ix_curr, const cv::Mat& mat_pts_curr,
+                           int ix_curr_m, const cv::Mat& mat_pts_curr_m,
+                           cv::Mat& c_3dpts );
+
+
+  void _to_homogeneous( const cv::Mat& in, cv::Mat& out );
+  void _from_homogeneous( const cv::Mat& in, cv::Mat& out );
+  void _perspective_divide_inplace( cv::Mat& in );
+
+
+  // Debug file in opencv format utils (in DataManager_core.cpp)
+  // void open_debug_xml( const string& fname );
+  // const cv::FileStorage& get_debug_file_ptr();
+  // void close_debug_xml();
+  // cv::FileStorage debug_fp;
+
+  // END 'rel pose computation utils'
 
 
   ros::NodeHandle nh; //< Node Handle

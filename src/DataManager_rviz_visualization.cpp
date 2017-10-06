@@ -1,5 +1,7 @@
 #include "DataManager.h"
 
+// This contains functions related to rviz visualization (using marker) of the pose graph
+
 void DataManager::publish_once()
 {
   publish_pose_graph_nodes();

@@ -1,5 +1,7 @@
 #include "DataManager.h"
 
+// Core functions to subscribe to messages and build the pose graph
+
 DataManager::DataManager(ros::NodeHandle &nh )
 {
     this->nh = nh;
@@ -215,15 +217,58 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
     return;
 
   //
-  // make a loop closure edges
+  // make a loop closure edge
   Edge * e = new Edge( nNodes[i_curr], i_curr, nNodes[i_prev], i_prev, EDGE_TYPE_LOOP_CLOSURE );
   e->setEdgeTimeStamps(msg->c_timestamp, msg->prev_timestamp);
+
+  ///////////////////////////////////
+  // Relative Pose Computation     //
+  //////////////////////////////////
+  cout << "n_sparse_matches : " << msg->n_sparse_matches << endl;
+  cout << "3way match sizes : " << msg->curr.size() << " " << msg->prev.size() << " " << msg->curr_m.size() << endl;
+
+  // //////////////////
+  //---- case-a : If 3way matching is empty : do ordinary way to compute relative pose. Borrow code from Qin. Basically using 3d points from odometry (wrt curr) and having known same points in prev do pnp
+  // /////////////////
+  // Use the point cloud (wrt curr) and do PnP using prev
+  if( msg->n_sparse_matches >= 200 )
+  {
+    e->setLoopEdgeSubtype(EDGE_TYPE_LOOP_SUBTYPE_BASIC);
+
+    // TODO: Put Qin Tong's code here. ie. rel pose computation when we have sufficient number of matches
+    Matrix4d cm_T_c;
+    this->pose_from_2way_matching(msg, cm_T_c );
+
+    loopClosureEdges.push_back( e );
+    return;
+  }
+
+
+  // //////////////////
+  //---- case-b : If 3way matching is not empty : i) Triangulate curr-1 and curr. ii) pnp( 3d pts from (i) ,  prev )
+  // //////////////////
+  // Pose computation with 3way matching
+  if( msg->n_sparse_matches < 200 && msg->curr.size() > 0 && msg->curr.size() == msg->prev.size() && msg->curr.size() == msg->curr_m.size()  )
+  {
+    e->setLoopEdgeSubtype(EDGE_TYPE_LOOP_SUBTYPE_3WAY);
+
+    // TODO: Relative pose from 3way matching
+    Matrix4d cm_T_c;
+    this->pose_from_3way_matching(msg, cm_T_c );
+
+
+    loopClosureEdges.push_back( e );
+    return;
+  }
+
+  ROS_ERROR( "in place_recog_callback: Error computing rel pose. Edge added without pose. This might be fatal!");
+
 
 }
 
 
 
-
+// ////////////////////////////////
 
 // Loop over each node and return the index of the node which is clossest to the specified stamp
 int DataManager::find_indexof_node( ros::Time stamp )
@@ -309,3 +354,30 @@ void DataManager::flush_unclaimed_pt_cld()
   }
 
 }
+
+
+// /// Debug file
+// void DataManager::open_debug_xml( const string& fname)
+// {
+//   ROS_INFO( "Open DEBUG XML : %s", fname.c_str() );
+//   (this->debug_fp).open( fname, cv::FileStorage::WRITE );
+// }
+//
+// const cv::FileStorage& DataManager::get_debug_file_ptr()
+// {
+//   if( debug_fp.isOpened() == false ) {
+//     ROS_ERROR( "get_debug_file_ptr(): debug xml file is not open. Call open_debug_xml() before this function" );
+//     return NULL;
+//   }
+//
+//   return debug_fp;
+// }
+//
+// void DataManager::close_debug_xml()
+// {
+//   if( debug_fp.isOpened() == false )
+//   {
+//     ROS_ERROR( "close_debug_xml() : Attempting to close a file that is not open. COnsider calling open_debug_xml() before this function");
+//   }
+//   this->debug_fp.release();
+// }
