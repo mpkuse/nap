@@ -90,6 +90,23 @@ void PinholeCamera::_2channel_to_1channel( const cv::Mat& input, cv::Mat& output
 
 
 //////////////////////////////////////////
+void PinholeCamera::perspectiveProject3DPoints( cv::Mat& _3dpts, Matrix4f& T,
+                                  cv::Mat& out_pts  )
+{
+  MatrixXf c_X;
+  cv::cv2eigen( _3dpts, c_X ); //3xN
+
+  MatrixXf cm_X;
+  cm_X = T * c_X;
+
+  cv::Mat _3dpts_cm;
+  cv::eigen2cv( cm_X, _3dpts_cm );
+
+  perspectiveProject3DPoints( _3dpts_cm, out_pts );
+}
+
+
+// Input 3d points in homogeneous co-ordinates 4xN matrix.
 void PinholeCamera::perspectiveProject3DPoints( cv::Mat& _3dpts,
                                   cv::Mat& out_pts )
 {
@@ -112,7 +129,7 @@ void PinholeCamera::perspectiveProject3DPoints( cv::Mat& _3dpts,
 
     // DIY - Do It Yourself Projection
     MatrixXf c_X;
-    cv::cv2eigen( _3dpts, c_X ); //3xN
+    cv::cv2eigen( _3dpts, c_X ); //4xN
     // c_X.row(0).array() /= c_X.row(3).array();
     // c_X.row(1).array() /= c_X.row(3).array();
     // c_X.row(2).array() /= c_X.row(3).array();
@@ -128,29 +145,32 @@ void PinholeCamera::perspectiveProject3DPoints( cv::Mat& _3dpts,
     // K [ I | 0 ]
     MatrixXf I_0;
     I_0 = Matrix4f::Identity().topLeftCorner<3,4>();
-    MatrixXf P1;
-    P1 = cam_intrin * I_0; //3x4
+    // MatrixXf P1;
+    // P1 = cam_intrin * I_0; //3x4
 
     // Project and Perspective Divide
     MatrixXf im_pts;
-    im_pts = P1 * c_X;
+    im_pts = I_0 * c_X; //in normalized image co-ordinate. Beware that distortion need to be applied in normalized co-ordinates
     im_pts.row(0).array() /= im_pts.row(2).array();
     im_pts.row(1).array() /= im_pts.row(2).array();
     im_pts.row(2).array() /= im_pts.row(2).array();
 
     // Apply Distortion
-    MatrixXf *Xdd = new MatrixXf( im_pts.rows(), im_pts.cols() );
+    MatrixXf Xdd = MatrixXf( im_pts.rows(), im_pts.cols() );
     for( int i=0 ; i<im_pts.cols() ; i++)
     {
       float r2 = im_pts(0,i)*im_pts(0,i) + im_pts(1,i)*im_pts(1,i);
       float c = 1.0f + (float)k1()*r2 + (float)k2()*r2*r2;
-      (*Xdd)(0,i) = im_pts(0,i) * c + 2.0f*(float)p1()*im_pts(0,i)*im_pts(1,i) + (float)p2()*(r2 + 2.0*im_pts(0,i)*im_pts(0,i));
-      (*Xdd)(1,i) = im_pts(1,i) * c + 2.0f*(float)p2()*im_pts(0,i)*im_pts(1,i) + (float)p1()*(r2 + 2.0*im_pts(1,i)*im_pts(1,i));
+      Xdd(0,i) = im_pts(0,i) * c + 2.0f*(float)p1()*im_pts(0,i)*im_pts(1,i) + (float)p2()*(r2 + 2.0*im_pts(0,i)*im_pts(0,i));
+      Xdd(1,i) = im_pts(1,i) * c + 2.0f*(float)p2()*im_pts(0,i)*im_pts(1,i) + (float)p1()*(r2 + 2.0*im_pts(1,i)*im_pts(1,i));
+      Xdd(2,i) = 1.0f;
     }
+
+    MatrixXf out = cam_intrin * Xdd;
 
 
     // cv::eigen2cv( im_pts, out_pts );
-    cv::eigen2cv( (*Xdd), out_pts );
+    cv::eigen2cv( out, out_pts );
 
 }
 
@@ -166,6 +186,7 @@ void PinholeCamera::undistortPointSet( const cv::Mat& pts_observed_image_space, 
   // this is because, undistort function takes in a 1xN 2channel input
   //call opencv's undistortPoints()
   cv::undistortPoints( _in, _out, m_K,  m_D, cv::Mat::eye(3,3, CV_32F), m_K );
+  // If you do not set m_K the returned points will be in normalized co-ordinate system.
 
 
   _2channel_to_1channel( _out, pts_undistorted_image_space );

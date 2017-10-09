@@ -125,8 +125,8 @@ public:
   //  Relative Pose Computation     //
   // ////////////////////////////   //
 
-  void pose_from_2way_matching( const nap::NapMsg::ConstPtr& msg, Matrix4d& cm_T_c );
-  void pose_from_3way_matching( const nap::NapMsg::ConstPtr& msg, Matrix4d& cm_T_c );
+  void pose_from_2way_matching( const nap::NapMsg::ConstPtr& msg, Matrix4d& p_T_c );
+  void pose_from_3way_matching( const nap::NapMsg::ConstPtr& msg, Matrix4d& p_T_c );
 
 
 
@@ -175,6 +175,10 @@ private:
                         const cv::Mat& curr_m_im, const cv::Mat& mat_pts_curr_m,
                         cv::Mat& dst);
 
+  // image, 2xN.
+  // If mat is more than 2d will only take 1st 2 dimensions as (x,y) ie (cols,rows)
+  void plot_point_sets( const cv::Mat& im, const cv::Mat& pts_set, cv::Mat& dst, const cv::Scalar& color );
+
 
   // My wrapper for cv2.triangulatePoints()
   // [Input]
@@ -189,9 +193,22 @@ private:
                            cv::Mat& c_3dpts );
 
 
+  // My wrapper for cv2.solvePnP().
+  // [Input]
+  // c_3dpts : 3d points. 3xN, 1-channel. It is also ok to pass 4xN. Last row will be ignored
+  // pts2d   : 2d Points 2xN 1-channel
+  // [Output]
+  // im_T_c  : Pose of model-cordinates (system in which 3d pts are specified) wrt to camera in which the 2d points are specified
+  void estimatePnPPose( const cv::Mat& c_3dpts, const cv::Mat& pts2d,
+                        Matrix4d& im_T_c  );
+
+
   void _to_homogeneous( const cv::Mat& in, cv::Mat& out );
   void _from_homogeneous( const cv::Mat& in, cv::Mat& out );
   void _perspective_divide_inplace( cv::Mat& in );
+  double _diff_2d( const cv::Mat&A, const cv::Mat&B ); //< 2xM, 2xM,  RMS of these 2 matrices
+
+  void convert_rvec_eigen4f( const cv::Mat& rvec, const cv::Mat& tvec, Matrix4f& Tr );
 
 
   // Debug file in opencv format utils (in DataManager_core.cpp)

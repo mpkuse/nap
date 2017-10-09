@@ -2,15 +2,15 @@
 
 // Functions for computation of relative pose
 
-void DataManager::pose_from_2way_matching( const nap::NapMsg::ConstPtr& msg, Matrix4d& cm_T_c )
+void DataManager::pose_from_2way_matching( const nap::NapMsg::ConstPtr& msg, Matrix4d& p_T_c )
 {
   cout << "Do Qin Tong's Code here, for computation of relative pose\nNot Yet implemented";
 
 }
 
 #define _DEBUG_3WAY
-
-void DataManager::pose_from_3way_matching( const nap::NapMsg::ConstPtr& msg, Matrix4d& cm_T_c )
+#define _DEBUG_PNP
+void DataManager::pose_from_3way_matching( const nap::NapMsg::ConstPtr& msg, Matrix4d& p_T_c )
 {
   cout << "Code here for 3way match pose computation\n";
 
@@ -49,7 +49,6 @@ void DataManager::pose_from_3way_matching( const nap::NapMsg::ConstPtr& msg, Mat
 
 
 #ifdef _DEBUG_3WAY
-
   debug_fp << "K" << camera.m_K;
   debug_fp << "D" << camera.m_D;
   debug_fp << "mat_pts_curr" << mat_pts_curr ;
@@ -67,6 +66,16 @@ void DataManager::pose_from_3way_matching( const nap::NapMsg::ConstPtr& msg, Mat
   prev_im = this->nNodes[ix_prev]->getImageRef();
   curr_m_im = this->nNodes[ix_curr_m]->getImageRef();
 
+
+  cv::Mat grey_curr_im, grey_curr_m_im, grey_prev_im;
+  cv::cvtColor(curr_im, grey_curr_im, cv::COLOR_BGR2GRAY);
+  cv::cvtColor(curr_m_im, grey_curr_m_im, cv::COLOR_BGR2GRAY);
+  cv::cvtColor(prev_im, grey_prev_im, cv::COLOR_BGR2GRAY);
+  debug_fp << "curr_im" << grey_curr_im;
+  debug_fp << "curr_m_im" << grey_curr_m_im;
+  debug_fp << "prev_im" << grey_prev_im;
+
+
   // Plot 3way match
   cv::Mat dst_plot_3way;
   this->plot_3way_match( curr_im, mat_pts_curr, prev_im, mat_pts_prev, curr_m_im, mat_pts_curr_m, dst_plot_3way );
@@ -74,35 +83,97 @@ void DataManager::pose_from_3way_matching( const nap::NapMsg::ConstPtr& msg, Mat
   sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d.jpg", ix_curr, ix_prev );
   cout << "Writing file : " << fname << endl;
   cv::imwrite( fname, dst_plot_3way );
+
+
+  // Plot points  on images
+  cv::Mat dst;
+  plot_point_sets( curr_im, mat_pts_curr, dst, cv::Scalar(255,0,0) );
+  sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d_curr_observed.jpg", ix_curr, ix_prev );
+  cout << "Writing file : " << fname << endl;
+  cv::imwrite( fname, dst );
+
+  cv::Mat dst2;
+  plot_point_sets( curr_m_im, mat_pts_curr_m, dst2, cv::Scalar(255,0,0) );
+  sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d_currm_observed.jpg", ix_curr, ix_prev );
+  cout << "Writing file : " << fname << endl;
+  cv::imwrite( fname, dst2 );
+
 #endif
 
   //
   // Step-2 : Triangulation using matched points from curr and curr-1
   //
   cv::Mat c_3dpts_4N;//4xN
-  triangulate_points( ix_curr, mat_pts_curr, ix_curr_m, mat_pts_curr_m, c_3dpts_4N );
-
-
+  triangulate_points( ix_curr, undistorted_pts_curr, ix_curr_m, undistorted_pts_curr_m, c_3dpts_4N );
   _perspective_divide_inplace( c_3dpts_4N );
-  // cv::Mat c_3dpts_3N;
-  // _from_homogeneous( c_3dpts_4N, c_3dpts_3N );
-  //
-  // cv::Mat c_3dpts_4N_a; //TODO: Remove this and the next line
-  // _to_homogeneous( c_3dpts_3N, c_3dpts_4N_a );
 
 
 #ifdef _DEBUG_3WAY
+  //
+  // Reproject 3d Points - Analysis
+  //
+
   // // write 3d pts to file
   print_cvmat_info( "c_3dpts_4N", c_3dpts_4N );
   debug_fp << "c_3dpts_4N" << c_3dpts_4N ;
 
-  // // Reproject 3d pts.
+
+  // // Reproject 3d pts on image-curr
   cv::Mat _reprojected_pts_into_c;
   camera.perspectiveProject3DPoints( c_3dpts_4N, _reprojected_pts_into_c );
   print_cvmat_info( "reprojected_pts_into_c" , _reprojected_pts_into_c );
   debug_fp << "reprojected_pts_into_c" << _reprojected_pts_into_c;
 
-  //
+
+  // Reproject 3d pts on image-curr_m
+  // [ ^{c-1}T_c ] ==> K [ inv( ^wT_{c-1} ) * ^wT_c ]
+  Matrix4d w_T_cm;
+  nNodes[ix_curr_m]->getCurrTransform(w_T_cm);//4x4
+  Matrix4d w_T_c;
+  nNodes[ix_curr]->getCurrTransform(w_T_c);//4x4
+
+  MatrixXd Tr;
+  Tr = w_T_cm.inverse() * w_T_c; //relative transform
+  Matrix4f Tr_float = Tr.cast<float>();
+
+  cv::Mat _reprojected_pts_into_cm;
+  camera.perspectiveProject3DPoints( c_3dpts_4N, Tr_float, _reprojected_pts_into_cm );
+  print_cvmat_info( "reprojected_pts_into_cm" , _reprojected_pts_into_cm );
+  debug_fp << "reprojected_pts_into_cm" << _reprojected_pts_into_cm;
+
+  cv::Mat mat_w_T_cm, mat_w_T_c, mat_cm_T_c;
+  cv::eigen2cv( w_T_cm, mat_w_T_cm );
+  cv::eigen2cv( w_T_c, mat_w_T_c );
+  cv::eigen2cv( Tr, mat_cm_T_c );
+  debug_fp << "w_T_cm" << mat_w_T_cm;
+  debug_fp << "w_T_c" << mat_w_T_c;
+  debug_fp << "cm_T_c" << mat_cm_T_c;
+
+
+  // Plot reprojected pts on image-curr
+  cv::Mat dst3;
+  plot_point_sets( curr_im, _reprojected_pts_into_c, dst3, cv::Scalar(0,0,255) );
+  sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d_curr_reproj.jpg", ix_curr, ix_prev );
+  cout << "Writing file : " << fname << endl;
+  cv::imwrite( fname, dst3 );
+
+  // Plot reprojected pts on image-curr_m
+  cv::Mat dst4;
+  plot_point_sets( curr_m_im, _reprojected_pts_into_cm, dst4, cv::Scalar(0,0,255) );
+  sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d_currm_reproj.jpg", ix_curr, ix_prev );
+  cout << "Writing file : " << fname << endl;
+  cv::imwrite( fname, dst4 );
+
+
+  // Goodness of triangulation. Difference between reprojected and observed pts.
+  double err_c = _diff_2d( mat_pts_curr, _reprojected_pts_into_c );
+  double err_cm = _diff_2d( mat_pts_curr_m, _reprojected_pts_into_cm );
+  sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d_reproj_err.txt", ix_curr, ix_prev );
+  ofstream myf;
+  myf.open( fname );
+  myf << ix_curr << ", " << ix_prev << ", "<< _reprojected_pts_into_c.cols << ", "
+            << err_c << ", " << err_cm << endl;
+  myf.close();
 
 
 #endif
@@ -110,11 +181,34 @@ void DataManager::pose_from_3way_matching( const nap::NapMsg::ConstPtr& msg, Mat
   //
   // Step-3 : PnP using a) 3d pts from step2 and b) corresponding matches from prev
   //
+  // 3dpts (in frame of curr), 2dpts (in prev)
+  Matrix4d prev_T_c = Matrix4d::Identity();
+  estimatePnPPose(  c_3dpts_4N, mat_pts_prev, prev_T_c ); //This is the real deal. Above 2 only for debug
+
+#ifdef _DEBUG_PNP
+  // 3dpts, curr-image
+  Matrix4d curr_T_c = Matrix4d::Identity();
+  estimatePnPPose(  c_3dpts_4N, mat_pts_curr, curr_T_c ); // This should giveout identity, for debug/verification
+
+  // 3dpts, curr_m-image
+  Matrix4d currm_T_c = Matrix4d::Identity();
+  estimatePnPPose(  c_3dpts_4N, mat_pts_curr_m, currm_T_c ); // This should be same as cm_T_c, for debug/verification
+
+
+  cv::Mat xmat_curr_T_c, xmat_currm_T_c, xmat_prev_T_c;
+  cv::eigen2cv( curr_T_c, xmat_curr_T_c );
+  cv::eigen2cv( currm_T_c, xmat_currm_T_c );
+  cv::eigen2cv( prev_T_c, xmat_prev_T_c );
+  debug_fp << "xmat_curr_T_c"<< xmat_curr_T_c;
+  debug_fp << "xmat_currm_T_c"<< xmat_currm_T_c;
+  debug_fp << "xmat_prev_T_c"<< xmat_prev_T_c;
+#endif
 
 
   //
   // Step-4 : Put the relative pose from step3 into eigen matrix in required convention
-  //
+  //       (p_T_c)
+
 
 
 
@@ -154,49 +248,6 @@ void DataManager::extract_3way_matches_from_napmsg( const nap::NapMsg::ConstPtr&
 
 
 
-void DataManager::plot_3way_match( const cv::Mat& curr_im, const cv::Mat& mat_pts_curr,
-                      const cv::Mat& prev_im, const cv::Mat& mat_pts_prev,
-                      const cv::Mat& curr_m_im, const cv::Mat& mat_pts_curr_m,
-                      cv::Mat& dst)
-{
-  cv::Mat zre = cv::Mat(curr_im.rows, curr_im.cols, CV_8UC3, cv::Scalar(128,128,128) );
-
-  cv::Mat dst_row1, dst_row2;
-  cv::hconcat(curr_im, prev_im, dst_row1);
-  cv::hconcat(curr_m_im, zre, dst_row2);
-  cv::vconcat(dst_row1, dst_row2, dst);
-
-
-
-  // Draw Matches
-  cv::Point2d p_curr, p_prev, p_curr_m;
-  for( int kl=0 ; kl<mat_pts_curr.cols ; kl++ )
-  {
-    if( mat_pts_curr.channels() == 2 ){
-      p_curr = cv::Point2d(mat_pts_curr.at<cv::Vec2f>(0,kl)[0], mat_pts_curr.at<cv::Vec2f>(0,kl)[1] );
-      p_prev = cv::Point2d(mat_pts_prev.at<cv::Vec2f>(0,kl)[0], mat_pts_prev.at<cv::Vec2f>(0,kl)[1] );
-      p_curr_m = cv::Point2d(mat_pts_curr_m.at<cv::Vec2f>(0,kl)[0], mat_pts_curr_m.at<cv::Vec2f>(0,kl)[1] );
-    }
-    else {
-      p_curr = cv::Point2d(mat_pts_curr.at<float>(0,kl),mat_pts_curr.at<float>(1,kl) );
-      p_prev = cv::Point2d(mat_pts_prev.at<float>(0,kl),mat_pts_prev.at<float>(1,kl) );
-      p_curr_m = cv::Point2d(mat_pts_curr_m.at<float>(0,kl),mat_pts_curr_m.at<float>(1,kl) );
-    }
-
-    cv::circle( dst, p_curr, 4, cv::Scalar(255,0,0) );
-    cv::circle( dst, p_prev+cv::Point2d(curr_im.cols,0), 4, cv::Scalar(0,255,0) );
-    cv::circle( dst, p_curr_m+cv::Point2d(0,curr_im.rows), 4, cv::Scalar(0,0,255) );
-    cv::line( dst,  p_curr, p_prev+cv::Point2d(curr_im.cols,0), cv::Scalar(255,0,0) );
-    cv::line( dst,  p_curr, p_curr_m+cv::Point2d(0,curr_im.rows), cv::Scalar(255,30,255) );
-
-    // cv::circle( dst, cv::Point2d(pts_curr[kl]), 4, cv::Scalar(255,0,0) );
-    // cv::circle( dst, cv::Point2d(pts_prev[kl])+cv::Point2d(curr_im.cols,0), 4, cv::Scalar(0,255,0) );
-    // cv::circle( dst, cv::Point2d(pts_curr_m[kl])+cv::Point2d(0,curr_im.rows), 4, cv::Scalar(0,0,255) );
-    // cv::line( dst,  cv::Point2d(pts_curr[kl]), cv::Point2d(pts_prev[kl])+cv::Point2d(curr_im.cols,0), cv::Scalar(255,0,0) );
-    // cv::line( dst,  cv::Point2d(pts_curr[kl]), cv::Point2d(pts_curr_m[kl])+cv::Point2d(0,curr_im.rows), cv::Scalar(255,30,255) );
-  }
-}
-
 
 
 void DataManager::triangulate_points( int ix_curr, const cv::Mat& mat_pts_curr,
@@ -235,11 +286,68 @@ void DataManager::triangulate_points( int ix_curr, const cv::Mat& mat_pts_curr,
 }
 
 
+void DataManager::estimatePnPPose( const cv::Mat& c_3dpts, const cv::Mat& pts2d,
+                      Matrix4d& im_T_c  )
+{
+  assert( (c_3dpts.cols == pts2d.cols) &&  pts2d.cols>0 );
+
+  //cv::Mat to std::vector<cv::Point3f>
+  //cv::Mat to std::vector<cv::Point2f>
+  vector<cv::Point3f> _3d;
+  vector<cv::Point2f> _2d;
+  for( int i=0 ; i<pts2d.cols ; i++ )
+  {
+    cv::Point3f point3d_model = cv::Point3f( c_3dpts.at<float>(0,i), c_3dpts.at<float>(1,i), c_3dpts.at<float>(2,i) );
+    cv::Point2f point2d_scene = cv::Point2f( pts2d.at<float>(0,i), pts2d.at<float>(1,i) );
+
+    _3d.push_back( point3d_model );
+    _2d.push_back( point2d_scene );
+  }
+
+
+
+  // solvePnP
+  cv::Mat rvec, tvec; //CV_64FC1
+  // cv::Mat rvec = cv::Mat::zeros(3,1, CV_32FC1 );
+  // cv::Mat tvec = cv::Mat::zeros(3,1, CV_32FC1 );
+  cv::solvePnP( _3d, _2d, camera.m_K, camera.m_D, rvec, tvec );
+  //TODO: Try out solvePnPRansac
+
+
+  // Convert rvec, tvec to Eigen::Matrix4d or Eigen::Matrix4f
+  // #define ___JH_ROT_PRINT
+#ifdef ___JH_ROT_PRINT
+  print_cvmat_info( "rvec", rvec );cout << "rvec:"<< rvec << endl;
+  print_cvmat_info( "tvec", tvec );cout << "tvec:"<< tvec << endl;
+#endif
+
+  cv::Mat rot;
+  cv::Rodrigues( rvec, rot );
+
+#ifdef ___JH_ROT_PRINT
+  print_cvmat_info( "rot", rot );cout << "rot:\n" << rot << endl;
+#endif
+
+  Matrix3d eig_rot;
+  cv::cv2eigen( rot, eig_rot );
+
+  Vector3d eig_trans;
+  cv::cv2eigen( tvec, eig_trans );
+
+
+  im_T_c = Matrix4d::Identity();
+  im_T_c.topLeftCorner<3,3>() = eig_rot;
+  im_T_c.block<3,1>(0,3) = eig_trans;
+
+
+}
+
 
 // Given an input matrix of size nXN returns (n+1)xN. Increase the dimension by 1
 // Add an extra dimension with 1.0 as the entry. This is NOT an inplace operation.
 void DataManager::_to_homogeneous( const cv::Mat& in, cv::Mat& out )
 {
+  //TODO: Use M.row() to vectorize
   cout << "Not implemented _to_homogeneous\n";
   out = cv::Mat( in.rows+1, in.cols, in.type() );
   int lastindex_of_out = out.rows-1;
@@ -258,7 +366,7 @@ void DataManager::_to_homogeneous( const cv::Mat& in, cv::Mat& out )
 // Y = X[0:3,:] / X[3,:]. This is not an inplace operation
 void DataManager::_from_homogeneous( const cv::Mat& in, cv::Mat& out )
 {
-  //TODO : Take this part into a function, say fromHomogeneous and toHomogeneous. Probably use these functions from opencv. Verify before though, points are thought to be row-wise. Best is to use my own method
+  //TODO: Use M.row() to vectorize
   out = cv::Mat( in.rows-1, in.cols, in.type() );
   int lastindex_of_in = in.rows-1;
   for( int iu=0 ; iu<in.cols ; iu++ )
@@ -273,11 +381,12 @@ void DataManager::_from_homogeneous( const cv::Mat& in, cv::Mat& out )
 
 // Input of nxN returns nxN. After this call the last row will be 1s.
 // X = X / X[n-1,:]
-void _perspective_divide_inplace( cv::Mat& in )
+void DataManager::_perspective_divide_inplace( cv::Mat& in )
 {
+  //TODO: Use M.row() to vectorize
   for( int iu = 0 ; iu<in.cols ; iu++ )
   {
-    float to_divide = in.at<float>( in.row-1, iu );
+    float to_divide = in.at<float>( in.rows-1, iu );
     for( int j=0 ; j<in.rows ; j++ )
     {
       in.at<float>( j, iu ) /= to_divide;
@@ -286,6 +395,42 @@ void _perspective_divide_inplace( cv::Mat& in )
 }
 
 
+
+double DataManager::_diff_2d( const cv::Mat&A, const cv::Mat&B )
+{
+  int M = A.cols;
+  double sum = 0.0;
+  for( int i=0 ; i<M ; i++ )
+  {
+    double dx = double(A.at<float>(0,i) - B.at<float>(0,i)) ;
+    double dy = double(A.at<float>(1,i) - B.at<float>(1,i)) ;
+    sum += dx*dx + dy*dy;
+  }
+  sum = sqrt(sum) / (double)M;
+  return sum;
+}
+
+
+void DataManager::convert_rvec_eigen4f( const cv::Mat& rvec, const cv::Mat& tvec, Matrix4f& Tr )
+{
+  Tr = Matrix4f::Identity();
+
+  // Rotation
+  cv::Mat R;
+  cv::Rodrigues( rvec, R );
+  cout << "R:" << R << endl;
+
+  Matrix3f e_R;
+  cv::cv2eigen( R, e_R );
+
+  Tr.topLeftCorner<3,3>() = e_R;
+  cout << "Eigen Tr:" << Tr << endl;
+
+  // Translation
+  // Vector3f e_T;
+  // cv::cv2eigen( tvec, e_T);
+  // Tr.col(3) = e_T;
+}
 
 
 void DataManager::print_cvmat_info( string msg, const cv::Mat& A )

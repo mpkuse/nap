@@ -236,8 +236,11 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
     e->setLoopEdgeSubtype(EDGE_TYPE_LOOP_SUBTYPE_BASIC);
 
     // TODO: Put Qin Tong's code here. ie. rel pose computation when we have sufficient number of matches
-    Matrix4d cm_T_c;
-    this->pose_from_2way_matching(msg, cm_T_c );
+    Matrix4d p_T_c;
+    this->pose_from_2way_matching(msg, p_T_c );
+
+
+    // Set the computed pose into edge
 
     loopClosureEdges.push_back( e );
     return;
@@ -253,9 +256,10 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
     e->setLoopEdgeSubtype(EDGE_TYPE_LOOP_SUBTYPE_3WAY);
 
     // TODO: Relative pose from 3way matching
-    Matrix4d cm_T_c;
-    this->pose_from_3way_matching(msg, cm_T_c );
+    Matrix4d p_T_c;
+    this->pose_from_3way_matching(msg, p_T_c );
 
+    // Set the computed pose into edge
 
     loopClosureEdges.push_back( e );
     return;

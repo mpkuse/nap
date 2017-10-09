@@ -126,3 +126,69 @@ void DataManager::publish_pose_graph_edges( const std::vector<Edge*>& x_edges )
     pub_pgraph.publish( marker );
   }
 }
+
+
+
+void DataManager::plot_3way_match( const cv::Mat& curr_im, const cv::Mat& mat_pts_curr,
+                      const cv::Mat& prev_im, const cv::Mat& mat_pts_prev,
+                      const cv::Mat& curr_m_im, const cv::Mat& mat_pts_curr_m,
+                      cv::Mat& dst)
+{
+  cv::Mat zre = cv::Mat(curr_im.rows, curr_im.cols, CV_8UC3, cv::Scalar(128,128,128) );
+
+  cv::Mat dst_row1, dst_row2;
+  cv::hconcat(curr_im, prev_im, dst_row1);
+  cv::hconcat(curr_m_im, zre, dst_row2);
+  cv::vconcat(dst_row1, dst_row2, dst);
+
+
+
+  // Draw Matches
+  cv::Point2d p_curr, p_prev, p_curr_m;
+  for( int kl=0 ; kl<mat_pts_curr.cols ; kl++ )
+  {
+    if( mat_pts_curr.channels() == 2 ){
+      p_curr = cv::Point2d(mat_pts_curr.at<cv::Vec2f>(0,kl)[0], mat_pts_curr.at<cv::Vec2f>(0,kl)[1] );
+      p_prev = cv::Point2d(mat_pts_prev.at<cv::Vec2f>(0,kl)[0], mat_pts_prev.at<cv::Vec2f>(0,kl)[1] );
+      p_curr_m = cv::Point2d(mat_pts_curr_m.at<cv::Vec2f>(0,kl)[0], mat_pts_curr_m.at<cv::Vec2f>(0,kl)[1] );
+    }
+    else {
+      p_curr = cv::Point2d(mat_pts_curr.at<float>(0,kl),mat_pts_curr.at<float>(1,kl) );
+      p_prev = cv::Point2d(mat_pts_prev.at<float>(0,kl),mat_pts_prev.at<float>(1,kl) );
+      p_curr_m = cv::Point2d(mat_pts_curr_m.at<float>(0,kl),mat_pts_curr_m.at<float>(1,kl) );
+    }
+
+    cv::circle( dst, p_curr, 4, cv::Scalar(255,0,0) );
+    cv::circle( dst, p_prev+cv::Point2d(curr_im.cols,0), 4, cv::Scalar(0,255,0) );
+    cv::circle( dst, p_curr_m+cv::Point2d(0,curr_im.rows), 4, cv::Scalar(0,0,255) );
+    cv::line( dst,  p_curr, p_prev+cv::Point2d(curr_im.cols,0), cv::Scalar(255,0,0) );
+    cv::line( dst,  p_curr, p_curr_m+cv::Point2d(0,curr_im.rows), cv::Scalar(255,30,255) );
+
+    // cv::circle( dst, cv::Point2d(pts_curr[kl]), 4, cv::Scalar(255,0,0) );
+    // cv::circle( dst, cv::Point2d(pts_prev[kl])+cv::Point2d(curr_im.cols,0), 4, cv::Scalar(0,255,0) );
+    // cv::circle( dst, cv::Point2d(pts_curr_m[kl])+cv::Point2d(0,curr_im.rows), 4, cv::Scalar(0,0,255) );
+    // cv::line( dst,  cv::Point2d(pts_curr[kl]), cv::Point2d(pts_prev[kl])+cv::Point2d(curr_im.cols,0), cv::Scalar(255,0,0) );
+    // cv::line( dst,  cv::Point2d(pts_curr[kl]), cv::Point2d(pts_curr_m[kl])+cv::Point2d(0,curr_im.rows), cv::Scalar(255,30,255) );
+  }
+}
+
+
+void DataManager::plot_point_sets( const cv::Mat& im, const cv::Mat& pts_set, cv::Mat& dst, const cv::Scalar& color )
+{
+  // TODO consider addressof(a) == addressof(b)
+  // dst = im.clone();
+  dst = cv::Mat( im.rows, im.cols, CV_8UC3 );
+
+  if( im.channels() == 1 )
+    cv::cvtColor( im, dst, cv::COLOR_GRAY2BGR );
+  else
+    im.copyTo(dst);
+
+  //pts_set is 2xN
+  cv::Point2d pt;
+  for( int i=0 ; i<pts_set.cols ; i++ )
+  {
+    pt = cv::Point2d(pts_set.at<float>(0,i),pts_set.at<float>(1,i) );
+    cv::circle( dst, pt, 4,color );
+  }
+}

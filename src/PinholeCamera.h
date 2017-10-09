@@ -78,7 +78,7 @@ public:
   // project these points using this camera.
   // TODO: Extend this function to include extrinsics (given as arguments)
   void perspectiveProject3DPoints( cv::Mat& _3dpts, cv::Mat& out_pts );
-
+  void perspectiveProject3DPoints( cv::Mat& _3dpts, Matrix4f& T, cv::Mat& out_pts ); //< T * _3dpts
 
   // Given an input pointset 2xN 1-channel matrix, returns a 2xN 1-channel matrix
   // containing undistorted points on input
