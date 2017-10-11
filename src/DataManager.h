@@ -180,6 +180,13 @@ private:
   void plot_point_sets( const cv::Mat& im, const cv::Mat& pts_set, cv::Mat& dst, const cv::Scalar& color );
 
 
+  // Given the odometry poses of 2 cameras compute the fundamental matrix.
+  // If the poses are known in canonical form, ie. [I|0] , [R,t] ; than
+  // Fundamental matrix is given as F:= [t]_x * R
+  void make_fundamentalmatrix_from_pose( const Matrix4d& w_T_c, const Matrix4d& w_T_cm,
+                                          Matrix3d& F );
+
+
   // My wrapper for cv2.triangulatePoints()
   // [Input]
   // ix_curr        : index of node corresponding to curr

@@ -22,10 +22,27 @@ void DataManager::pose_from_3way_matching( const nap::NapMsg::ConstPtr& msg, Mat
   int ix_curr_m = find_indexof_node(msg->t_curr_m);
   assert( ix_curr > 0 && ix_prev>0 && ix_curr_m>0 );
 
+
+  // [ ^{c-1}T_c ] ==> [ inv( ^wT_{c-1} ) * ^wT_c ]
+  Matrix4d w_T_cm;
+  nNodes[ix_curr_m]->getCurrTransform(w_T_cm);//4x4
+  Matrix4d w_T_c;
+  nNodes[ix_curr]->getCurrTransform(w_T_c);//4x4
+
+  Matrix4d Tr;
+  Tr = w_T_cm.inverse() * w_T_c; //relative transform
+
+  Matrix3d F_c_cm;
+  cv::Mat mat_F_c_cm;
+  make_fundamentalmatrix_from_pose( w_T_c, w_T_cm, F_c_cm );
+  cv::eigen2cv( F_c_cm, mat_F_c_cm );
+  cout << "F_c_cm:\n" << F_c_cm << endl;
+
+
   #ifdef _DEBUG_3WAY
     // Open DEBUG file
     char fname[200];
-    sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d.opencv", ix_curr, ix_prev );
+    sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d.opencv", ix_curr, ix_prev, ix_curr_m );
     cout << "Writing file : " << fname << endl;
     cv::FileStorage debug_fp( fname, cv::FileStorage::WRITE );
   #endif
@@ -41,14 +58,26 @@ void DataManager::pose_from_3way_matching( const nap::NapMsg::ConstPtr& msg, Mat
   // convert these into undistorted_image_space. Qin Tong had told me it
   // publishes the keyframe original, however the pointcloud is published in
   // undistorted_image_space.
-  // TODO: To speedup this conversion, build a lookup table for every point. Non-priority
+
   cv::Mat undistorted_pts_curr, undistorted_pts_prev, undistorted_pts_curr_m; //2xN 1-channel
-  camera.undistortPointSet( mat_pts_curr, undistorted_pts_curr);
+  camera.jointUndistortPointSets( mat_F_c_cm,
+                                  mat_pts_curr, mat_pts_curr_m,
+                                  undistorted_pts_curr, undistorted_pts_curr_m );
+  // camera.undistortPointSet( mat_pts_curr, undistorted_pts_curr);
+  // camera.undistortPointSet( mat_pts_curr_m, undistorted_pts_curr_m);
   camera.undistortPointSet( mat_pts_prev, undistorted_pts_prev);
-  camera.undistortPointSet( mat_pts_curr_m, undistorted_pts_curr_m);
+
 
 
 #ifdef _DEBUG_3WAY
+  // Collect undistortedPoints in normalized cords for analysis
+  cv::Mat undist_normed_curr, undist_normed_curr_m;
+  camera.getUndistortedNormalizedCords( mat_pts_curr,  undist_normed_curr );
+  camera.getUndistortedNormalizedCords( mat_pts_curr_m,  undist_normed_curr_m );
+  debug_fp << "undist_normed_curr" << undist_normed_curr;
+  debug_fp << "undist_normed_curr_m" << undist_normed_curr_m;
+
+
   debug_fp << "K" << camera.m_K;
   debug_fp << "D" << camera.m_D;
   debug_fp << "mat_pts_curr" << mat_pts_curr ;
@@ -67,20 +96,32 @@ void DataManager::pose_from_3way_matching( const nap::NapMsg::ConstPtr& msg, Mat
   curr_m_im = this->nNodes[ix_curr_m]->getImageRef();
 
 
+  // Start images writing. Writing to FileStorage is too slow
   cv::Mat grey_curr_im, grey_curr_m_im, grey_prev_im;
   cv::cvtColor(curr_im, grey_curr_im, cv::COLOR_BGR2GRAY);
   cv::cvtColor(curr_m_im, grey_curr_m_im, cv::COLOR_BGR2GRAY);
   cv::cvtColor(prev_im, grey_prev_im, cv::COLOR_BGR2GRAY);
-  debug_fp << "curr_im" << grey_curr_im;
-  debug_fp << "curr_m_im" << grey_curr_m_im;
-  debug_fp << "prev_im" << grey_prev_im;
+  // debug_fp << "curr_im" << grey_curr_im;
+  // debug_fp << "curr_m_im" << grey_curr_m_im;
+  // debug_fp << "prev_im" << grey_prev_im;
+
+  sprintf( fname, "/home/mpkuse/Desktop/a/drag/%d.png", ix_curr );
+  cout << "Writing : " << fname << endl;
+  cv::imwrite( fname, curr_im );
+  sprintf( fname, "/home/mpkuse/Desktop/a/drag/%d.png", ix_curr_m );
+  cout << "Writing : " << fname << endl;
+  cv::imwrite( fname, curr_m_im );
+  sprintf( fname, "/home/mpkuse/Desktop/a/drag/%d.png", ix_prev );
+  cout << "Writing : " << fname << endl;
+  cv::imwrite( fname, prev_im );
+  // End of Images Writing
 
 
   // Plot 3way match
   cv::Mat dst_plot_3way;
   this->plot_3way_match( curr_im, mat_pts_curr, prev_im, mat_pts_prev, curr_m_im, mat_pts_curr_m, dst_plot_3way );
 
-  sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d.jpg", ix_curr, ix_prev );
+  sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d.jpg", ix_curr, ix_prev, ix_curr_m );
   cout << "Writing file : " << fname << endl;
   cv::imwrite( fname, dst_plot_3way );
 
@@ -88,15 +129,21 @@ void DataManager::pose_from_3way_matching( const nap::NapMsg::ConstPtr& msg, Mat
   // Plot points  on images
   cv::Mat dst;
   plot_point_sets( curr_im, mat_pts_curr, dst, cv::Scalar(255,0,0) );
-  sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d_curr_observed.jpg", ix_curr, ix_prev );
+  sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d_curr_observed.jpg", ix_curr, ix_prev, ix_curr_m );
   cout << "Writing file : " << fname << endl;
   cv::imwrite( fname, dst );
 
   cv::Mat dst2;
   plot_point_sets( curr_m_im, mat_pts_curr_m, dst2, cv::Scalar(255,0,0) );
-  sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d_currm_observed.jpg", ix_curr, ix_prev );
+  sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d_currm_observed.jpg", ix_curr, ix_prev, ix_curr_m );
   cout << "Writing file : " << fname << endl;
   cv::imwrite( fname, dst2 );
+
+  cv::Mat dst2_5;
+  plot_point_sets( prev_im, mat_pts_prev, dst2_5, cv::Scalar(255,0,0) );
+  sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d_prev_observed.jpg", ix_curr, ix_prev, ix_curr_m );
+  cout << "Writing file : " << fname << endl;
+  cv::imwrite( fname, dst2_5 );
 
 #endif
 
@@ -126,14 +173,7 @@ void DataManager::pose_from_3way_matching( const nap::NapMsg::ConstPtr& msg, Mat
 
 
   // Reproject 3d pts on image-curr_m
-  // [ ^{c-1}T_c ] ==> K [ inv( ^wT_{c-1} ) * ^wT_c ]
-  Matrix4d w_T_cm;
-  nNodes[ix_curr_m]->getCurrTransform(w_T_cm);//4x4
-  Matrix4d w_T_c;
-  nNodes[ix_curr]->getCurrTransform(w_T_c);//4x4
 
-  MatrixXd Tr;
-  Tr = w_T_cm.inverse() * w_T_c; //relative transform
   Matrix4f Tr_float = Tr.cast<float>();
 
   cv::Mat _reprojected_pts_into_cm;
@@ -150,30 +190,24 @@ void DataManager::pose_from_3way_matching( const nap::NapMsg::ConstPtr& msg, Mat
   debug_fp << "cm_T_c" << mat_cm_T_c;
 
 
+  debug_fp << "F_c_cm" << mat_F_c_cm;
+
+
   // Plot reprojected pts on image-curr
   cv::Mat dst3;
   plot_point_sets( curr_im, _reprojected_pts_into_c, dst3, cv::Scalar(0,0,255) );
-  sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d_curr_reproj.jpg", ix_curr, ix_prev );
+  sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d_curr_reproj.jpg", ix_curr, ix_prev, ix_curr_m );
   cout << "Writing file : " << fname << endl;
   cv::imwrite( fname, dst3 );
 
   // Plot reprojected pts on image-curr_m
   cv::Mat dst4;
   plot_point_sets( curr_m_im, _reprojected_pts_into_cm, dst4, cv::Scalar(0,0,255) );
-  sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d_currm_reproj.jpg", ix_curr, ix_prev );
+  sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d_currm_reproj.jpg", ix_curr, ix_prev, ix_curr_m );
   cout << "Writing file : " << fname << endl;
   cv::imwrite( fname, dst4 );
 
 
-  // Goodness of triangulation. Difference between reprojected and observed pts.
-  double err_c = _diff_2d( mat_pts_curr, _reprojected_pts_into_c );
-  double err_cm = _diff_2d( mat_pts_curr_m, _reprojected_pts_into_cm );
-  sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d_reproj_err.txt", ix_curr, ix_prev );
-  ofstream myf;
-  myf.open( fname );
-  myf << ix_curr << ", " << ix_prev << ", "<< _reprojected_pts_into_c.cols << ", "
-            << err_c << ", " << err_cm << endl;
-  myf.close();
 
 
 #endif
@@ -182,6 +216,7 @@ void DataManager::pose_from_3way_matching( const nap::NapMsg::ConstPtr& msg, Mat
   // Step-3 : PnP using a) 3d pts from step2 and b) corresponding matches from prev
   //
   // 3dpts (in frame of curr), 2dpts (in prev)
+  // TODO: Consider naming these outputs of pnp with a prefix `pnp`
   Matrix4d prev_T_c = Matrix4d::Identity();
   estimatePnPPose(  c_3dpts_4N, mat_pts_prev, prev_T_c ); //This is the real deal. Above 2 only for debug
 
@@ -195,20 +230,50 @@ void DataManager::pose_from_3way_matching( const nap::NapMsg::ConstPtr& msg, Mat
   estimatePnPPose(  c_3dpts_4N, mat_pts_curr_m, currm_T_c ); // This should be same as cm_T_c, for debug/verification
 
 
-  cv::Mat xmat_curr_T_c, xmat_currm_T_c, xmat_prev_T_c;
-  cv::eigen2cv( curr_T_c, xmat_curr_T_c );
-  cv::eigen2cv( currm_T_c, xmat_currm_T_c );
-  cv::eigen2cv( prev_T_c, xmat_prev_T_c );
-  debug_fp << "xmat_curr_T_c"<< xmat_curr_T_c;
-  debug_fp << "xmat_currm_T_c"<< xmat_currm_T_c;
-  debug_fp << "xmat_prev_T_c"<< xmat_prev_T_c;
+  cv::Mat pnp_curr_T_c, pnp_currm_T_c, pnp_prev_T_c;
+  cv::eigen2cv( curr_T_c, pnp_curr_T_c );
+  cv::eigen2cv( currm_T_c, pnp_currm_T_c );
+  cv::eigen2cv( prev_T_c, pnp_prev_T_c );
+  debug_fp << "pnp_curr_T_c"<< pnp_curr_T_c;
+  debug_fp << "pnp_currm_T_c"<< pnp_currm_T_c;
+  debug_fp << "pnp_prev_T_c"<< pnp_prev_T_c;
+
+
+  // Reproject 3dpoints on prev view using the pose estimated from pnp
+  cv::Mat _reprojected_pts_into_prev;
+  Matrix4f c_Tr_prev_float = prev_T_c.cast<float>();
+  camera.perspectiveProject3DPoints( c_3dpts_4N, c_Tr_prev_float, _reprojected_pts_into_prev );
+  print_cvmat_info( "_reprojected_pts_into_prev" , _reprojected_pts_into_prev );
+  debug_fp << "_reprojected_pts_into_prev" << _reprojected_pts_into_prev;
+
+  // Plot reprojected pts on prev
+  cv::Mat dst5;
+  plot_point_sets( prev_im, _reprojected_pts_into_prev, dst5, cv::Scalar(0,0,255) );
+  sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d_prev_reproj.jpg", ix_curr, ix_prev, ix_curr_m );
+  cout << "Writing file : " << fname << endl;
+  cv::imwrite( fname, dst5 );
+
+
+
+
+    // Goodness of triangulation. Difference between reprojected and observed pts.
+    double err_c = _diff_2d( mat_pts_curr, _reprojected_pts_into_c );
+    double err_cm = _diff_2d( mat_pts_curr_m, _reprojected_pts_into_cm );
+    double err_p = _diff_2d( mat_pts_prev, _reprojected_pts_into_prev );
+    sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d_reproj_err.txt", ix_curr, ix_prev, ix_curr_m );
+    ofstream myf;
+    myf.open( fname );
+    myf << ix_curr << ", " << ix_prev << ", "<< ix_curr_m << ", " <<
+              _reprojected_pts_into_c.cols << ", "
+              << err_c << ", " << err_cm << "," << err_p << endl;
+    myf.close();
 #endif
 
 
   //
   // Step-4 : Put the relative pose from step3 into eigen matrix in required convention
   //       (p_T_c)
-
+  p_T_c = prev_T_c;
 
 
 
@@ -247,6 +312,29 @@ void DataManager::extract_3way_matches_from_napmsg( const nap::NapMsg::ConstPtr&
 
 
 
+
+void DataManager::make_fundamentalmatrix_from_pose( const Matrix4d& w_T_c, const Matrix4d& w_T_cm,
+                                        Matrix3d& F )
+{
+  // Convert the poses to Canonical Form
+  Matrix4d Tr;
+  Tr = w_T_cm.inverse() * w_T_c; //relative transform
+
+
+  F = Matrix3d::Identity();
+  Matrix3d e = Matrix3d::Zero(); // |_ t _|
+  e(0,1) = -Tr(2,3); // -tz
+  e(0,2) = Tr(1,3);    //  ty
+  e(1,2) = -Tr(0,3);    // -tx
+  e(1,0) = -e(0,1);
+  e(2,0) = -e(0,2);
+  e(2,1) = -e(1,2);
+
+  F = e * Tr.topLeftCorner<3,3>();
+
+
+
+}
 
 
 

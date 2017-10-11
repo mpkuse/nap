@@ -88,6 +88,23 @@ public:
   //    point set in undistorted image space
   void undistortPointSet( const cv::Mat& pts_observed_image_space, cv::Mat& pts_undistorted_image_space );
 
+  // Given a) the pose of 2 cameras (to compute fundamental matrix), b) Point matches in observed space.
+  // This function undisorts these point sets and correct matches to be consistent with the fundamental matrix.
+  // See Optimal Triangulation in Hartley-Zizzerman book.
+  // [Input]
+  // F : Fundamental Matrix F_c_cm. 3x3
+  // curr_pts_in_observed_image_space : 2xN
+  // currm_pts_in_observed_image_space : 2xN
+  // [Output]
+  // curr_pts_undistorted : 2xN in undistorted image space
+  // currm_pts_undistorted : 2xN in undistorted image space
+  void jointUndistortPointSets( const cv::Mat& F,
+                const cv::Mat& curr_pts_in_observed_image_space, const cv::Mat& currm_pts_in_observed_image_space,
+               cv::Mat& curr_pts_undistorted, cv::Mat& currm_pts_undistorted);
+
+
+   // Returns points in normalized_cords. Input being observed points in distorted image space.
+   void getUndistortedNormalizedCords( const cv::Mat& pts_observed_image_space, cv::Mat& pts_undist_normed );
 
 
 private:
@@ -111,4 +128,17 @@ private:
 
   void print_cvmat_info( string msg, const cv::Mat& A );
   string type2str( int );
+
+
+
+  // Other Geometric Debugging
+  // x is either 1ch 2xN or 2ch 1xN
+  double verify_epipolar_constraint( const cv::Mat& x, const cv::Mat& F, const cv::Mat& xd );
+
+  // Computes Gradient and Hessian of 5d state. Used in the optimal triangulation method
+  void grad_and_hessian( const Matrix<double,5,1>& S,
+                         const Matrix3d& F, const Vector3d& xl, const Vector3d& xr,
+                         Matrix<double,5,1>& GRAD, Matrix<double,5,5>& HESS
+                        );
+
 };
