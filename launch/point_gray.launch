@@ -134,7 +134,7 @@
     <!-- <node name="rvizvisualisation" pkg="rviz" type="rviz" output="log" args="-d $(find nap)/rviz/my_pose_graph.rviz" /> -->
 
     <!-- Display/Publish the colocation image. Subscribes to /raw_graph_visual_edge -->
-    <node name="colocation_viz_lite" pkg="nap" type="colocation_viz_lite.py" output="log" />
+    <!-- <node name="colocation_viz_lite" pkg="nap" type="colocation_viz_lite.py" output="log" /> -->
 
 
 <!-- ##### End Visualization ##### -->

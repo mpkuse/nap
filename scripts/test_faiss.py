@@ -20,6 +20,10 @@
     into the main nap node.
 
 
+    export OMP_WAIT_POLICY=PASSIVE
+    Is the solution to slow appends(). See github/facebookresearch/faiss issue 163.
+
+
     Author  : Manohar Kuse <mpkuse@connect.ust.hk>
     Created : 19th July, 2017
 """

@@ -69,7 +69,12 @@ public:
   Vector3d e_p;
   Quaterniond e_q;
 
+  Vector3d org_p;
+  Quaterniond org_q;
+
   void getCurrTransform(Matrix4d& M);
+  void getOriginalTransform(Matrix4d& M);
+
   // 3d point cloud
   Matrix<double,3,Dynamic> ptCld; //TODO: Consider making this private
   void setPointCloud( ros::Time time, const vector<geometry_msgs::Point32> & points );

@@ -28,6 +28,8 @@ void DataManager::pose_from_3way_matching( const nap::NapMsg::ConstPtr& msg, Mat
   nNodes[ix_curr_m]->getCurrTransform(w_T_cm);//4x4
   Matrix4d w_T_c;
   nNodes[ix_curr]->getCurrTransform(w_T_c);//4x4
+  Matrix4d w_T_p;
+  nNodes[ix_prev]->getCurrTransform(w_T_p);//4x4
 
   Matrix4d Tr;
   Tr = w_T_cm.inverse() * w_T_c; //relative transform
@@ -60,22 +62,24 @@ void DataManager::pose_from_3way_matching( const nap::NapMsg::ConstPtr& msg, Mat
   // undistorted_image_space.
 
   cv::Mat undistorted_pts_curr, undistorted_pts_prev, undistorted_pts_curr_m; //2xN 1-channel
-  camera.jointUndistortPointSets( mat_F_c_cm,
-                                  mat_pts_curr, mat_pts_curr_m,
-                                  undistorted_pts_curr, undistorted_pts_curr_m );
-  // camera.undistortPointSet( mat_pts_curr, undistorted_pts_curr);
-  // camera.undistortPointSet( mat_pts_curr_m, undistorted_pts_curr_m);
+  // camera.jointUndistortPointSets( mat_F_c_cm,
+                                  // mat_pts_curr, mat_pts_curr_m,
+                                  // undistorted_pts_curr, undistorted_pts_curr_m );
+  camera.undistortPointSet( mat_pts_curr, undistorted_pts_curr);
+  camera.undistortPointSet( mat_pts_curr_m, undistorted_pts_curr_m);
   camera.undistortPointSet( mat_pts_prev, undistorted_pts_prev);
 
 
 
 #ifdef _DEBUG_3WAY
   // Collect undistortedPoints in normalized cords for analysis
-  cv::Mat undist_normed_curr, undist_normed_curr_m;
+  cv::Mat undist_normed_curr, undist_normed_curr_m, undist_normed_prev;
   camera.getUndistortedNormalizedCords( mat_pts_curr,  undist_normed_curr );
   camera.getUndistortedNormalizedCords( mat_pts_curr_m,  undist_normed_curr_m );
+  camera.getUndistortedNormalizedCords( mat_pts_prev,  undist_normed_prev );
   debug_fp << "undist_normed_curr" << undist_normed_curr;
   debug_fp << "undist_normed_curr_m" << undist_normed_curr_m;
+  debug_fp << "undist_normed_prev" << undist_normed_prev;
 
 
   debug_fp << "K" << camera.m_K;
@@ -119,9 +123,18 @@ void DataManager::pose_from_3way_matching( const nap::NapMsg::ConstPtr& msg, Mat
 
   // Plot 3way match
   cv::Mat dst_plot_3way;
-  this->plot_3way_match( curr_im, mat_pts_curr, prev_im, mat_pts_prev, curr_m_im, mat_pts_curr_m, dst_plot_3way );
-
+  this->plot_3way_match( curr_im, mat_pts_curr,
+                        prev_im, mat_pts_prev,
+                        curr_m_im, mat_pts_curr_m,
+                        dst_plot_3way );
   sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d.jpg", ix_curr, ix_prev, ix_curr_m );
+  cv::imwrite( fname, dst_plot_3way );
+  this->plot_3way_match_clean( curr_im, mat_pts_curr,
+                        prev_im, mat_pts_prev,
+                        curr_m_im, mat_pts_curr_m,
+                        dst_plot_3way );
+  sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d.png", ix_curr, ix_prev, ix_curr_m );
+
   cout << "Writing file : " << fname << endl;
   cv::imwrite( fname, dst_plot_3way );
 
@@ -129,19 +142,19 @@ void DataManager::pose_from_3way_matching( const nap::NapMsg::ConstPtr& msg, Mat
   // Plot points  on images
   cv::Mat dst;
   plot_point_sets( curr_im, mat_pts_curr, dst, cv::Scalar(255,0,0) );
-  sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d_curr_observed.jpg", ix_curr, ix_prev, ix_curr_m );
+  sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d_curr_observed.png", ix_curr, ix_prev, ix_curr_m );
   cout << "Writing file : " << fname << endl;
   cv::imwrite( fname, dst );
 
   cv::Mat dst2;
   plot_point_sets( curr_m_im, mat_pts_curr_m, dst2, cv::Scalar(255,0,0) );
-  sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d_currm_observed.jpg", ix_curr, ix_prev, ix_curr_m );
+  sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d_currm_observed.png", ix_curr, ix_prev, ix_curr_m );
   cout << "Writing file : " << fname << endl;
   cv::imwrite( fname, dst2 );
 
   cv::Mat dst2_5;
   plot_point_sets( prev_im, mat_pts_prev, dst2_5, cv::Scalar(255,0,0) );
-  sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d_prev_observed.jpg", ix_curr, ix_prev, ix_curr_m );
+  sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d_prev_observed.png", ix_curr, ix_prev, ix_curr_m );
   cout << "Writing file : " << fname << endl;
   cv::imwrite( fname, dst2_5 );
 
@@ -196,14 +209,14 @@ void DataManager::pose_from_3way_matching( const nap::NapMsg::ConstPtr& msg, Mat
   // Plot reprojected pts on image-curr
   cv::Mat dst3;
   plot_point_sets( curr_im, _reprojected_pts_into_c, dst3, cv::Scalar(0,0,255) );
-  sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d_curr_reproj.jpg", ix_curr, ix_prev, ix_curr_m );
+  sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d_curr_reproj.png", ix_curr, ix_prev, ix_curr_m );
   cout << "Writing file : " << fname << endl;
   cv::imwrite( fname, dst3 );
 
   // Plot reprojected pts on image-curr_m
   cv::Mat dst4;
   plot_point_sets( curr_m_im, _reprojected_pts_into_cm, dst4, cv::Scalar(0,0,255) );
-  sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d_currm_reproj.jpg", ix_curr, ix_prev, ix_curr_m );
+  sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d_currm_reproj.png", ix_curr, ix_prev, ix_curr_m );
   cout << "Writing file : " << fname << endl;
   cv::imwrite( fname, dst4 );
 
@@ -217,18 +230,25 @@ void DataManager::pose_from_3way_matching( const nap::NapMsg::ConstPtr& msg, Mat
   //
   // 3dpts (in frame of curr), 2dpts (in prev)
   // TODO: Consider naming these outputs of pnp with a prefix `pnp`
+  // TODO: Try and use only pitch and roll (do not use yaw as initialization for pnp)
   Matrix4d prev_T_c = Matrix4d::Identity();
-  estimatePnPPose(  c_3dpts_4N, mat_pts_prev, prev_T_c ); //This is the real deal. Above 2 only for debug
+  // estimatePnPPose(  c_3dpts_4N, mat_pts_prev, prev_T_c ); //This is the real deal. Above 2 only for debug
+  // estimatePnPPose(  c_3dpts_4N, undist_normed_prev, prev_T_c );
+  // estimatePnPPose_withguess( c_3dpts_4N, undist_normed_prev, prev_T_c, w_T_c, w_T_p );
+  estimatePnPPose_ceres( c_3dpts_4N, undist_normed_prev, prev_T_c );
+
+
 
 #ifdef _DEBUG_PNP
   // 3dpts, curr-image
   Matrix4d curr_T_c = Matrix4d::Identity();
-  estimatePnPPose(  c_3dpts_4N, mat_pts_curr, curr_T_c ); // This should giveout identity, for debug/verification
+  //estimatePnPPose(  c_3dpts_4N, mat_pts_curr, curr_T_c ); // This should giveout identity, for debug/verification
+  estimatePnPPose_ceres(  c_3dpts_4N, undist_normed_curr, curr_T_c );
 
   // 3dpts, curr_m-image
   Matrix4d currm_T_c = Matrix4d::Identity();
-  estimatePnPPose(  c_3dpts_4N, mat_pts_curr_m, currm_T_c ); // This should be same as cm_T_c, for debug/verification
-
+  //estimatePnPPose(  c_3dpts_4N, mat_pts_curr_m, currm_T_c ); // This should be same as cm_T_c, for debug/verification
+  estimatePnPPose_ceres(  c_3dpts_4N, undist_normed_curr_m, currm_T_c );
 
   cv::Mat pnp_curr_T_c, pnp_currm_T_c, pnp_prev_T_c;
   cv::eigen2cv( curr_T_c, pnp_curr_T_c );
@@ -241,32 +261,54 @@ void DataManager::pose_from_3way_matching( const nap::NapMsg::ConstPtr& msg, Mat
 
   // Reproject 3dpoints on prev view using the pose estimated from pnp
   cv::Mat _reprojected_pts_into_prev;
-  Matrix4f c_Tr_prev_float = prev_T_c.cast<float>();
-  camera.perspectiveProject3DPoints( c_3dpts_4N, c_Tr_prev_float, _reprojected_pts_into_prev );
+  Matrix4f prev_Tr_c_float = prev_T_c.cast<float>();
+  camera.perspectiveProject3DPoints( c_3dpts_4N, prev_Tr_c_float, _reprojected_pts_into_prev );
   print_cvmat_info( "_reprojected_pts_into_prev" , _reprojected_pts_into_prev );
   debug_fp << "_reprojected_pts_into_prev" << _reprojected_pts_into_prev;
 
+
+  // Reproject 3dpoints on prev view using pose estimates from odometry
+  cv::Mat _reprojected_pts_into_prev__pose_from_odom;
+  Matrix4f prev_Tr_c_odom_float = (w_T_p.inverse() * w_T_c).cast<float>();
+  camera.perspectiveProject3DPoints( c_3dpts_4N, prev_Tr_c_odom_float, _reprojected_pts_into_prev__pose_from_odom);
+  print_cvmat_info( "_reprojected_pts_into_prev__pose_from_odom" , _reprojected_pts_into_prev__pose_from_odom );
+  debug_fp << "_reprojected_pts_into_prev__pose_from_odom" << _reprojected_pts_into_prev__pose_from_odom;
+
+
+
+
+
+
+  // Goodness of triangulation. Difference between reprojected and observed pts.
+  double err_c = _diff_2d( mat_pts_curr, _reprojected_pts_into_c );
+  double err_cm = _diff_2d( mat_pts_curr_m, _reprojected_pts_into_cm );
+  double err_p = _diff_2d( mat_pts_prev, _reprojected_pts_into_prev );
+  sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d_reproj_err.txt", ix_curr, ix_prev, ix_curr_m );
+  ofstream myf;
+  myf.open( fname );
+  myf << ix_curr << ", " << ix_prev << ", "<< ix_curr_m << ", " <<
+            _reprojected_pts_into_c.cols << ", "
+            << err_c << ", " << err_cm << "," << err_p << endl;
+  myf.close();
+
+
   // Plot reprojected pts on prev
   cv::Mat dst5;
-  plot_point_sets( prev_im, _reprojected_pts_into_prev, dst5, cv::Scalar(0,0,255) );
-  sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d_prev_reproj.jpg", ix_curr, ix_prev, ix_curr_m );
+  plot_point_sets( prev_im, _reprojected_pts_into_prev, dst5, cv::Scalar(0,0,255), matrix4f_to_string(prev_Tr_c_float) );
+  sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d_prev_reproj.png", ix_curr, ix_prev, ix_curr_m );
   cout << "Writing file : " << fname << endl;
   cv::imwrite( fname, dst5 );
 
 
 
+// Plot reprojected pts on prev
+cv::Mat dst5_1;
+plot_point_sets( prev_im, _reprojected_pts_into_prev__pose_from_odom, dst5_1, cv::Scalar(0,0,255), matrix4f_to_string(prev_Tr_c_odom_float) );
+sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d_prev_reproj_pose_from_odom.png", ix_curr, ix_prev, ix_curr_m );
+cout << "Writing file : " << fname << endl;
+cv::imwrite( fname, dst5_1 );
 
-    // Goodness of triangulation. Difference between reprojected and observed pts.
-    double err_c = _diff_2d( mat_pts_curr, _reprojected_pts_into_c );
-    double err_cm = _diff_2d( mat_pts_curr_m, _reprojected_pts_into_cm );
-    double err_p = _diff_2d( mat_pts_prev, _reprojected_pts_into_prev );
-    sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d_reproj_err.txt", ix_curr, ix_prev, ix_curr_m );
-    ofstream myf;
-    myf.open( fname );
-    myf << ix_curr << ", " << ix_prev << ", "<< ix_curr_m << ", " <<
-              _reprojected_pts_into_c.cols << ", "
-              << err_c << ", " << err_cm << "," << err_p << endl;
-    myf.close();
+
 #endif
 
 
@@ -396,10 +438,21 @@ void DataManager::estimatePnPPose( const cv::Mat& c_3dpts, const cv::Mat& pts2d,
 
   // solvePnP
   cv::Mat rvec, tvec; //CV_64FC1
-  // cv::Mat rvec = cv::Mat::zeros(3,1, CV_32FC1 );
-  // cv::Mat tvec = cv::Mat::zeros(3,1, CV_32FC1 );
-  cv::solvePnP( _3d, _2d, camera.m_K, camera.m_D, rvec, tvec );
-  //TODO: Try out solvePnPRansac
+
+  // Simple PnP
+  // cv::solvePnP( _3d, _2d, camera.m_K, camera.m_D, rvec, tvec );
+
+
+  // When 2d pts are in normalized undistorted image co-ordinates
+  cv::Mat eye = cv::Mat::eye(3,3,CV_32FC1);
+  cv::Mat zer = cv::Mat::zeros(1,4,CV_32FC1);
+
+  // cv::solvePnP( _3d, _2d, eye, zer, rvec, tvec );
+  // cout << "solvePnP returned : " << flag << endl;
+
+  //Try out solvePnPRansac
+  // cv::solvePnPRansac( _3d, _2d, eye, zer, rvec, tvec );
+  cv::solvePnPRansac( _3d, _2d, eye, zer, rvec, tvec, false, 100, 8.0, .99, cv::noArray(), cv::SOLVEPNP_ITERATIVE  );
 
 
   // Convert rvec, tvec to Eigen::Matrix4d or Eigen::Matrix4f
@@ -428,6 +481,145 @@ void DataManager::estimatePnPPose( const cv::Mat& c_3dpts, const cv::Mat& pts2d,
   im_T_c.block<3,1>(0,3) = eig_trans;
 
 
+}
+
+
+
+void DataManager::estimatePnPPose_withguess( const cv::Mat& c_3dpts, const cv::Mat& pts2d,
+                      Matrix4d& im_T_c,
+                      const Matrix4d& odom_w_T_c, const Matrix4d& odom_w_T_p )
+{
+  //
+  // Process the Guess to get to rvec, tvec
+  //
+  // cout << "NOT IMPLEMENTED> PNP WITH GUESS FROM ODOM\n";
+  Matrix4d odom_p_T_c = odom_w_T_p.inverse() * odom_w_T_c;
+  Matrix3d odom_p_R_c = odom_p_T_c.topLeftCorner<3,3>();
+  Vector3d odom_p_t_c;
+  // odom_p_t_c << odom_p_T_c(0,3), odom_p_T_c(1,3), odom_p_T_c(2,3);
+  odom_p_t_c << 0.0, 0.0, 0.0;
+
+  cv::Mat _rot, tvec, rvec;
+  cv::eigen2cv( odom_p_R_c, _rot );
+  cv::eigen2cv( odom_p_t_c, tvec );
+  cv::Rodrigues( _rot, rvec );
+
+
+  //
+  // pts to vector<Point3f>, vector<Point2f>
+  //
+  assert( (c_3dpts.cols == pts2d.cols) &&  pts2d.cols>0 );
+
+  //cv::Mat to std::vector<cv::Point3f>
+  //cv::Mat to std::vector<cv::Point2f>
+  vector<cv::Point3f> _3d;
+  vector<cv::Point2f> _2d;
+  for( int i=0 ; i<pts2d.cols ; i++ )
+  {
+    cv::Point3f point3d_model = cv::Point3f( c_3dpts.at<float>(0,i), c_3dpts.at<float>(1,i), c_3dpts.at<float>(2,i) );
+    cv::Point2f point2d_scene = cv::Point2f( pts2d.at<float>(0,i), pts2d.at<float>(1,i) );
+
+    _3d.push_back( point3d_model );
+    _2d.push_back( point2d_scene );
+  }
+
+
+  // Do PnP
+  // When 2d pts are in normalized undistorted image co-ordinates
+  cv::Mat eye = cv::Mat::eye(3,3,CV_32FC1);
+  cv::Mat zer = cv::Mat::zeros(1,4,CV_32FC1);
+
+  cv::solvePnPRansac( _3d, _2d, eye, zer, rvec, tvec, true, 100, 8.0, .99, cv::noArray(), cv::SOLVEPNP_EPNP  );
+
+  // Convert back to eigen
+  cv::Mat out_rot;
+  cv::Rodrigues( rvec, out_rot );
+
+
+  Matrix3d eig_rot;
+  cv::cv2eigen( out_rot, eig_rot );
+
+  Vector3d eig_trans;
+  cv::cv2eigen( tvec, eig_trans );
+
+
+  im_T_c = Matrix4d::Identity();
+  im_T_c.topLeftCorner<3,3>() = eig_rot;
+  im_T_c.block<3,1>(0,3) = eig_trans;
+
+
+
+
+
+}
+
+
+
+// c_3dpts_4N - 4xN. 3d points in homogeneous co-ordinates
+// pts2d - 2xN. Image points in undistorted-normalized-image co-ordinates.
+void DataManager::estimatePnPPose_ceres( const cv::Mat& c_3dpts_4N, const cv::Mat& pts2d,
+                      Matrix4d& im_T_c  )
+{
+  //
+  // Convert input to Eigen format
+  MatrixXd eigen_c_3dpts_4N, eigen_2dpts;
+  cv::cv2eigen(c_3dpts_4N, eigen_c_3dpts_4N);
+  cv::cv2eigen(pts2d, eigen_2dpts);
+
+
+  //
+  // Model the problem
+  ceres::Problem problem;
+  double opt_q[4] = {1.,0.,0.,0.};
+  double opt_t[3] = {0.,0.,0.};
+  cout << "opt_q " << opt_q[0] << " "<< opt_q[1] << " "<< opt_q[2] << " "<< opt_q[3] << endl;
+  cout << "opt_t " << opt_t[0] << " "<< opt_t[1] << " "<< opt_t[2] << " "<< endl ;
+
+
+  for( int i=0 ; i<eigen_2dpts.cols() ; i++ ) {
+    ceres::CostFunction * cost_function = PnPReprojectionError::Create( eigen_c_3dpts_4N.col(i),
+                                                                        eigen_2dpts.col(i)  );
+    problem.AddResidualBlock( cost_function, new ceres::HuberLoss(0.01), opt_q, opt_t );
+  }
+
+
+
+  //
+  // Set q as a Quaternion Increment
+  ceres::LocalParameterization *quaternion_parameterization = new ceres::QuaternionParameterization;
+  problem.SetParameterization( opt_q, quaternion_parameterization );
+
+  //
+  // Solve
+  ceres::Solver::Options options;
+  options.linear_solver_type = ceres::DENSE_QR;
+  options.minimizer_progress_to_stdout = true;
+  // options.trust_region_strategy_type = ceres::LEVENBERG_MARQUARDT;
+  options.trust_region_strategy_type = ceres::DOGLEG;
+  options.dogleg_type = ceres::SUBSPACE_DOGLEG;
+  options.max_num_iterations = 5;
+  options.max_solver_time_in_seconds = 100E-3;
+  ceres::Solver::Summary summary;
+  ceres::Solve(options, &problem, &summary);
+
+
+  quaternion_to_T( opt_q, opt_t, im_T_c );
+  // cout << summary.FullReport() << endl;
+  // cout << "opt_t " << opt_t[0] << " "<< opt_t[1] << " "<< opt_t[2] << " "<< endl ;
+  // cout << "opt_q " << opt_q[0] << " "<< opt_q[1] << " "<< opt_q[2] << " "<< opt_q[3] << endl;
+  // cout << "Ceres PnP p_T_c:\n" << im_T_c << endl;
+
+}
+
+void DataManager::quaternion_to_T( double * opt_q, double * opt_t, Matrix4d& Tr )
+{
+  Quaterniond Q(opt_q[0], opt_q[1], opt_q[2], opt_q[3] );
+  Vector4d t;
+  t << opt_t[0], opt_t[1], opt_t[2], 1.0;
+
+  Tr = Matrix4d::Identity();
+  Tr.topLeftCorner<3,3>() = Q.toRotationMatrix();
+  Tr.col(3) = t;
 }
 
 
@@ -494,7 +686,7 @@ double DataManager::_diff_2d( const cv::Mat&A, const cv::Mat&B )
     double dy = double(A.at<float>(1,i) - B.at<float>(1,i)) ;
     sum += dx*dx + dy*dy;
   }
-  sum = sqrt(sum) / (double)M;
+  sum = sqrt(sum / (double)M );
   return sum;
 }
 
@@ -547,4 +739,44 @@ string DataManager::type2str(int type) {
   r += (chans+'0');
 
   return r;
+}
+
+string DataManager::matrix4f_to_string( const Matrix4f& M )
+{
+  Vector3f ea = M.topLeftCorner<3,3>().eulerAngles( 2,1,0 );
+  Vector3f tx;
+  tx << M(0,3), M(1,3), M(2,3);
+
+  string to_return;
+
+  char pr[200];
+  sprintf( pr, "A: %4.2f, %4.2f, %4.2f;Tx: %4.2f, %4.2f, %4.2f", ea(0), ea(1), ea(2), tx(0), tx(1), tx(2) );
+  to_return = string( pr );
+
+  // to_return = string("A: ");
+  // to_return += std::to_string( round( ea(0) * 1000. )/1000. ) + string( ";");
+  // to_return += std::to_string( round( ea(1) * 1000. )/1000. ) + string( ";");
+  // to_return += std::to_string( round( ea(2) * 1000. )/1000. ) + string( ";");
+  // to_return += string( "  T: ");
+  // to_return += std::to_string( round( tx(0) * 1000. )/1000. ) + string( ";");
+  // to_return += std::to_string( round( tx(1) * 1000. )/1000. ) + string( ";");
+  // to_return += std::to_string( round( tx(2) * 1000. )/1000. ) + string( ";");
+
+  return to_return;
+}
+
+
+string DataManager::matrix4d_to_string( const Matrix4d& M )
+{
+  Vector3d ea = M.topLeftCorner<3,3>().eulerAngles( 2,1,0 );
+  Vector3d tx;
+  tx << M(0,3), M(1,3), M(2,3);
+
+  string to_return;
+
+  char pr[200];
+  sprintf( pr, "A: %4.2f, %4.2f, %4.2f;Tx: %4.2f, %4.2f, %4.2f", ea(0), ea(1), ea(2), tx(0), tx(1), tx(2) );
+  to_return = string( pr );
+
+  return to_return;
 }

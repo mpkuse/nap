@@ -16,6 +16,7 @@ Node::Node( ros::Time time_stamp, geometry_msgs::Pose pose )
   // opt_position[2] = pose.pose.position.z;
   // e_p << pose.pose.position.x, pose.pose.position.y,pose.pose.position.z;
   e_p = Vector3d(pose.position.x, pose.position.y,pose.position.z );
+  org_p = Vector3d(pose.position.x, pose.position.y,pose.position.z );
 
   // opt_quat = new double[4];
   // opt_quat[0] = pose.pose.orientation.x;
@@ -23,6 +24,7 @@ Node::Node( ros::Time time_stamp, geometry_msgs::Pose pose )
   // opt_quat[2] = pose.pose.orientation.z;
   // opt_quat[3] = pose.pose.orientation.w;
   e_q = Quaterniond( pose.orientation.w, pose.orientation.x,pose.orientation.y,pose.orientation.z );
+  org_q = Quaterniond( pose.orientation.w, pose.orientation.x,pose.orientation.y,pose.orientation.z );
   // TODO extract covariance
 }
 
@@ -30,8 +32,21 @@ void Node::getCurrTransform(Matrix4d& M)
 {
   M = Matrix4d::Zero();
   M.col(3) << e_p, 1.0;
-  Matrix3d R = e_q.toRotationMatrix();
+  // Matrix3d R = e_q.toRotationMatrix();
   M.topLeftCorner<3,3>() = e_q.toRotationMatrix();
+
+  // cout << "e_p\n" << e_p << endl;
+  // cout << "e_q [w,x,y,z]\n" << e_q.w() << " " << e_q.x() << " " << e_q.y() << " " << e_q.z() << " " << endl;
+  // cout << "R\n" << R << endl;
+  // cout << "M\n"<< M << endl;
+}
+
+void Node::getOriginalTransform(Matrix4d& M)
+{
+  M = Matrix4d::Zero();
+  M.col(3) << org_p, 1.0;
+  // Matrix3d R = org_q.toRotationMatrix();
+  M.topLeftCorner<3,3>() = org_q.toRotationMatrix();
 
   // cout << "e_p\n" << e_p << endl;
   // cout << "e_q [w,x,y,z]\n" << e_q.w() << " " << e_q.x() << " " << e_q.y() << " " << e_q.z() << " " << endl;

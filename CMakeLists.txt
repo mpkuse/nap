@@ -16,7 +16,7 @@ list(APPEND CMAKE_MODULE_PATH "/usr/local/lib/cmake")
 find_package(Eigen3 REQUIRED)
 find_package(Ceres REQUIRED)
 find_package(DBoW3 REQUIRED )
-find_package(OpenCV REQUIRED)
+find_package(OpenCV 3 REQUIRED)
 find_package(ZLIB REQUIRED) #for cnpy.cpp
 
 set( CMAKE_CXX_FLAGS "-fpermissive -std=c++11" )
@@ -78,4 +78,4 @@ target_link_libraries( toy_vertigo_dcs ${CERES_LIBRARIES}  ${catkin_LIBRARIES} )
 
 target_link_libraries( dbow3_test ${DBoW3_LIBRARIES} ${OpenCV_LIBRARIES} )
 target_link_libraries( dbow3_naive  ${OpenCV_LIBRARIES} ${DBoW3_LIBRARIES} ${catkin_LIBRARIES} )
-target_link_libraries( pose_graph_opt_node  ${OpenCV_LIBRARIES} ${DBoW3_LIBRARIES} ${catkin_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries( pose_graph_opt_node  ${OpenCV_LIBRARIES} ${DBoW3_LIBRARIES} ${catkin_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT}  ${CERES_LIBRARIES} ) 

@@ -8,6 +8,10 @@ DataManager::DataManager(ros::NodeHandle &nh )
 }
 
 
+DataManager::DataManager(const DataManager &obj) {
+   cout << "Copy constructor allocating ptr." << endl;
+
+}
 
 void DataManager::setCamera( PinholeCamera& camera )
 {
@@ -23,6 +27,7 @@ void DataManager::setVisualizationTopic( string rviz_topic )
 {
   // usually was "/mish/pose_nodes"
   pub_pgraph = nh.advertise<visualization_msgs::Marker>( rviz_topic.c_str(), 0 );
+  pub_pgraph_org = nh.advertise<visualization_msgs::Marker>( (rviz_topic+string("_original")).c_str(), 0 );
 }
 
 
@@ -30,7 +35,11 @@ DataManager::~DataManager()
 {
   cout << "In ~DataManager\n";
 
-  string file_name = ros::package::getPath( "nap" ) + "/DUMP_pose_graph/pose_graph.nodes.csv";
+  string base_path = string( "/home/mpkuse/Desktop/a/drag/" );
+  // string base_path = ros::package::getPath( "nap" ) + "/DUMP_pose_graph/";
+
+  // string file_name = ros::package::getPath( "nap" ) + "/DUMP_pose_graph/pose_graph.nodes.csv";
+  string file_name = base_path + "/pose_graph.nodes.csv";
   ofstream fp_nodes;
   fp_nodes.open( file_name );
   cout << "Write file (" <<  file_name << ") with " << nNodes.size() << " entries\n";
@@ -40,15 +49,17 @@ DataManager::~DataManager()
   for( int i=0 ; i<nNodes.size() ; i++ )
   {
     Node * n = nNodes[i];
+
     fp_nodes <<  i << ", " << n->time_stamp  << endl;
               // << e_p[0] << ", " << e_p[1] << ", "<< e_p[2] << ", "
-              // << e_q.x() << ", "<< e_q.y() << ", "<< e_q.x() << ", "<< e_q.x() << endl;
+              // << e_q.x() << ", "<< e_q.y() << ", "<< e_q.z() << ", "<< e_q.w() << endl;
   }
   fp_nodes.close();
 
 
   // Write Odometry Edges
-  file_name = ros::package::getPath( "nap" ) + "/DUMP_pose_graph/pose_graph.odomedges.csv";
+  // file_name = ros::package::getPath( "nap" ) + "/DUMP_pose_graph/pose_graph.odomedges.csv";
+  file_name = base_path + "/pose_graph.odomedges.csv";
   ofstream fp_odom_edge;
   fp_odom_edge.open( file_name );
   cout << "Write file (" <<  file_name << ") with " << odometryEdges.size() << " entries\n";
@@ -64,7 +75,8 @@ DataManager::~DataManager()
 
 
   // Write Loop Closure Edges
-  file_name = ros::package::getPath( "nap" ) + "/DUMP_pose_graph/pose_graph.loopedges.csv";
+  // file_name = ros::package::getPath( "nap" ) + "/DUMP_pose_graph/pose_graph.loopedges.csv";
+  file_name = base_path + "/pose_graph.loopedges.csv";
   ofstream fp_loop_edge;
   fp_loop_edge.open( file_name );
   cout << "Write file (" <<  file_name << ") with " << loopClosureEdges.size() << " entries\n";
@@ -200,6 +212,19 @@ void DataManager::camera_pose_callback( const nav_msgs::Odometry::ConstPtr msg )
 
 void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
 {
+  if( loopClosureEdges.size() == 10 )
+  {
+    lock_enable_ceres.lock();
+    enable_ceres = true;
+    lock_enable_ceres.unlock();
+  }
+  else
+  {
+    lock_enable_ceres.lock();
+    enable_ceres = false;
+    lock_enable_ceres.unlock();
+  }
+
   ROS_INFO( "Received - NapMsg");
   // cout << msg->c_timestamp << " " << msg->prev_timestamp << endl;
 
@@ -241,6 +266,7 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
 
 
     // Set the computed pose into edge
+    // e->setEdgeRelPose( p_T_c );
 
     loopClosureEdges.push_back( e );
     return;
@@ -260,6 +286,7 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
     this->pose_from_3way_matching(msg, p_T_c );
 
     // Set the computed pose into edge
+    e->setEdgeRelPose( p_T_c );
 
     loopClosureEdges.push_back( e );
     return;
