@@ -33,6 +33,8 @@ void DataManager::publish_pose_graph_nodes()
 
     Node * n = nNodes[i];
 
+
+
     // Publish Sphere
     marker.type = visualization_msgs::Marker::SPHERE;
     marker.id = i;
@@ -64,11 +66,78 @@ void DataManager::publish_pose_graph_nodes()
     // marker.text = std::to_string(i)+std::string(":")+std::to_string(n->ptCld.cols())+std::string(":")+((n->getImageRef().data)?"I":"~I");
 
     std::stringstream buffer;
-    buffer << i << ":" << n->time_stamp - nNodes[0]->time_stamp;
+    buffer << i << ":" << n->time_stamp - nNodes[0]->time_stamp << ":" << n->getn3dpts() << ":" << n->getn2dfeat();
     // buffer << i << ":" << n->time_stamp - nNodes[0]->time_stamp << ":" << n->time_image- nNodes[0]->time_stamp  ;
     marker.text = buffer.str();
     // marker.text = std::to_string(i)+std::string(":")+std::to_string( n->time_stamp );
     pub_pgraph.publish( marker );
+
+
+
+    //
+    // Write Node Image along with feat2d to file //
+    char imfile_name[200];
+    sprintf( imfile_name, "/home/mpkuse/Desktop/a/drag2/kf_%d.png", i );
+
+    if( !if_file_exist(imfile_name) )
+    {
+      if( n->valid_image() && n->valid_3dpts() && n->valid_2dfeats() ) {
+        cout << "3d:"<< n->valid_3dpts()   << "(" << n->getn3dpts() << "); ";
+        cout << "2d:"<< n->valid_2dfeats() << "(" << n->getn2dfeat() << ")\n";
+
+        // Write original image
+        cout << "Writing file "<< imfile_name << endl;
+        cv::imwrite( imfile_name, n->getImageRef() );
+
+        // Write Node data to file.
+        char debug_fname[100];
+        sprintf( debug_fname, "/home/mpkuse/Desktop/a/drag2/kf_%d.yaml", i );
+        n->write_debug_xml( debug_fname );
+
+
+        // Get 3dpoints - Probably don't need to bother with 3dpts.
+        // MatrixXd c_M; //4xN
+        // n->getPointCloudHomogeneous(c_M);
+        //
+        // // Project 3d points on camera
+        // MatrixXd reprojM;
+        // camera.perspectiveProject3DPoints( c_M, reprojM );
+        //
+        // MatrixXf reproj_float;
+        // reproj_float = reprojM.cast<float>();
+        // cv::Mat reprojM_mat;
+        // cv::eigen2cv( reproj_float, reprojM_mat );
+        //
+        //
+        // // plot reproj-3d points on image
+        // cv::Mat dst;
+        // plot_point_sets( n->getImageRef(), reprojM_mat, dst, cv::Scalar(0,0,244));
+
+
+        // Get 2d features
+        MatrixXd c_feat2d_normed, c_feat2d;
+        n->getFeatures2dHomogeneous( c_feat2d_normed );
+        camera.normalizedImCords_2_imageCords( c_feat2d_normed, c_feat2d );
+
+
+
+        // plot 2dfeats on image
+        cv::Mat dst;
+        plot_point_sets( n->getImageRef(), c_feat2d, dst, cv::Scalar(0,0,244), string("feat2d in red"));
+
+
+        // Write annotated image
+        // Write Node data to file.
+        sprintf( debug_fname, "/home/mpkuse/Desktop/a/drag2/kf_%d_anno.png", i );
+        cv::imwrite( debug_fname, dst );
+
+
+
+      }
+    }
+    // END
+
+
   }
 }
 
@@ -298,6 +367,13 @@ void DataManager::plot_3way_match_clean( const cv::Mat& curr_im, const cv::Mat& 
   }
 }
 
+bool DataManager::if_file_exist( char * fname )
+{
+  ifstream f(fname);
+  return f.good();
+}
+
+bool DataManager::if_file_exist( string fname ) { if_file_exist( fname.c_str() ); }
 
 std::vector<std::string>
 DataManager::split( std::string const& original, char separator )
@@ -313,6 +389,17 @@ DataManager::split( std::string const& original, char separator )
     }
     results.push_back( std::string( start, next ) );
     return results;
+}
+
+void DataManager::plot_point_sets( const cv::Mat& im, const MatrixXd& pts_set, cv::Mat& dst, const cv::Scalar& color, const string& msg )
+{
+  MatrixXf pts_set_float;
+  pts_set_float = pts_set.cast<float>();
+
+  cv::Mat pts_set_mat;
+  cv::eigen2cv( pts_set_float, pts_set_mat );
+
+  plot_point_sets( im, pts_set_mat, dst, color, msg );
 }
 
 void DataManager::plot_point_sets( const cv::Mat& im, const cv::Mat& pts_set, cv::Mat& dst, const cv::Scalar& color, const string& msg )

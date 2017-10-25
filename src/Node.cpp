@@ -26,6 +26,9 @@ Node::Node( ros::Time time_stamp, geometry_msgs::Pose pose )
   e_q = Quaterniond( pose.orientation.w, pose.orientation.x,pose.orientation.y,pose.orientation.z );
   org_q = Quaterniond( pose.orientation.w, pose.orientation.x,pose.orientation.y,pose.orientation.z );
   // TODO extract covariance
+
+  m_3dpts = false;
+  m_2dfeats = false;
 }
 
 void Node::getCurrTransform(Matrix4d& M)
@@ -54,6 +57,7 @@ void Node::getOriginalTransform(Matrix4d& M)
   // cout << "M\n"<< M << endl;
 }
 
+////////////// 3d points
 void Node::setPointCloud( ros::Time time, const vector<geometry_msgs::Point32> & points )
 {
   ptCld = Matrix<double,3,Dynamic>(3,points.size());
@@ -64,12 +68,14 @@ void Node::setPointCloud( ros::Time time, const vector<geometry_msgs::Point32> &
     ptCld(2,i) = points[i].z;
   }
   this->time_pcl = ros::Time(time);
+  m_3dpts = true;
 }
 
 void Node::setPointCloud( ros::Time time, const Matrix<double,3,Dynamic>& e )
 {
   ptCld = Matrix<double,3,Dynamic>( e );
   this->time_pcl = ros::Time(time);
+  m_3dpts = true;
 }
 
 const Matrix<double,3,Dynamic>& Node::getPointCloud( )
@@ -90,7 +96,35 @@ void Node::getPointCloudHomogeneous( MatrixXd& M )
   }
 }
 
+////////////// 2d tracked features
+void Node::setFeatures2dHomogeneous( ros::Time time, const vector<geometry_msgs::Point32> & points )
+{
+  feat2d = Matrix<double,3,Dynamic>(3,points.size());
+  for( int i=0 ; i<points.size() ; i++ )
+  {
+    feat2d(0,i) = points[i].x;
+    feat2d(1,i) = points[i].y;
+    feat2d(2,i) = points[i].z;
+  }
+  this->time_feat2d = ros::Time(time);
+  m_2dfeats = true;
+}
 
+void Node::setFeatures2dHomogeneous( ros::Time time, const Matrix<double,3,Dynamic>& e )
+{
+  feat2d = Matrix<double,3,Dynamic>( e );
+  this->time_feat2d = ros::Time(time);
+  m_2dfeats = true;
+}
+
+void Node::getFeatures2dHomogeneous( MatrixXd& M )
+{
+  // return feat2d;
+  M = MatrixXd(feat2d );
+}
+
+
+/////////////// Image
 void Node::setImage( ros::Time time, const cv::Mat& im )
 {
   image = cv::Mat(im.clone());
@@ -101,4 +135,36 @@ void Node::setImage( ros::Time time, const cv::Mat& im )
 const cv::Mat& Node::getImageRef()
 {
   return image;
+}
+
+
+
+void Node::write_debug_xml( char * fname )
+{
+  cv::FileStorage fs( fname, cv::FileStorage::WRITE );
+
+  // 3d pts
+  MatrixXd c_M; //4xN
+  getPointCloudHomogeneous(c_M);
+
+  cv::Mat c_M_mat;
+  cv::eigen2cv( c_M, c_M_mat );
+
+  fs << "c_3dpts" << c_M_mat;
+
+  // feat2d
+  MatrixXd c_feat2d;
+  getFeatures2dHomogeneous( c_feat2d );
+
+  cv::Mat c_feat2d_mat;
+  cv::eigen2cv( c_feat2d, c_feat2d_mat);
+  fs << "c_feat2d" << c_feat2d_mat;
+
+  // Transform
+  Matrix4d w_T_c;
+  getCurrTransform( w_T_c );
+
+  cv::Mat w_T_c_mat;
+  cv::eigen2cv( w_T_c, w_T_c_mat );
+  fs <<  "w_T_c" << w_T_c_mat;
 }

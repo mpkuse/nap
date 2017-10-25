@@ -103,7 +103,8 @@ public:
   /// Subscribes to pointcloud. pointcloud messages are sublish by the
   /// visual-innertial odometry system from Qin Tong. These are used for
   /// loop-closure relative pose computation
-  void point_cloud_callback( const sensor_msgs::PointCloudConstPtr& msg );
+  void point_cloud_callback( const sensor_msgs::PointCloudConstPtr& msg ); //< 3d
+  void tracked_features_callback( const sensor_msgs::PointCloudConstPtr& msg ); //< 2d tracked features
 
 
   /// Subscribes to odometry messages. These are used to make the nodes.
@@ -172,6 +173,11 @@ private:
   std::queue<ros::Time> unclaimed_pt_cld_time;
   void flush_unclaimed_pt_cld();
 
+  std::queue<Matrix<double,3,Dynamic>> unclaimed_2d_feat;
+  std::queue<ros::Time> unclaimed_2d_feat_time;
+  void flush_unclaimed_2d_feat();
+
+
   void print_cvmat_info( string msg, const cv::Mat& A );
   string type2str( int );
 
@@ -200,6 +206,7 @@ private:
   // image, 2xN.
   // If mat is more than 2d will only take 1st 2 dimensions as (x,y) ie (cols,rows)
   void plot_point_sets( const cv::Mat& im, const cv::Mat& pts_set, cv::Mat& dst, const cv::Scalar& color, const string& msg=string("") );
+  void plot_point_sets( const cv::Mat& im, const MatrixXd& pts_set, cv::Mat& dst, const cv::Scalar& color, const string& msg=string("") );
   std::vector<std::string> split( std::string const& original, char separator );
 
   // Given the odometry poses of 2 cameras compute the fundamental matrix.
@@ -250,6 +257,8 @@ private:
 
 
   void convert_rvec_eigen4f( const cv::Mat& rvec, const cv::Mat& tvec, Matrix4f& Tr );
+  bool if_file_exist( string fname ); //in DataManager_rviz_visualization.cpp
+  bool if_file_exist( char * fname );
 
   string matrix4f_to_string( const Matrix4f& M );
   string matrix4d_to_string( const Matrix4d& M );

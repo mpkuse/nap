@@ -135,10 +135,19 @@ int main(int argc, char ** argv )
   ROS_INFO( "Subscribed to %s", place_recognition_topic.c_str() );
   ros::Subscriber sub_place_recognition = nh.subscribe( place_recognition_topic, 1000, &DataManager::place_recog_callback, &dataManager );
 
-  //
-  // string point_cloud_topic = string( "/vins_estimator/point_cloud_no_loop" );
-  // ROS_INFO( "Subscribed to %s", point_cloud_topic.c_str() );
-  // ros::Subscriber sub_pcl_topic = nh.subscribe( point_cloud_topic, 1000, &DataManager::point_cloud_callback, &dataManager );
+
+  // 3d points
+  string point_cloud_topic = string( "/vins_estimator/point_cloud_no_loop" );
+  ROS_INFO( "Subscribed to %s", point_cloud_topic.c_str() );
+  ros::Subscriber sub_pcl_topic = nh.subscribe( point_cloud_topic, 1000, &DataManager::point_cloud_callback, &dataManager );
+
+
+
+  // 2d features in normalized cords
+  string features_tracked_topic = string( "/feature_tracker/feature" );
+  ROS_INFO( "Subscribed to %s", features_tracked_topic.c_str() );
+  ros::Subscriber sub_features_tracked_topic = nh.subscribe( features_tracked_topic, 1000, &DataManager::tracked_features_callback, &dataManager );
+
 
   //
   //   This is not a requirement for core computation. But is subscribed for debug reasons. Especially to verify correctness of 3way matches

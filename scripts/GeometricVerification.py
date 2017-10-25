@@ -20,7 +20,7 @@ cv2.ocl.setUseOpenCL(False)
 try:
     from DaisyMeld.daisymeld import DaisyMeld
 except:
-    print 'If you get this error, your DaisyMeld wrapper is not properly setup. You need to set DaisyMeld in LD_LIBRARY_PATH. '
+    print 'If you get this error, your DaisyMeld wrapper is not properly setup. You need to set DaisyMeld in LD_LIBRARY_PATH. and PYTHONPATH contains parent of DaisyMeld'
     print 'See also : https://github.com/mpkuse/daisy_py_wrapper'
 from ColorLUT import ColorLUT
 
@@ -515,7 +515,7 @@ class GeometricVerification:
         assert self.im1 is not None, "GeometricVerification.daisy_dense_matches(): im1 was not set. "
         assert self.im2 is not None, "GeometricVerification.daisy_dense_matches(): im2 was not set. "
         assert self.im1_lut_raw is not None, "GeometricVerification.daisy_dense_matches(): im1_lut_raw was not set. "
-        assert self.im2_lut_raw is not None, "GeometricVerification.daisy_dense_matches(): im2_lut_raw was not set. "
+        assert self.im2_lut_raw is not None, "GeometricVerification.daisy_dense_matches(): im2_lut was not set. "
 
         if DEBUG:
             assert self.im1_lut is not None, "GeometricVerification.daisy_dense_matches(): im1_lut was not set. "

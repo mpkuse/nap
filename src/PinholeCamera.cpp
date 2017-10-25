@@ -25,6 +25,14 @@ PinholeCamera::PinholeCamera( string config_file )
   fs["projection_parameters"]["fy"] >> _fy;
   fs["projection_parameters"]["cx"] >> _cx;
   fs["projection_parameters"]["cy"] >> _cy;
+  // Scaling to adjust for keyframe image resize. TODO: the scaling factors need to be infered from config_image_width and config_image_height compared to (320,240)
+  cout << "Scaling camera intrinsics to adjust for image resizing\n";
+  double x_scale = config_image_width / 320.0; //3.0
+  double y_scale = config_image_height / 240.0; //2.5
+  _fx /= x_scale;
+  _cx /= x_scale;
+  _fy /= y_scale;
+  _cy /= y_scale;
   cout << "projection_parameters :: " << _fx << " " << _fy << " " << _cx << " " << _cy << " " << endl;
 
   fs["distortion_parameters"]["k1"] >> _k1;
@@ -105,27 +113,71 @@ void PinholeCamera::perspectiveProject3DPoints( cv::Mat& _3dpts, Matrix4f& T,
   perspectiveProject3DPoints( _3dpts_cm, out_pts );
 }
 
+// Input 3d points in homogeneous co-ordinates 4xN matrix. Eigen I/O
+void PinholeCamera::perspectiveProject3DPoints( const MatrixXd& c_X,
+                              MatrixXd& out_pts )
+{
+
+    // DIY - Do It Yourself Projection
+    // c_X.row(0).array() /= c_X.row(3).array();
+    // c_X.row(1).array() /= c_X.row(3).array();
+    // c_X.row(2).array() /= c_X.row(3).array();
+    // c_X.row(3).array() /= c_X.row(3).array();
+
+
+
+    // K [ I | 0 ]
+    MatrixXd I_0;
+    I_0 = Matrix4d::Identity().topLeftCorner<3,4>();
+    // MatrixXf P1;
+    // P1 = cam_intrin * I_0; //3x4
+
+    // Project and Perspective Divide
+    MatrixXd im_pts;
+    im_pts = I_0 * c_X; //in normalized image co-ordinate. Beware that distortion need to be applied in normalized co-ordinates
+    im_pts.row(0).array() /= im_pts.row(2).array();
+    im_pts.row(1).array() /= im_pts.row(2).array();
+    im_pts.row(2).array() /= im_pts.row(2).array();
+
+    // Apply Distortion
+    MatrixXd Xdd = MatrixXd( im_pts.rows(), im_pts.cols() );
+    for( int i=0 ; i<im_pts.cols() ; i++)
+    {
+      double r2 = im_pts(0,i)*im_pts(0,i) + im_pts(1,i)*im_pts(1,i);
+      double c = 1.0f + (double)k1()*r2 + (double)k2()*r2*r2;
+      Xdd(0,i) = im_pts(0,i) * c + 2.0f*(double)p1()*im_pts(0,i)*im_pts(1,i) + (double)p2()*(r2 + 2.0*im_pts(0,i)*im_pts(0,i));
+      Xdd(1,i) = im_pts(1,i) * c + 2.0f*(double)p2()*im_pts(0,i)*im_pts(1,i) + (double)p1()*(r2 + 2.0*im_pts(1,i)*im_pts(1,i));
+      Xdd(2,i) = 1.0f;
+    }
+
+    out_pts = e_K * Xdd;
+
+
+}
+
+void PinholeCamera::normalizedImCords_2_imageCords( const MatrixXd& im_pts, MatrixXd& out_pts )
+{
+  assert( im_pts.rows() == 3 );
+
+  // Apply Distortion
+  MatrixXd Xdd = MatrixXd( im_pts.rows(), im_pts.cols() );
+  for( int i=0 ; i<im_pts.cols() ; i++)
+  {
+    double r2 = im_pts(0,i)*im_pts(0,i) + im_pts(1,i)*im_pts(1,i);
+    double c = 1.0f + (double)k1()*r2 + (double)k2()*r2*r2;
+    Xdd(0,i) = im_pts(0,i) * c + 2.0f*(double)p1()*im_pts(0,i)*im_pts(1,i) + (double)p2()*(r2 + 2.0*im_pts(0,i)*im_pts(0,i));
+    Xdd(1,i) = im_pts(1,i) * c + 2.0f*(double)p2()*im_pts(0,i)*im_pts(1,i) + (double)p1()*(r2 + 2.0*im_pts(1,i)*im_pts(1,i));
+    Xdd(2,i) = 1.0f;
+  }
+
+  out_pts = e_K * Xdd;
+}
+
 
 // Input 3d points in homogeneous co-ordinates 4xN matrix.
 void PinholeCamera::perspectiveProject3DPoints( cv::Mat& _3dpts,
                                   cv::Mat& out_pts )
 {
-    // cout << "Not Implemented perspectiveProject3DPoints\n";
-
-    // //call opencv's projectPoints()
-    // cv::Mat rVec = cv::Mat::zeros( 3,1, CV_32F );
-    // cv::Mat tVec = cv::Mat::zeros( 3,1, CV_32F );
-    // out_pts = cv::Mat( 2, _3dpts.cols, CV_32FC1 );
-    //
-    //
-    // print_cvmat_info( "_3dpts", _3dpts );
-    // print_cvmat_info( "rVec", rVec );
-    // print_cvmat_info( "tVec", tVec );
-    // print_cvmat_info( "m_K", m_K );
-    // print_cvmat_info( "m_D", m_D );
-    // print_cvmat_info( "out_pts", out_pts );
-    // cv::projectPoints( _3dpts, rVec, tVec, m_K, m_D, out_pts );
-    // return;
 
     // DIY - Do It Yourself Projection
     MatrixXf c_X;

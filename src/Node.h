@@ -60,7 +60,7 @@ public:
   ros::Time time_stamp; //this is timestamp of the pose
   geometry_msgs::Pose pose;
 
-  ros::Time time_pcl, time_pose, time_image;
+  ros::Time time_pcl, time_pose, time_image, time_feat2d;
 
   //optimization variables
   // double *opt_position; //translation component ^wT_1
@@ -77,14 +77,36 @@ public:
 
   // 3d point cloud
   Matrix<double,3,Dynamic> ptCld; //TODO: Consider making this private
+  bool m_3dpts;//TODO: Consider making this private
   void setPointCloud( ros::Time time, const vector<geometry_msgs::Point32> & points );
   void setPointCloud( ros::Time time, const Matrix<double,3,Dynamic>& e );
   const Matrix<double,3,Dynamic>& getPointCloud( );
   void getPointCloudHomogeneous( MatrixXd& M );
 
+
+  // 2d features (tracked)
+  Matrix<double,3,Dynamic> feat2d; //TODO: Consider making this private
+  bool m_2dfeats; //TODO: Consider making this private
+  void setFeatures2dHomogeneous( ros::Time time, const vector<geometry_msgs::Point32> & points );
+  void setFeatures2dHomogeneous( ros::Time time, const Matrix<double,3,Dynamic>& e );
+  void getFeatures2dHomogeneous( MatrixXd& M ); //< M will be 3xN matrix
+
+
+  int getn3dpts()      { return ptCld.cols(); }
+  int getn2dfeat()     { return feat2d.cols(); }
+  bool valid_3dpts()   { return m_3dpts; }
+  bool valid_2dfeats() { return m_2dfeats; }
+  bool valid_image()   { return (image.data!=NULL); }
+
+
+
   //image
   void setImage( ros::Time time, const cv::Mat& im );
   const cv::Mat& getImageRef();
+
+
+  // Write to file XML
+  void write_debug_xml( char *fname  );
 
 private:
   cv::Mat image;

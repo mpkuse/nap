@@ -129,11 +129,45 @@ void DataManager::image_callback( const sensor_msgs::ImageConstPtr& msg )
 
 }
 
+void DataManager::tracked_features_callback( const sensor_msgs::PointCloudConstPtr& msg )
+{
+  // ROS_INFO( 'Received2d:: Features: %d', (int)msg->points.size() );
+  // ROS_INFO( "Received2d");
+  int i_ = find_indexof_node(msg->header.stamp);
+  cout << "stamp2d : " << msg->header.stamp << endl;
+  cout << "Received2d:: Node:"<< i_ <<  " size=" << msg->points.size() << endl;
+
+  // if i_ < 0 : Node not found for this timestamp. Buffer points
+  if( i_ < 0 )
+  {
+    Matrix<double,3,Dynamic> tracked_2d_features;
+    tracked_2d_features = Matrix<double,3,Dynamic>(3,msg->points.size()); //in homogeneous co-ords. Qin Tong publishes features points in homogeneous cords
+    for( int i=0 ; i<msg->points.size() ; i++ )
+    {
+      tracked_2d_features(0,i) = msg->points[i].x; //x
+      tracked_2d_features(1,i) = msg->points[i].y; //y
+      tracked_2d_features(2,i) = msg->points[i].z; //1.0
+    }
+
+    //push to buffer
+    unclaimed_2d_feat.push( tracked_2d_features );
+    unclaimed_2d_feat_time.push( msg->header.stamp );
+    flush_unclaimed_2d_feat();
+  }
+  else // if i_> 0 : Found node for this. Associate these points with a node
+  {
+    nNodes[i_]->setFeatures2dHomogeneous( msg->header.stamp, msg->points  );
+  }
+
+
+}
+
 
 void DataManager::point_cloud_callback( const sensor_msgs::PointCloudConstPtr& msg )
 {
   int i_ = find_indexof_node(msg->header.stamp);
-  ROS_INFO( "Received - PointCloud - %d", i_);
+  cout << "stamp3d : " << msg->header.stamp << endl;
+  ROS_INFO( "Received3d:: PointCloud: %d. nUnclaimed: %d", i_, (int)unclaimed_pt_cld.size() );
 
   if( i_ < 0 )
   {
@@ -167,6 +201,7 @@ void DataManager::camera_pose_callback( const nav_msgs::Odometry::ConstPtr msg )
   Node * n = new Node(msg->header.stamp, msg->pose.pose);
   nNodes.push_back( n );
   ROS_DEBUG( "Recvd msg - camera_pose_callback");
+  cout << "add-node : " << msg->header.stamp << endl;
 
 
   // ALSO add odometry edges to 1 previous.
@@ -212,18 +247,18 @@ void DataManager::camera_pose_callback( const nav_msgs::Odometry::ConstPtr msg )
 
 void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
 {
-  if( loopClosureEdges.size() == 10 )
-  {
-    lock_enable_ceres.lock();
-    enable_ceres = true;
-    lock_enable_ceres.unlock();
-  }
-  else
-  {
-    lock_enable_ceres.lock();
-    enable_ceres = false;
-    lock_enable_ceres.unlock();
-  }
+  // if( loopClosureEdges.size() == 10 )
+  // {
+  //   lock_enable_ceres.lock();
+  //   enable_ceres = true;
+  //   lock_enable_ceres.unlock();
+  // }
+  // else
+  // {
+  //   lock_enable_ceres.lock();
+  //   enable_ceres = false;
+  //   lock_enable_ceres.unlock();
+  // }
 
   ROS_INFO( "Received - NapMsg");
   // cout << msg->c_timestamp << " " << msg->prev_timestamp << endl;
@@ -282,7 +317,7 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
     e->setLoopEdgeSubtype(EDGE_TYPE_LOOP_SUBTYPE_3WAY);
 
     // TODO: Relative pose from 3way matching
-    Matrix4d p_T_c;
+    Matrix4d p_T_c = Matrix4d::Identity();
     this->pose_from_3way_matching(msg, p_T_c );
 
     // Set the computed pose into edge
@@ -364,10 +399,11 @@ void DataManager::flush_unclaimed_im()
 void DataManager::flush_unclaimed_pt_cld()
 {
   ROS_WARN( "PtCld %d, %d", (int)unclaimed_pt_cld.size(), (int)unclaimed_pt_cld_time.size() );
-  int M = max(20,(int)unclaimed_pt_cld.size());
+  int M = max(20,(int)unclaimed_pt_cld.size()); // Potential BUG. If not found, the ptcld is pushed at the end, where you will never get to as you see only first 20 elements!
   for( int i=0 ; i<M ; i++ )
   {
-    Matrix<double,3,Dynamic> e = unclaimed_pt_cld.front();
+    Matrix<double,3,Dynamic> e;
+    e = unclaimed_pt_cld.front();
     ros::Time t = ros::Time( unclaimed_pt_cld_time.front() );
     unclaimed_pt_cld.pop();
     unclaimed_pt_cld_time.pop();
@@ -385,9 +421,37 @@ void DataManager::flush_unclaimed_pt_cld()
   }
 
 }
+void DataManager::flush_unclaimed_2d_feat()
+{
+  ROS_WARN( "flush2dfeat %d, %d", (int)unclaimed_2d_feat.size(), (int)unclaimed_2d_feat_time.size() );
+  // int M = max(20,(int)unclaimed_2d_feat.size());
+  int M = unclaimed_2d_feat.size();
+  cout << "flush_feat2d()\n";
+  for( int i=0 ; i<M ; i++ )
+  {
+    Matrix<double,3,Dynamic> e;
+    e = unclaimed_2d_feat.front();
+    ros::Time t = ros::Time( unclaimed_2d_feat_time.front() );
+    unclaimed_2d_feat.pop();
+    unclaimed_2d_feat_time.pop();
+    int i_ = find_indexof_node(t);
+    if( i_ < 0 )
+    {
+      //still not found, push back again
+      unclaimed_2d_feat.push( e );
+      unclaimed_2d_feat_time.push( t );
+    }
+    else
+    {
+      cout << "found "<< t << "--> " << i_ << endl;
+      nNodes[i_]->setFeatures2dHomogeneous(t, e); //this will be set2dFeatures()
+      return;
+    }
+  }
 
+}
 
-// /// Debug file
+// /// Debug file - Mark for removal. The debug txt file is now handled inside
 // void DataManager::open_debug_xml( const string& fname)
 // {
 //   ROS_INFO( "Open DEBUG XML : %s", fname.c_str() );

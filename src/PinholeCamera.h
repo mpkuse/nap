@@ -78,6 +78,7 @@ public:
   // project these points using this camera.
   // TODO: Extend this function to include extrinsics (given as arguments)
   void perspectiveProject3DPoints( cv::Mat& _3dpts, cv::Mat& out_pts );
+  void perspectiveProject3DPoints( const MatrixXd& _3dpts, MatrixXd& out_pts );
   void perspectiveProject3DPoints( cv::Mat& _3dpts, Matrix4f& T, cv::Mat& out_pts ); //< T * _3dpts
 
   // Given an input pointset 2xN 1-channel matrix, returns a 2xN 1-channel matrix
@@ -105,6 +106,14 @@ public:
 
    // Returns points in normalized_cords. Input being observed points in distorted image space.
    void getUndistortedNormalizedCords( const cv::Mat& pts_observed_image_space, cv::Mat& pts_undist_normed );
+
+
+
+
+   // Given a point2d set in homogeneous co-ords (3xN eigen matrix)
+   // in normalized image co-ordinates. This function shall doDistortion() followed
+   // by scaling with camera intrinsic to give point these points in distorted_image_cords
+   void normalizedImCords_2_imageCords( const MatrixXd& in_, MatrixXd& out_ );
 
 
 private:
