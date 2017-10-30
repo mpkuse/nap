@@ -98,6 +98,54 @@ class SwigPyIterator(_object):
 SwigPyIterator_swigregister = _daisymeld.SwigPyIterator_swigregister
 SwigPyIterator_swigregister(SwigPyIterator)
 
+class floatp(_object):
+    __swig_setmethods__ = {}
+    __setattr__ = lambda self, name, value: _swig_setattr(self, floatp, name, value)
+    __swig_getmethods__ = {}
+    __getattr__ = lambda self, name: _swig_getattr(self, floatp, name)
+    __repr__ = _swig_repr
+    def __init__(self): 
+        this = _daisymeld.new_floatp()
+        try: self.this.append(this)
+        except: self.this = this
+    __swig_destroy__ = _daisymeld.delete_floatp
+    __del__ = lambda self : None;
+    def assign(self, *args): return _daisymeld.floatp_assign(self, *args)
+    def value(self): return _daisymeld.floatp_value(self)
+    def cast(self): return _daisymeld.floatp_cast(self)
+    __swig_getmethods__["frompointer"] = lambda x: _daisymeld.floatp_frompointer
+    if _newclass:frompointer = staticmethod(_daisymeld.floatp_frompointer)
+floatp_swigregister = _daisymeld.floatp_swigregister
+floatp_swigregister(floatp)
+
+def floatp_frompointer(*args):
+  return _daisymeld.floatp_frompointer(*args)
+floatp_frompointer = _daisymeld.floatp_frompointer
+
+class intp(_object):
+    __swig_setmethods__ = {}
+    __setattr__ = lambda self, name, value: _swig_setattr(self, intp, name, value)
+    __swig_getmethods__ = {}
+    __getattr__ = lambda self, name: _swig_getattr(self, intp, name)
+    __repr__ = _swig_repr
+    def __init__(self): 
+        this = _daisymeld.new_intp()
+        try: self.this.append(this)
+        except: self.this = this
+    __swig_destroy__ = _daisymeld.delete_intp
+    __del__ = lambda self : None;
+    def assign(self, *args): return _daisymeld.intp_assign(self, *args)
+    def value(self): return _daisymeld.intp_value(self)
+    def cast(self): return _daisymeld.intp_cast(self)
+    __swig_getmethods__["frompointer"] = lambda x: _daisymeld.intp_frompointer
+    if _newclass:frompointer = staticmethod(_daisymeld.intp_frompointer)
+intp_swigregister = _daisymeld.intp_swigregister
+intp_swigregister(intp)
+
+def intp_frompointer(*args):
+  return _daisymeld.intp_frompointer(*args)
+intp_frompointer = _daisymeld.intp_frompointer
+
 class IntVector(_object):
     __swig_setmethods__ = {}
     __setattr__ = lambda self, name, value: _swig_setattr(self, IntVector, name, value)
@@ -198,13 +246,19 @@ class DaisyMeld(_object):
     __swig_getmethods__ = {}
     __getattr__ = lambda self, name: _swig_getattr(self, DaisyMeld, name)
     __repr__ = _swig_repr
-    def __init__(self): 
-        this = _daisymeld.new_DaisyMeld()
+    def __init__(self, *args): 
+        this = _daisymeld.new_DaisyMeld(*args)
         try: self.this.append(this)
         except: self.this = this
-    def hook(self, *args): return _daisymeld.DaisyMeld_hook(self, *args)
     __swig_destroy__ = _daisymeld.delete_DaisyMeld
     __del__ = lambda self : None;
+    def hook(self, *args): return _daisymeld.DaisyMeld_hook(self, *args)
+    def do_daisy_computation(self, *args): return _daisymeld.DaisyMeld_do_daisy_computation(self, *args)
+    def get_daisy_view(self): return _daisymeld.DaisyMeld_get_daisy_view(self)
+    def rms(self, *args): return _daisymeld.DaisyMeld_rms(self, *args)
+    def sum2d(self, *args): return _daisymeld.DaisyMeld_sum2d(self, *args)
+    def im_neg(self, *args): return _daisymeld.DaisyMeld_im_neg(self, *args)
+    def dot(self, *args): return _daisymeld.DaisyMeld_dot(self, *args)
 DaisyMeld_swigregister = _daisymeld.DaisyMeld_swigregister
 DaisyMeld_swigregister(DaisyMeld)
 

@@ -8,10 +8,13 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   rospy
   std_msgs
+  geometry_msgs
   message_generation
   image_transport
   cv_bridge
+
 )
+
 list(APPEND CMAKE_MODULE_PATH "/usr/local/lib/cmake")
 find_package(Eigen3 REQUIRED)
 find_package(Ceres REQUIRED)
@@ -20,6 +23,9 @@ find_package(OpenCV 3 REQUIRED)
 find_package(ZLIB REQUIRED) #for cnpy.cpp
 
 set( CMAKE_CXX_FLAGS "-fpermissive -std=c++11" )
+
+
+
 
 
 
@@ -38,7 +44,9 @@ generate_messages(
   std_msgs
   sensor_msgs
   geometry_msgs
+
 )
+
 
 
 catkin_package(
@@ -70,6 +78,7 @@ add_executable( pose_graph_opt_node
                     src/DataManager_rviz_visualization.cpp
                     src/DataManager_looppose_computation.cpp
                     src/DataManager_ceres.cpp
+                    src/cnpy.cpp
               )
 
 target_link_libraries( ls_pose_graph_opt ${CERES_LIBRARIES}  ${catkin_LIBRARIES} )
@@ -78,4 +87,4 @@ target_link_libraries( toy_vertigo_dcs ${CERES_LIBRARIES}  ${catkin_LIBRARIES} )
 
 target_link_libraries( dbow3_test ${DBoW3_LIBRARIES} ${OpenCV_LIBRARIES} )
 target_link_libraries( dbow3_naive  ${OpenCV_LIBRARIES} ${DBoW3_LIBRARIES} ${catkin_LIBRARIES} )
-target_link_libraries( pose_graph_opt_node  ${OpenCV_LIBRARIES} ${DBoW3_LIBRARIES} ${catkin_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT}  ${CERES_LIBRARIES} ) 
+target_link_libraries( pose_graph_opt_node  ${OpenCV_LIBRARIES} ${DBoW3_LIBRARIES} ${catkin_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT}  ${CERES_LIBRARIES} )

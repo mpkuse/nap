@@ -155,6 +155,14 @@ int main(int argc, char ** argv )
   ROS_INFO( "Subscribed to %s", image_topic.c_str() );
   ros::Subscriber sub_image = nh.subscribe( image_topic, 1000, &DataManager::image_callback, &dataManager );
 
+  //
+  // Nap Cluster assignment in raw format. mono8 type image basically a 60x80 array of numbers with intensity as cluster ID
+  // This is used for daisy matching
+  string nap_cluster_assgn_topic = string( "/nap/cluster_assignment" );
+  ROS_INFO( "Subscribed to %s", nap_cluster_assgn_topic.c_str() );
+  ros::Subscriber sub_nap_cl_asgn = nh.subscribe( nap_cluster_assgn_topic, 1000, &DataManager::raw_nap_cluster_assgn_callback, &dataManager );
+
+
 
   //--- END Subscribes ---//
   std::cout<< Color::green <<  "Pose Graph Optimization Node by mpkuse!" << Color::def << endl;

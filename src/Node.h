@@ -43,6 +43,7 @@
 
 #include <nap/NapMsg.h>
 
+#include "cnpy.h"
 
 
 #include <Eigen/Dense>
@@ -60,7 +61,7 @@ public:
   ros::Time time_stamp; //this is timestamp of the pose
   geometry_msgs::Pose pose;
 
-  ros::Time time_pcl, time_pose, time_image, time_feat2d;
+  ros::Time time_pcl, time_pose, time_image, time_feat2d, time_nap_clustermap;
 
   //optimization variables
   // double *opt_position; //translation component ^wT_1
@@ -96,13 +97,20 @@ public:
   int getn2dfeat()     { return feat2d.cols(); }
   bool valid_3dpts()   { return m_3dpts; }
   bool valid_2dfeats() { return m_2dfeats; }
-  bool valid_image()   { return (image.data!=NULL); }
+
+
 
 
 
   //image
   void setImage( ros::Time time, const cv::Mat& im );
   const cv::Mat& getImageRef();
+  bool valid_image()   { return (image.data!=NULL); }
+
+  // nap clusters
+  void setNapClusterMap( ros::Time time, const cv::Mat& im );
+  const cv::Mat& getNapClusterMap();
+  bool valid_clustermap()   { return (nap_clusters.data!=NULL); }
 
 
   // Write to file XML
@@ -110,5 +118,7 @@ public:
 
 private:
   cv::Mat image;
+
+  cv::Mat nap_clusters;
 
 };

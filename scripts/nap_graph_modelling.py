@@ -93,7 +93,12 @@ def publish_time( PUB, time_ms ):
     PUB.publish( Float32(time_ms) )
 
 def publish_image( PUB, cv_image, t=None ):
-    msg_frame = CvBridge().cv2_to_imgmsg( cv_image, "bgr8" )
+
+    data_type = 'bgr8'
+    if len(cv_image.shape) == 2:
+        data_type = 'mono8'
+
+    msg_frame = CvBridge().cv2_to_imgmsg( cv_image, data_type )
     if t is not None:
         msg_frame.header.stamp = t
     PUB.publish( msg_frame )
@@ -239,6 +244,7 @@ pub_time_total_loop = rospy.Publisher( '/time/total', Float32, queue_size=1000)
 pub_cluster_assgn_falsecolormap = rospy.Publisher( '/debug/cluster_assignment', Image, queue_size=10 )
 rospy.loginfo( 'Publish to /debug/cluster_assignment')
 
+pub_cluster_assgn_raw = rospy.Publisher( '/nap/cluster_assignment', Image, queue_size=10 )
 
 #################### Init Plotter #####################
 plotter = FastPlotter(n=5)
@@ -328,6 +334,7 @@ while not rospy.is_shutdown():
         S_lut.append( lut )
         S_lut_raw.append( place_mod.Assgn_matrix[0,:,:]  )
         publish_image( pub_cluster_assgn_falsecolormap, lut, t=im_raw_timestamp )
+        publish_image( pub_cluster_assgn_raw, place_mod.Assgn_matrix[0,:,:].astype('uint8'), t=im_raw_timestamp )
 
     #---------------------------- END  -----------------------------#
 
@@ -599,8 +606,7 @@ while not rospy.is_shutdown():
 
 
                 pts_curr, pts_prev, mask_c_p = VV.daisy_dense_matches()
-                xcanvas_c_p = VV.plot_point_sets( VV.im1, pts_curr, VV.im2, pts_prev, mask_c_p)
-
+                # xcanvas_c_p = VV.plot_point_sets( VV.im1, pts_curr, VV.im2, pts_prev, mask_c_p)
                 # print 'Write : ', '/home/mpkuse/Desktop/a/%d.jpg' %(loop_index)
                 # cv2.imwrite( '/home/mpkuse/Desktop/a/%d.jpg' %(loop_index), xcanvas_c_p )
 
@@ -611,8 +617,8 @@ while not rospy.is_shutdown():
 
                 masked_pts_curr = list( pts_curr[i] for i in np.where( mask_c_p[:,0] == 1 )[0] )
                 masked_pts_prev = list( pts_prev[i] for i in np.where( mask_c_p[:,0] == 1 )[0] )
-                gridd = VV.plot_3way_match( curr_im, masked_pts_curr, prev_im, masked_pts_prev, curr_m_im, _pts_curr_m )
 
+                # gridd = VV.plot_3way_match( curr_im, masked_pts_curr, prev_im, masked_pts_prev, curr_m_im, _pts_curr_m )
                 # print 'Write : ',  '/home/mpkuse/Desktop/a/%d_3way.jpg' %(loop_index)
                 # cv2.imwrite( '/home/mpkuse/Desktop/a/%d_3way.jpg' %(loop_index), gridd )
 
@@ -634,8 +640,11 @@ while not rospy.is_shutdown():
                 nap_msg.t_prev = t_prev
                 nap_msg.t_curr_m = t_curr_m
 
+                nap_msg.op_mode = 29 #Signal that the msg contains 3-way match
 
 
+            else:
+                nap_msg.op_mode = 10 #Signal that the msg does not contain 3-way, neither does it contain any matching data.
             pub_edge_msg.publish( nap_msg )
 
 

@@ -138,6 +138,23 @@ const cv::Mat& Node::getImageRef()
 }
 
 
+/////////////// Nap Cluster Map
+void Node::setNapClusterMap( ros::Time time, const cv::Mat& im )
+{
+  this->nap_clusters = cv::Mat(im.clone());
+  this->time_nap_clustermap = ros::Time(time);
+}
+
+
+const cv::Mat& Node::getNapClusterMap()
+{
+  return nap_clusters;
+}
+
+
+
+
+
 
 void Node::write_debug_xml( char * fname )
 {
@@ -167,4 +184,14 @@ void Node::write_debug_xml( char * fname )
   cv::Mat w_T_c_mat;
   cv::eigen2cv( w_T_c, w_T_c_mat );
   fs <<  "w_T_c" << w_T_c_mat;
+
+
+  // Save npy file of cluster map
+  if( this->valid_clustermap() )
+  {
+    char newf[200];
+    sprintf( newf, "%s.png", fname );
+    // cnpy::npy_save( newf,  )
+    cv::imwrite( newf, this->nap_clusters );
+  }
 }

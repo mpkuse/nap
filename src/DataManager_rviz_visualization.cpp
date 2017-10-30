@@ -59,7 +59,7 @@ void DataManager::publish_pose_graph_nodes()
     marker.scale.z = .03;
 
     // pink color text if node doesnt contain images
-    if( n->getImageRef().data == NULL )
+    if( n->getNapClusterMap().data == NULL )
     { marker.color.r = 1.0;  marker.color.g = .4;  marker.color.b = .4; }
     else
     { marker.color.r = 1.0;  marker.color.g = 1.0;  marker.color.b = 1.0; } //text in white color
@@ -170,7 +170,7 @@ void DataManager::publish_pose_graph_nodes_original_poses()
     marker.ns = "spheres";
     Matrix4d original_pose;
     n->getOriginalTransform(original_pose);
-    marker.pose.position.x = original_pose(0,3)-20.;
+    marker.pose.position.x = original_pose(0,3); //-20.;
     marker.pose.position.y = original_pose(1,3);
     marker.pose.position.z = original_pose(2,3);
     marker.pose.orientation.x = 0.;

@@ -42,7 +42,10 @@ class GeometricVerification:
         search_params = dict(checks=50)   # or pass empty dictionary
         self.flann = cv2.FlannBasedMatcher(index_params,search_params)
 
-        self.dai = DaisyMeld()
+        # self.dai = DaisyMeld()
+        self.dai1 = DaisyMeld( 240, 320, 1 ) #v2 of py_daisy_wrapper. You really need 3 as the memory is allocated and owned by C++
+        self.dai2 = DaisyMeld( 240, 320, 1 )
+        self.dai3 = DaisyMeld( 240, 320, 1 )
 
     def reset(self):
         self.im1 = None
@@ -438,34 +441,57 @@ class GeometricVerification:
 
     # Return the daisy image for input image
     def static_get_daisy_descriptor_mat( self, xim ):
-        xim_gray = cv2.cvtColor( xim, cv2.COLOR_BGR2GRAY ).astype('float64')
-        output = self.dai.hook( xim_gray.flatten(), xim_gray.shape )
-        output = np.array( output ).reshape( xim_gray.shape[0], xim_gray.shape[1], -1 )
-        return output
+        startD = time.time()
+        xim_gray = cv2.cvtColor( xim, cv2.COLOR_BGR2GRAY ).astype('float32')
+        self.dai3.do_daisy_computation( xim_gray )
+        print 'py-daisy in (ms) %4.2f' %(1000. * (time.time() - startD) )
+        return self.dai3.get_daisy_view()
+
+        # Old way - Mark for removal
+        # xim_gray = cv2.cvtColor( xim, cv2.COLOR_BGR2GRAY ).astype('float64')
+        # output = self.dai.hook( xim_gray.flatten(), xim_gray.shape )
+        # output = np.array( output ).reshape( xim_gray.shape[0], xim_gray.shape[1], -1 )
+        # return output
 
     def get_whole_image_daisy(self, im_no):
         # cv2.imshow( 'do_daisy_im1', self.im1 )
         # cv2.imshow( 'do_daisy_im2', self.im2 )
-
-
         startD = time.time()
-        printing = False
         if im_no == 1:
-            im1_gray = cv2.cvtColor( self.im1, cv2.COLOR_BGR2GRAY ).astype('float64')
+            im1_gray = cv2.cvtColor( self.im1, cv2.COLOR_BGR2GRAY ).astype('float32')
+            self.dai1.do_daisy_computation( im1_gray )
+            print 'py-daisy in (ms) %4.2f' %(1000. * (time.time() - startD) )
+            return self.dai1.get_daisy_view()
         elif im_no == 2:
-            im1_gray = cv2.cvtColor( self.im2, cv2.COLOR_BGR2GRAY ).astype('float64')
+            im2_gray = cv2.cvtColor( self.im2, cv2.COLOR_BGR2GRAY ).astype('float32')
+            self.dai2.do_daisy_computation( im2_gray )
+            print 'py-daisy in (ms) %4.2f' %(1000. * (time.time() - startD) )
+            return self.dai2.get_daisy_view()
         else:
             print 'ERROR in get_whole_image_daisy. im_no has to be 1 or 2'
             quit()
 
-        #NOTE: Have DaisyMeld/ is LD_LIBRARY_PATH
-        output = self.dai.hook( im1_gray.flatten(), im1_gray.shape )
-        output = np.array( output ).reshape( im1_gray.shape[0], im1_gray.shape[1], -1 )
 
-        if printing:
-            print im1_gray.dtype, im1_gray.shape, output.shape, 'daisy in (ms) %4.2f' %(1000. * (time.time() - startD) )
-        # cv2.imshow( 'do_daisy_im1', output[:,:,0] )
-        return output
+
+        # Old - Mark for removal
+        # startD = time.time()
+        # printing = False
+        # if im_no == 1:
+        #     im1_gray = cv2.cvtColor( self.im1, cv2.COLOR_BGR2GRAY ).astype('float64')
+        # elif im_no == 2:
+        #     im1_gray = cv2.cvtColor( self.im2, cv2.COLOR_BGR2GRAY ).astype('float64')
+        # else:
+        #     print 'ERROR in get_whole_image_daisy. im_no has to be 1 or 2'
+        #     quit()
+        #
+        # #NOTE: Have DaisyMeld/ is LD_LIBRARY_PATH
+        # output = self.dai.hook( im1_gray.flatten(), im1_gray.shape )
+        # output = np.array( output ).reshape( im1_gray.shape[0], im1_gray.shape[1], -1 )
+        #
+        # if printing:
+        #     print im1_gray.dtype, im1_gray.shape, output.shape, 'daisy in (ms) %4.2f' %(1000. * (time.time() - startD) )
+        # # cv2.imshow( 'do_daisy_im1', output[:,:,0] )
+        # return output
 
 
     def analyze_dense_matches( self, H1, H2, matches ):

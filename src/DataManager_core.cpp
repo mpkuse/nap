@@ -5,6 +5,9 @@
 DataManager::DataManager(ros::NodeHandle &nh )
 {
     this->nh = nh;
+
+    // init republish colocation topic
+    pub_chatter_colocation = this->nh.advertise<nap::NapMsg>( "/colocation_chatter", 1000 );
 }
 
 
@@ -93,7 +96,38 @@ DataManager::~DataManager()
 
 }
 
+void DataManager::raw_nap_cluster_assgn_callback( const sensor_msgs::ImageConstPtr& msg )
+{
+  cout << "clu_assgn rcvd : " << msg->header.stamp << endl;
+  int i_ = find_indexof_node(msg->header.stamp);
+  cv::Mat clustermap;
 
+  try {
+    clustermap = cv_bridge::toCvCopy( msg, sensor_msgs::image_encodings::MONO8 )->image;
+  }
+  catch( cv_bridge::Exception& e)
+  {
+    ROS_ERROR( "cv_bridge exception in raw_nap_cluster_assgn_callback(): %s", e.what() );
+  }
+
+  cout << "nap_clusters i_=" << i_ << "     napmap_buffer="<< unclaimed_napmap.size() << endl;
+  // if this i_ is found in the pose-graph set()
+  if( i_ < 0 )
+  {
+    unclaimed_napmap.push( clustermap.clone() );
+    unclaimed_napmap_time.push( ros::Time(msg->header.stamp) );
+    flush_unclaimed_napmap();
+
+    //TODO: Code up the buffering part of nap clusters. For now, you don't need to as
+    // this is garunteed to be a bit delayed due to needed computation time
+  }
+  else //if found than associated the node with this image
+  {
+    nNodes[i_]->setNapClusterMap( msg->header.stamp, clustermap );
+  }
+
+
+}
 
 
 void DataManager::image_callback( const sensor_msgs::ImageConstPtr& msg )
@@ -260,6 +294,7 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
   //   lock_enable_ceres.unlock();
   // }
 
+
   ROS_INFO( "Received - NapMsg");
   // cout << msg->c_timestamp << " " << msg->prev_timestamp << endl;
 
@@ -283,7 +318,7 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
 
   ///////////////////////////////////
   // Relative Pose Computation     //
-  //////////////////////////////////
+  ///////////////////////////////////
   cout << "n_sparse_matches : " << msg->n_sparse_matches << endl;
   cout << "3way match sizes : " << msg->curr.size() << " " << msg->prev.size() << " " << msg->curr_m.size() << endl;
 
@@ -291,7 +326,8 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
   //---- case-a : If 3way matching is empty : do ordinary way to compute relative pose. Borrow code from Qin. Basically using 3d points from odometry (wrt curr) and having known same points in prev do pnp
   // /////////////////
   // Use the point cloud (wrt curr) and do PnP using prev
-  if( msg->n_sparse_matches >= 200 )
+  // if( msg->n_sparse_matches >= 200 )
+  if( msg->op_mode == 10 )
   {
     e->setLoopEdgeSubtype(EDGE_TYPE_LOOP_SUBTYPE_BASIC);
 
@@ -304,6 +340,13 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
     // e->setEdgeRelPose( p_T_c );
 
     loopClosureEdges.push_back( e );
+
+    // Re-publish op_mode:= 10 (as is)
+    Matrix4d __h;
+    int32_t mode = 10;
+    republish_nap( msg->c_timestamp, msg->prev_timestamp, __h, mode );
+
+
     return;
   }
 
@@ -312,7 +355,8 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
   //---- case-b : If 3way matching is not empty : i) Triangulate curr-1 and curr. ii) pnp( 3d pts from (i) ,  prev )
   // //////////////////
   // Pose computation with 3way matching
-  if( msg->n_sparse_matches < 200 && msg->curr.size() > 0 && msg->curr.size() == msg->prev.size() && msg->curr.size() == msg->curr_m.size()  )
+  // if( msg->n_sparse_matches < 200 && msg->curr.size() > 0 && msg->curr.size() == msg->prev.size() && msg->curr.size() == msg->curr_m.size()  )
+  if( msg->op_mode == 29 )
   {
     e->setLoopEdgeSubtype(EDGE_TYPE_LOOP_SUBTYPE_3WAY);
 
@@ -324,12 +368,61 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
     e->setEdgeRelPose( p_T_c );
 
     loopClosureEdges.push_back( e );
+    // doOptimization();
+
+    // Re-publish with pose, op_mode:=30
+    int32_t mode = 30;
+    republish_nap( msg->c_timestamp, msg->prev_timestamp, p_T_c, mode );
+
+
     return;
   }
 
   ROS_ERROR( "in place_recog_callback: Error computing rel pose. Edge added without pose. This might be fatal!");
 
 
+}
+
+
+
+void DataManager::republish_nap( const ros::Time& t_c, const ros::Time& t_p, const Matrix4d& p_T_c, int32_t op_mode )
+{
+  cout << "Not Implemented Republish\n";
+  nap::NapMsg msg;
+
+  msg.c_timestamp = t_c;
+  msg.prev_timestamp = t_p;
+  msg.op_mode = op_mode;
+
+  // if op_mode is 30 means that pose p_T_c was computed from 3-way matching
+  if( op_mode == 30 )
+  {
+    Matrix3d p_R_c;
+    Vector4d p_t_c;
+
+    p_R_c = p_T_c.topLeftCorner<3,3>();
+    p_t_c = p_T_c.col(3);
+
+    Quaterniond q = Quaterniond( p_R_c );
+    msg.p_T_c.position.x = p_t_c[0];
+    msg.p_T_c.position.y = p_t_c[1];
+    msg.p_T_c.position.z = p_t_c[2];
+
+    msg.p_T_c.orientation.x = q.x();
+    msg.p_T_c.orientation.y = q.y();
+    msg.p_T_c.orientation.z = q.z();
+    msg.p_T_c.orientation.w = q.w();
+  }
+  else if( op_mode == 10 ) // contains no pose info.
+  {
+    ;
+  }
+  else
+  {
+    ROS_ERROR( "Cannot re-publish nap. Invalid op_mode" );
+  }
+
+  pub_chatter_colocation.publish( msg );
 }
 
 
@@ -356,6 +449,33 @@ int DataManager::find_indexof_node( ros::Time stamp )
   return -1;
 }
 
+
+void DataManager::flush_unclaimed_napmap()
+{
+  ROS_WARN( "flush_unclaimed_napmapIM:%d, T:%d", (int)unclaimed_napmap.size(), (int)unclaimed_napmap_time.size() );
+
+
+  // int N = max(20,(int)unclaimed_im.size() );
+  int N = unclaimed_napmap.size() ;
+  for( int i=0 ; i<N ; i++)
+  {
+    cv::Mat image = cv::Mat(unclaimed_napmap.front());
+    ros::Time stamp = ros::Time(unclaimed_napmap_time.front());
+    unclaimed_napmap.pop();
+    unclaimed_napmap_time.pop();
+    int i_ = find_indexof_node(stamp);
+    if( i_ < 0 )
+    {
+      unclaimed_napmap.push( image.clone() );
+      unclaimed_napmap_time.push( ros::Time(stamp) );
+    }
+    else
+    {
+      nNodes[i_]->setNapClusterMap( stamp, image );
+    }
+  }
+
+}
 
 void DataManager::flush_unclaimed_im()
 {

@@ -100,6 +100,11 @@ public:
   /// This is not required for actual computation, but is used for debugging
   void image_callback( const sensor_msgs::ImageConstPtr& msg );
 
+  /// Nap Cluster assignment in raw format. mono8 type image basically a 60x80 array of numbers with intensity as cluster ID
+  /// This is used for daisy matching
+  void raw_nap_cluster_assgn_callback( const sensor_msgs::ImageConstPtr& msg );
+
+
   /// Subscribes to pointcloud. pointcloud messages are sublish by the
   /// visual-innertial odometry system from Qin Tong. These are used for
   /// loop-closure relative pose computation
@@ -153,6 +158,13 @@ public:
 
 private:
 
+    // /////////////////////////////////////////////// //
+    // Republish                                       //
+    // /////////////////////////////////////////////// //
+    ros::Publisher pub_chatter_colocation;
+    void republish_nap( const ros::Time& t_c, const ros::Time& t_p, const Matrix4d& p_T_c, int32_t op_mode );
+
+
   //
   // Core Data variables
   //
@@ -168,6 +180,10 @@ private:
   std::queue<cv::Mat> unclaimed_im;
   std::queue<ros::Time> unclaimed_im_time;
   void flush_unclaimed_im();
+
+  std::queue<cv::Mat> unclaimed_napmap;
+  std::queue<ros::Time> unclaimed_napmap_time;
+  void flush_unclaimed_napmap();
 
   std::queue<Matrix<double,3,Dynamic>> unclaimed_pt_cld;
   std::queue<ros::Time> unclaimed_pt_cld_time;
