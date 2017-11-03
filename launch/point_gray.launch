@@ -87,9 +87,10 @@
       <!--<arg name="bag_color_im_topic" default="/camera/image_raw" />--><!-- All input color images -->
 
       <!--NAP Node -->
-      <!-- <node name="nap" pkg="nap" type="nap_graph_modelling.py" output="screen" >
+      <!-- <node name="nap" pkg="nap" type="nap_graph_modelling.py" output="screen" > -->
+      <node name="nap" pkg="nap" type="nap_daisy_bf.py" output="screen" >
         <remap to="$(arg bag_color_im_topic)" from="/semi_keyframes"/>
-      </node> -->
+      </node>
 
 
       <!-- DBOW node -->
@@ -100,9 +101,9 @@
 
       <!-- DBOW node by Qin Tong -->
       <!-- TODO: In tony's node add code to writes images to file and also writeout all loop_candidates. But essentially this is same as my DBOW node, difference is in the way comparison thresh is set -->
-      <node name="dbow_qintony_node" pkg="loop_detector" type="loop_detector" output="screen">
+      <!-- <node name="dbow_qintony_node" pkg="loop_detector" type="loop_detector" output="screen"> -->
         <!-- <remap from="/raw_graph_edge" to="/colocation" /> -->
-    </node>
+    <!-- </node> -->
 
 
 
@@ -117,7 +118,7 @@
     <node name="pgraph_opt" pkg="nap" type="pose_graph_opt_node" output="log">
         <param name="config_file" type="string" value="$(arg config_path)" />
         <!-- Commentout next line to remove the places-feedback-->
-        <remap from="/colocation_chatter" to="/colocation" />
+        <!-- <remap from="/colocation_chatter" to="/colocation" /> -->
     </node>
 
 <!-- ##### END Pose Graph Optimization ##### -->

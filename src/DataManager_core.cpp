@@ -378,6 +378,13 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
     return;
   }
 
+
+  if( msg->op_mode == 20 )
+  {
+    // This is when the expanded matches are present. basically need to just forward this. No geometry computation here.
+    cout << "NOT IMPLEMENTED OPMODE_20.\n";
+  }
+
   ROS_ERROR( "in place_recog_callback: Error computing rel pose. Edge added without pose. This might be fatal!");
 
 
