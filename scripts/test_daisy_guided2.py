@@ -505,10 +505,14 @@ for i in range( len(loop_candidates) ):
 
     curr_im = S_thumbnails[curr, :,:,:]
     prev_im = S_thumbnails[prev, :,:,:]
-    curr_lut = S_thumbnails_lut[curr,:,:]
-    prev_lut = S_thumbnails_lut[prev,:,:]
+    curr_lut_raw = S_thumbnails_lut_raw[curr,:,:]
+    prev_lut_raw = S_thumbnails_lut_raw[prev,:,:]
     t_curr = S_timestamp[curr]
     t_prev = S_timestamp[prev]
+
+    currm_im = S_thumbnails[curr-1, :,:,:]
+    currm_lut_raw = S_thumbnails_lut_raw[curr-1,:,:]
+    t_currm = S_timestamp[curr-1]
 
     feat2d_curr_idx = feature_factory.find_index( t_curr )
     feat2d_prev_idx = feature_factory.find_index( t_prev )
@@ -518,20 +522,66 @@ for i in range( len(loop_candidates) ):
     print feat2d_curr.shape
     print feat2d_prev.shape
 
+    # ------------ Data Ready now! -------------- #
 
 
-    # matcher = DaisyExMatcher()
-    matcher_geom = GeometricVerification()
-    # matcher.match2_guided( curr_im, feat2d_curr, prev_im )
-    # quit()
+    # Simulated proc
+    VV = GeometricVerification()
+
+    # Try 2 way matching
+    VV.set_image( curr_im, 1 ) #set current image
+    VV.set_image( prev_im, 2 )# set previous image (at this stage dont need lut_raw to be set as it is not used by release_candidate_match2_guided_2way() )
+
     startT = time.time()
-    selected_curr_i, selected_prev_i = matcher_geom.match2_guided_2pointset( curr_im, feat2d_curr, prev_im, feat2d_prev )
-    print 'matcher.match2_guided_2pointset() : %4.2f (ms)' %(1000. * (time.time() - startT) )
-    print selected_curr_i.shape
-    print selected_prev_i.shape
+    selected_curr_i, selected_prev_i = VV.release_candidate_match2_guided_2way( feat2d_curr, feat2d_prev )
+    print 'matcher.release_candidate_match2_guided_2way() : %4.2f (ms)' %(1000. * (time.time() - startT) )
+    print 'guided 2way matches : ', selected_curr_i.shape[0], selected_prev_i.shape[0]
+    n_guided_2way = selected_curr_i.shape[0]
+
+    # TODO: Consider having a plot_point_sets function inside GeometricVerification
+    # careful with alrady exisiting plot_point_sets in GeometricVerification though!
     cv2.imshow( 'main selected+fundamentalmatrixtest', plot_point_sets( curr_im, np.int0(feat2d_curr[0:2,selected_curr_i]), prev_im, np.int0(feat2d_prev[0:2,selected_prev_i])  ) )
-    cv2.imshow( 'curr_im', points_overlay( curr_im, feat2d_curr) )
-    cv2.imshow( 'prev_im', points_overlay( prev_im, feat2d_prev) )
+
+
+    # Try 3way
+    if n_guided_2way < 20:
+        VV.set_image( currm_im, 3 )  #set curr-1 image
+        VV.set_lut_raw( curr_lut_raw, 1 ) #set lut of curr and prev
+        VV.set_lut_raw( prev_lut_raw, 2 )
+        # lut for curr-1 is not set as it is not used.
+
+
+        # these will be 3 co-ordinate point sets
+        start3way = time.time()
+        xpts_curr, xpts_prev, xpts_currm = VV.release_candidate_match3way() #this function reuses daisy for im1, and im2, just 1 daisy computation inside.
+        print 'matcher.release_candidate_match3way() : %4.2f (ms)' %(1000. * (time.time() - start3way) )
+
+        gridd = VV.plot_3way_match( curr_im, xpts_curr, prev_im, xpts_prev, currm_im, xpts_currm, enable_lines=False, enable_text=True )
+        cv2.imshow( '3way', gridd )
+
+
+
+
+    cv2.waitKey(0)
+
+    VV.reset()
+
+
+
+quit()
+
+    # # matcher = DaisyExMatcher()
+    # matcher_geom = GeometricVerification()
+    # # matcher.match2_guided( curr_im, feat2d_curr, prev_im )
+    # # quit()
+    # startT = time.time()
+    # selected_curr_i, selected_prev_i = matcher_geom.match2_guided_2pointset( curr_im, feat2d_curr, prev_im, feat2d_prev )
+    # print 'matcher.match2_guided_2pointset() : %4.2f (ms)' %(1000. * (time.time() - startT) )
+    # print selected_curr_i.shape
+    # print selected_prev_i.shape
+    # cv2.imshow( 'main selected+fundamentalmatrixtest', plot_point_sets( curr_im, np.int0(feat2d_curr[0:2,selected_curr_i]), prev_im, np.int0(feat2d_prev[0:2,selected_prev_i])  ) )
+    # cv2.imshow( 'curr_im', points_overlay( curr_im, feat2d_curr) )
+    # cv2.imshow( 'prev_im', points_overlay( prev_im, feat2d_prev) )
 
 
 
@@ -541,4 +591,4 @@ for i in range( len(loop_candidates) ):
     #
     # cv2.imshow( 'curr_lut', curr_lut )
     # cv2.imshow( 'prev_lut', prev_lut )
-    cv2.waitKey(0)
+    # cv2.waitKey(0)
