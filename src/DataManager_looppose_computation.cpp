@@ -73,7 +73,7 @@ void DataManager::pose_from_3way_matching( const nap::NapMsg::ConstPtr& msg, Mat
 
 #ifdef _DEBUG_3WAY
   // Collect undistortedPoints in normalized cords for analysis
-  cv::Mat undist_normed_curr, undist_normed_curr_m, undist_normed_prev;
+  cv::Mat undist_normed_curr, undist_normed_curr_m, undist_normed_prev; //TODO, these 3 normalized image co-ordinate are in use. Move them outside debug
   camera.getUndistortedNormalizedCords( mat_pts_curr,  undist_normed_curr );
   camera.getUndistortedNormalizedCords( mat_pts_curr_m,  undist_normed_curr_m );
   camera.getUndistortedNormalizedCords( mat_pts_prev,  undist_normed_prev );
@@ -302,11 +302,11 @@ void DataManager::pose_from_3way_matching( const nap::NapMsg::ConstPtr& msg, Mat
 
 
 // Plot reprojected pts on prev
-cv::Mat dst5_1;
-plot_point_sets( prev_im, _reprojected_pts_into_prev__pose_from_odom, dst5_1, cv::Scalar(0,0,255), matrix4f_to_string(prev_Tr_c_odom_float) );
-sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d_prev_reproj_pose_from_odom.png", ix_curr, ix_prev, ix_curr_m );
-cout << "Writing file : " << fname << endl;
-cv::imwrite( fname, dst5_1 );
+// cv::Mat dst5_1;
+// plot_point_sets( prev_im, _reprojected_pts_into_prev__pose_from_odom, dst5_1, cv::Scalar(0,0,255), matrix4f_to_string(prev_Tr_c_odom_float) );
+// sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d_prev_reproj_pose_from_odom.png", ix_curr, ix_prev, ix_curr_m );
+// cout << "Writing file : " << fname << endl;
+// cv::imwrite( fname, dst5_1 );
 
 
 #endif

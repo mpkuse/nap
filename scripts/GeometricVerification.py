@@ -843,3 +843,245 @@ class GeometricVerification:
 
 
         return _pts_curr_m
+
+
+
+        ##################### Guided Matching (added 12th Nov, 2017) ############
+
+    def my_daisy( self, xim, ch ):
+        startD = time.time()
+        xim_gray = cv2.cvtColor( xim, cv2.COLOR_BGR2GRAY ).astype('float32')
+
+        if ch==0 :
+            self.dai1.do_daisy_computation( xim_gray )
+            print 'py-daisy in (ms) %4.2f' %(1000. * (time.time() - startD) )
+            return self.dai1.get_daisy_view()
+        if ch==1:
+            self.dai2.do_daisy_computation( xim_gray )
+            print 'py-daisy in (ms) %4.2f' %(1000. * (time.time() - startD) )
+            return self.dai2.get_daisy_view()
+
+        if ch==2:
+            self.dai3.do_daisy_computation( xim_gray )
+            print 'py-daisy in (ms) %4.2f' %(1000. * (time.time() - startD) )
+            return self.dai3.get_daisy_view()
+
+        print '[FATAL-ERROR] In valid ch in GeometricVerification::my_daisy()'
+        quit()
+
+    def match2_guided_2pointset( self, im_curr, pts_curr, im_prev, pts_prev):
+        """ Given images with tracked feature2d pts. Returns matched points
+            using the voting mechanism. Loosely inspired from GMS-matcher
+
+            im_curr : Current Image
+            pts_curr : Detected points in current image (3xN) or (2xN)
+            im_prev : Previous Image
+            pts_prev : Detected points in prev image (3xM) or (2xN)
+
+
+            returns :
+            2 1d arrays. the masked index in the original.
+            Basically, the index_i in pts_curr <--> index_j in pts_prev as 1d arrays
+
+            Note: points in pts_curr and pts_prev could be different in count.
+            These are the detected features in 2 views in image co-ordinates (ie. NOT normalized co-ordinates)
+        """
+        #
+        # Algorithm Params
+
+        # a) neighbourhood
+        W = 1
+        # _R = range( -W, W+1 )
+        _R = [-4,0,4]
+
+
+        # b) number of NN
+        #
+        K_nn = 1
+
+
+        # Enabling this might cause issue. Some debug overlay functions are missing.
+        # Caution!
+        DEBUG = False
+
+
+
+        daisy_curr = self.my_daisy( im_curr, ch=0 )
+        daisy_prev = self.my_daisy( im_prev, ch=1 )
+
+
+
+        if DEBUG:
+            print 'im_curr.shape', im_curr.shape
+            print 'im_prev.shape', im_prev.shape
+            print 'pts_curr.shape', pts_curr.shape
+            print 'pts_prev.shape', pts_prev.shape
+            print 'neighbourhood: ', _R
+
+        # wxw around each of curr
+        A = []    # Nd x 20. Nd is usually ~ 2000
+        A_i = []  # Nd x 1 (index)
+        A_pt = [] # Nd x 2 (every 2d pt)
+        for pt_i in range( pts_curr.shape[1] ):
+            for u in _R:#range(-W, W+1):
+                for v in _R:#range(-W,W+1):
+                    pt = np.int0( pts_curr[0:2, pt_i ] ) + np.array([u,v])
+                    if pt[1] < 0 or pt[1] >= im_curr.shape[0] or pt[0] < 0 or pt[0] >= im_curr.shape[1]:
+                        continue
+                    # print pt_i, pt, im_curr.shape
+                    A.append( daisy_curr[ pt[1], pt[0], : ] )
+                    A_pt.append( pt )
+                    A_i.append( pt_i )
+
+        # wxw around each of prev
+        B = []
+        B_i = []
+        B_pt = []
+        for pt_i in range( pts_prev.shape[1] ):
+            for u in _R:#range(-W,W+1):
+                for v in _R:#range(-W,W+1):
+                    pt = np.int0( pts_prev[0:2, pt_i ] )+ np.array([u,v])
+                    if pt[1] < 0 or pt[1] >= im_prev.shape[0] or pt[0] < 0 or pt[0] >= im_prev.shape[1]:
+                        continue
+                    # print pt_i, pt
+                    B.append( daisy_prev[ pt[1], pt[0], : ] )
+                    B_pt.append( pt )
+                    B_i.append( pt_i )
+
+
+        if DEBUG:
+            print 'len(A)', len(A)
+            print 'len(B)', len(B)
+
+        #
+        # FLANN Matching
+        startflann = time.time()
+        matches = self.flann.knnMatch( np.array(A), np.array(B), k=K_nn )
+        if DEBUG:
+            print 'time elaspsed for flann : %4.2f (ms)' %(1000.0 * (time.time() - startflann) )
+
+
+        # Loop over each match and do voting
+        startvote = time.time()
+        vote = np.zeros( ( pts_curr.shape[1], pts_prev.shape[1] ) )
+        for mi, m in enumerate(matches):
+            # m[0].queryIdx <--> m[0].trainIdx
+            # m[1].queryIdx <--> m[1].trainIdx
+            # .
+            # m[k].queryIdx <--> m[k].trainIdx
+
+            # print mi, m[0].queryIdx, m[0].trainIdx, m[0].distance
+            # print A_i[m[0].queryIdx], B_i[ m[0].trainIdx ]
+
+            for k in range( len(m) ):
+                ptA = A_pt[ m[k].queryIdx ]
+                ptB = B_pt[ m[k].trainIdx ]
+
+                iA = A_i[ m[k].queryIdx ]
+                iB = B_i[ m[k].trainIdx ]
+                # print iA, iB
+                vote[ iA, iB ] += 1.0/(1.0+k*k) # vote from 2nd nn is 1/4 the 1st nn and 3rd is 1/9th and so on
+
+        if DEBUG:
+            print 'time elaspsed for voting : %4.2f (ms)' %( 1000. * (time.time() - startvote) )
+
+
+            # cv2.imshow( 'curr_overlay', self.points_overlay( im_curr, np.expand_dims(ptA,1)) )
+            # cv2.imshow( 'prev_overlay', self.points_overlay( im_prev, np.expand_dims(ptB,1)) )
+            # cv2.waitKey(0)
+        selected_A = []
+        selected_A_i = []
+        selected_B = []
+        selected_B_i = []
+        startSelect = time.time()
+        for i in range( vote.shape[0] ):
+            iS = vote[i,:]
+            nz = iS.nonzero()
+            if sum(iS) <= 0:
+                continue
+            iS /=  sum(iS)
+
+
+
+
+            top = iS[nz].max()
+            toparg = iS[nz].argmax()
+            top2 = self.second_largest( iS[nz] )
+
+            if DEBUG:
+                print i, nz, iS[nz]
+                print 'toparg=',toparg, 'top=',round(top,2), 'top2=',round(top2,2)
+
+            if top/top2 >= 2.0 or top2 < 0:
+
+                # i <---> nz[0]
+                # i <---> nz[1]
+                # ...
+                ptxA = np.int0(   np.expand_dims( pts_curr[0:2,i], 1 )   ) # current point in curr
+                ptxB = np.int0(   pts_prev[0:2,nz][:,0,:]    )             # All candidates
+                ptyB = np.int0(   np.expand_dims( ptxB[0:2,toparg], 1 )   )# top candidate only
+
+                selected_A.append( ptxA )
+                selected_B.append( ptyB )
+
+                selected_A_i.append( i )
+                selected_B_i.append( nz[0][toparg] )
+
+                if DEBUG and False:
+                    print 'ACCEPTED'
+                    cv2.imshow( 'curr_overlay', self.points_overlay( im_curr, ptxA, enable_text=True ))
+                    cv2.imshow( 'prev_overlay', self.points_overlay( im_prev, ptxB, enable_text=True ))
+                    cv2.imshow( 'prev_overlay top', self.points_overlay( im_prev, ptyB, enable_text=True ))
+                    cv2.waitKey(0)
+
+        selected_A = np.transpose(  np.array( selected_A )[:,:,0]  )
+        selected_B = np.transpose(  np.array( selected_B )[:,:,0]  )
+
+        if DEBUG:
+            print 'time elaspsed for selection from voting : %4.2f (ms)' %( 1000. * (time.time() - startSelect) )
+
+            # cv2.imshow( 'xxx' , self.plot_point_sets( im_curr, np.int0(pts_curr[0:2,selected_A_i]), im_prev, np.int0(pts_prev[0:2,selected_B_i] ) ) )
+
+        #
+        # Fundamental Matrix Text
+        startFundamentalMatrixTest = time.time()
+        E, mask = cv2.findFundamentalMat( np.transpose( selected_A ), np.transpose( selected_B ),param1=5 )
+        if mask is not None:
+            nInliers = mask.sum()
+
+        masked_pts_curr = np.transpose( np.array( list( selected_A[:,i] for i in np.where( mask[:,0] == 1 )[0] ) ) )
+        masked_pts_prev = np.transpose( np.array( list( selected_B[:,i] for i in np.where( mask[:,0] == 1 )[0] ) ) )
+
+        if DEBUG:
+            print 'nInliers : ', nInliers
+            print 'time elaspsed for fundamental matrix test : %4.2f (ms)' %( 1000. * (time.time() - startFundamentalMatrixTest) )
+
+
+        masked_selected_A_i = list( selected_A_i[q] for q in np.where( mask[:,0] == 1 )[0] )
+        masked_selected_B_i = list( selected_B_i[q] for q in np.where( mask[:,0] == 1 )[0] )
+
+
+
+        if DEBUG:
+            cv2.imshow( 'curr_overlay', self.points_overlay( im_curr, pts_curr) )
+            cv2.imshow( 'prev_overlay', self.points_overlay( im_prev, pts_prev) )
+            cv2.imshow( 'selected', self.plot_point_sets( im_curr, selected_A, im_prev, selected_B) )
+            cv2.imshow( 'selected+fundamentalmatrixtest', self.plot_point_sets( im_curr, masked_pts_curr, im_prev, masked_pts_prev) )
+
+            cv2.imshow( 'yyy selected+fundamentalmatrixtest', self.plot_point_sets( im_curr, np.int0(pts_curr[0:2,masked_selected_A_i]), im_prev, np.int0(pts_prev[0:2,masked_selected_B_i])  ) )
+
+
+        # Return the masked index in the original
+        return np.array(masked_selected_A_i), np.array(masked_selected_B_i)
+
+    def second_largest(self,numbers):
+        count = 0
+        m1 = m2 = float('-inf')
+        for x in numbers:
+            count += 1
+            if x > m2:
+                if x >= m1:
+                    m1, m2 = x, m1
+                else:
+                    m2 = x
+        return m2 if count >= 2 else -1 #None

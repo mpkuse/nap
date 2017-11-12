@@ -247,6 +247,27 @@ void DataManager::publish_pose_graph_edges( const std::vector<Edge*>& x_edges )
     {    marker.color.r = 0.0; marker.color.g = 1.0; marker.color.b = 0.0;    marker.ns = "odom_edges";}
     else if( e->type == EDGE_TYPE_LOOP_CLOSURE )
     {
+      switch(e->sub_type)
+      {
+        case EDGE_TYPE_LOOP_SUBTYPE_BASIC: // basic loop-edge in red
+          marker.color.r = 1.0; marker.color.g = 0.0; marker.color.b = 0.0; marker.ns = "loop_edges";
+          break;
+
+        case EDGE_TYPE_LOOP_SUBTYPE_3WAY: // 3way matched loop-edge in pink
+          marker.color.r = 1.0; marker.color.g = 0.0; marker.color.b = 1.0; marker.ns = "loop_edges";
+          break;
+
+        case EDGE_TYPE_LOOP_SUBTYPE_GUIDED: // Dark green
+          marker.color.r = .2; marker.color.g = 0.4; marker.color.b = 0.0; marker.ns = "loop_edges";
+          break;
+
+        default:
+          marker.color.r = 1.0; marker.color.g = 1.0; marker.color.b = 1.0; marker.ns = "loop_edges";
+          break;
+
+      }
+
+      /*
       if( e->sub_type == EDGE_TYPE_LOOP_SUBTYPE_BASIC ) // basic loop-edge in red
       { marker.color.r = 1.0; marker.color.g = 0.0; marker.color.b = 0.0; marker.ns = "loop_edges"; }
       else {
@@ -255,6 +276,7 @@ void DataManager::publish_pose_graph_edges( const std::vector<Edge*>& x_edges )
         else //other edge subtype in white
         { marker.color.r = 1.0; marker.color.g = 1.0; marker.color.b = 1.0; marker.ns = "loop_edges"; }
       }
+      */
 
 
     }
@@ -329,6 +351,7 @@ void DataManager::plot_3way_match_clean( const cv::Mat& curr_im, const cv::Mat& 
   cv::Mat dst_row1, dst_row2;
   cv::putText( zre, "C   P", cv::Point(5,30), cv::FONT_HERSHEY_COMPLEX_SMALL, 2, cv::Scalar(0,0,255) );
   cv::putText( zre, "Cm   ", cv::Point(5,80), cv::FONT_HERSHEY_COMPLEX_SMALL, 2, cv::Scalar(0,0,255) );
+  cv::putText( zre, to_string(mat_pts_curr.cols), cv::Point(5,130), cv::FONT_HERSHEY_COMPLEX_SMALL, 2, cv::Scalar(0,0,255) );
   cv::hconcat(curr_im, prev_im, dst_row1);
   cv::hconcat(curr_m_im, zre, dst_row2);
   cv::vconcat(dst_row1, dst_row2, dst);

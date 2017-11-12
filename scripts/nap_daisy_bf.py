@@ -50,11 +50,14 @@ from nap.msg import NapMsg
 from nap.msg import NapNodeMsg
 from nap.msg import NapVisualEdgeMsg
 from geometry_msgs.msg import Point32
+from sensor_msgs.msg import PointCloud
 
 from PlaceRecognitionNetvlad import PlaceRecognitionNetvlad
+from FeatureFactory import FeatureFactory
 from FastPlotter import FastPlotter
 
 from GeometricVerification import GeometricVerification
+from gms_matcher import GmsRobe
 
 from ColorLUT import ColorLUT
 
@@ -139,14 +142,14 @@ def make_nap_visual_msg( i_curr, i_prev, str_curr, str_prev ):
 #--- Geometry and Matching ---#
 def match3way_daisy( curr_im, prev_im, curr_m_im,    __lut_curr_im, __lut_prev_im ):
     """ Gives out 3 way matching 3 3xN matrix (i think)"""
-    DEBUG = True
+    DEBUG = True #on enable, writes images to disk
     # Step-1: Compute dense matches between curr and prev --> SetA
     VV.set_im( curr_im, prev_im )
     VV.set_im_lut_raw( S_lut_raw[i_curr], S_lut_raw[i_prev] )
 
     pts_curr, pts_prev, mask_c_p = VV.daisy_dense_matches()
-    xcanvas_c_p = VV.plot_point_sets( VV.im1, pts_curr, VV.im2, pts_prev, mask_c_p)
     if DEBUG:
+        xcanvas_c_p = VV.plot_point_sets( VV.im1, pts_curr, VV.im2, pts_prev, mask_c_p)
         fname = '/home/mpkuse/Desktop/a/drag_nap/%d.jpg' %(loop_index)
         print 'Write(match3way_daisy) : ', fname
         cv2.imwrite( fname, xcanvas_c_p )
@@ -157,8 +160,8 @@ def match3way_daisy( curr_im, prev_im, curr_m_im,    __lut_curr_im, __lut_prev_i
     masked_pts_curr = list( pts_curr[i] for i in np.where( mask_c_p[:,0] == 1 )[0] )
     masked_pts_prev = list( pts_prev[i] for i in np.where( mask_c_p[:,0] == 1 )[0] )
 
-    gridd = VV.plot_3way_match( curr_im, masked_pts_curr, prev_im, masked_pts_prev, curr_m_im, _pts_curr_m )
     if DEBUG:
+        gridd = VV.plot_3way_match( curr_im, masked_pts_curr, prev_im, masked_pts_prev, curr_m_im, _pts_curr_m )
         fname = '/home/mpkuse/Desktop/a/drag_nap/%d_3way.jpg' %(loop_index)
         print 'Write(match3way_daisy) : ', fname
         cv2.imwrite(fname, gridd )
@@ -166,7 +169,62 @@ def match3way_daisy( curr_im, prev_im, curr_m_im,    __lut_curr_im, __lut_prev_i
     assert( len(masked_pts_curr) == len(masked_pts_prev) )
     assert( len(masked_pts_curr) == len(_pts_curr_m) )
 
-    return np.array(masked_pts_curr) ,np.array( masked_pts_prev ), np.array(_pts_curr_m )
+    masked_pts_curr = np.array(masked_pts_curr) #Nx2
+    masked_pts_prev = np.array( masked_pts_prev )
+    _pts_curr_m =  np.array(_pts_curr_m )
+    return  masked_pts_curr, masked_pts_prev, _pts_curr_m
+
+
+def match3way_gms( curr_im, prev_im, curr_m_im ):
+    start3way = time.time()
+    pts_C, pts_P, pts_Cm = GMS.match3( curr_im, prev_im, curr_m_im )
+    print 'time elapsed GMS.match3 : %4.2f' %( 1000. * (time.time() - start3way) )
+    print 'match3way_gms() : pts_C.shape', pts_C.shape
+    print 'match3way_gms() : pts_P.shape', pts_P.shape
+    print 'match3way_gms() : pts_Cm.shape', pts_Cm.shape
+    return np.transpose(pts_C), np.transpose(pts_P), np.transpose(pts_Cm)
+
+
+def match2_guided_gms( curr_im, feature_factory_index, prev_im ):
+    feat2d_normed = feature_factory.features[ feature_factory_index ] #3xN
+    K = feature_factory.K
+
+    pts_curr = np.dot( K, feat2d_normed )
+    print 'match2: Input pts : ', pts_curr.shape
+    curr_annotate = curr_im.copy()
+    for i in range( pts_curr.shape[1] ):
+        xpt = np.int0( pts_curr[0:2,i] )
+        cv2.circle( curr_annotate, (xpt[0], xpt[1]), 2, (55,255,55), -1 )
+    #
+    # fname = '/home/mpkuse/Desktop/a/drag_nap/%d.png' %(feature_factory_index)
+    # print 'Writing file : ', fname
+    # cv2.imwrite( fname, dst )
+
+    pts2_curr, pts2_prev = GMS.match2_guided( curr_im, pts_curr[0:2,:], prev_im )
+
+    # dst = GMS.plot_point_sets( curr_im, pts2_curr, prev_im, pts2_prev )
+    dst = GMS.plot_point_sets( curr_annotate, pts2_curr, prev_im, pts2_prev )
+    fname = '/home/mpkuse/Desktop/a/drag_nap/%d.png' %(feature_factory_index)
+    print 'Writing file : ', fname
+    cv2.imwrite( fname, dst )
+
+
+
+
+
+
+    pts2x_curr, pts2x_prev = GMS.match2( curr_im, prev_im )
+
+    # dst = GMS.plot_point_sets( curr_im, pts2_curr, prev_im, pts2_prev )
+    dst = GMS.plot_point_sets( curr_annotate, pts2x_curr, prev_im, pts2x_prev )
+    fname = '/home/mpkuse/Desktop/a/drag_nap/%d_match2.png' %(feature_factory_index)
+    print 'Writing file : ', fname
+    cv2.imwrite( fname, dst )
+
+
+    print 'match2: Output pts : ', pts2_curr.shape
+    return np.transpose( pts2_curr), np.transpose( pts2_prev )
+
 
 
 
@@ -180,16 +238,25 @@ place_mod = PlaceRecognitionNetvlad(\
                                     PARAM_K = 64
                                     )
 
+feature_factory = FeatureFactory()
 
 ############# GEOMETRIC VERIFICATION #################
 VV = GeometricVerification()
-
+GMS = GmsRobe(n=10000)
 
 
 ################### Init Node and Topics ############
 rospy.init_node( 'nap_geom_node', log_level=rospy.INFO )
+
+# Input Images
 rospy.Subscriber( INPUT_IMAGE_TOPIC, Image, place_mod.callback_image )
 rospy.loginfo( 'Subscribed to '+INPUT_IMAGE_TOPIC )
+
+# Tracked Features
+TRACKED_FEATURE_TOPIC = '/feature_tracker/feature'
+rospy.Subscriber( TRACKED_FEATURE_TOPIC, PointCloud, feature_factory.tracked_features_callback )
+rospy.loginfo( 'Subscribed to '+TRACKED_FEATURE_TOPIC )
+
 
 # raw edges
 pub_edge_msg = rospy.Publisher( '/raw_graph_edge', NapMsg, queue_size=1000 )
@@ -229,6 +296,8 @@ plotter.setRange( 2, yRange=[0,1] )
 ##################### Main Loop ########################
 rate = rospy.Rate(PARAM_FPS)
 
+
+
 # S_word = np.zeros( (25000,8192) ) #word
 # S_word = np.zeros( (25000,PARAM_NETVLAD_WORD_DIM) ) #word-48
 S_word = []
@@ -266,6 +335,12 @@ while not rospy.is_shutdown():
         im_raw_full_res = place_mod.im_queue_full_res.get()
         print 'im_full_res.size : ', im_raw_full_res.shape
     im_raw_timestamp = place_mod.im_timestamp_queue.get()
+
+    feature_factory_index = feature_factory.find_index( im_raw_timestamp )
+    print 'feature_factory_index', feature_factory_index
+    # if feature_factory_index >= 0:
+        # match2_guided( im_raw, feature_factory_index, None)
+
 
     loop_index += 1
     #---------------------------- END  -----------------------------#
@@ -370,7 +445,7 @@ while not rospy.is_shutdown():
         # nMatches, nInliers = VV.simple_verify(features='orb')
         nMatches = 25
         nInliers = np.random.randint(10, 40) #25
-        print 'Setting random inlier count'
+
         # Another possibility is to not do any verification here. And randomly choose 1 pair for 3way matching.
 
 
@@ -410,8 +485,8 @@ while not rospy.is_shutdown():
     decided_op_mode = 29;
     ############################
 
+    # 3-way matching
     if decided_op_mode == 29:
-        # 3-way matching
         nap_msg.op_mode = 29
 
 
@@ -430,10 +505,11 @@ while not rospy.is_shutdown():
 
         #
         # Step-1 : Daisy
-        pts3_curr, pts3_prev, pts3_currm = match3way_daisy(curr_im, prev_im, curr_m_im,    __lut_curr_im, __lut_prev_im  )
-        # print 'pts3_curr.shape', pts3_curr.shape    # Nx2
-        # print 'pts3_prev.shape', pts3_prev.shape    # Nx2
-        # print 'pts3_currm.shape', pts3_currm.shape  # Nx2
+        # pts3_curr, pts3_prev, pts3_currm = match3way_daisy(curr_im, prev_im, curr_m_im,    __lut_curr_im, __lut_prev_im  )
+        pts3_curr, pts3_prev, pts3_currm = match3way_gms(curr_im, prev_im, curr_m_im  )
+        print 'pts3_curr.shape', pts3_curr.shape    # Nx2
+        print 'pts3_prev.shape', pts3_prev.shape    # Nx2
+        print 'pts3_currm.shape', pts3_currm.shape  # Nx2
         # TODO consider returning a 2xN numpy matrix instead of list
 
         #
@@ -453,16 +529,39 @@ while not rospy.is_shutdown():
 
 
 
+    # Nothing, No co-ordinates to pass
     if decided_op_mode == 10:
-        # Nothing, No co-ordinates to pass
+
         nap_msg.op_mode = 10
         pass
 
     if decided_op_mode == 20:
-        # Do guided matching using tracked features and prev image.
+        # Do guided matching using tracked features, curr_image and prev image.
         # Finally the msg will contain 2-way guided match between curr and prev in normalized-image co-ordinates
         nap_msg.op_mode = 20
-        pass
+
+        if feature_factory_index >= 0:
+            # Step-0 : Collect Image curr and prev only
+            curr_im = S_thumbnail[i_curr].astype('uint8')
+            prev_im = S_thumbnail[i_prev].astype('uint8')
+            t_curr = S_timestamp[i_curr]
+            t_prev = S_timestamp[i_prev]
+
+            # Step-1: Guided 2 way matching
+            pts2_curr, pts2_prev = match2_guided_gms( curr_im, feature_factory_index, prev_im )
+
+            # Step-2:
+            nap_msg.t_curr = t_curr
+            nap_msg.t_prev = t_prev
+
+            for ji in range( len(pts2_curr) ):
+                pt_curr = pts2_curr[ji]
+                pt_prev = pts2_prev[ji]
+
+                nap_msg.curr.append(   Point32(pt_curr[0], pt_curr[1],-1) )
+                nap_msg.prev.append(   Point32(pt_prev[0], pt_prev[1],-1) )
+
+
 
 
 
@@ -594,3 +693,7 @@ else:
 
 print 'Writing Loop Candidates : ', BASE__DUMP+'/loop_candidates.csv'
 np.savetxt( BASE__DUMP+'/loop_candidates.csv', loop_candidates, delimiter=',', comments='NAP loop_candidates' )
+
+
+print 'Writing as pickle, FeatureFactory'
+feature_factory.dump_to_file( BASE__DUMP+'/FeatureFactory')

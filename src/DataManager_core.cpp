@@ -382,7 +382,20 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
   if( msg->op_mode == 20 )
   {
     // This is when the expanded matches are present. basically need to just forward this. No geometry computation here.
-    cout << "NOT IMPLEMENTED OPMODE_20.\n";
+
+    e->setLoopEdgeSubtype(EDGE_TYPE_LOOP_SUBTYPE_GUIDED);
+
+
+    loopClosureEdges.push_back( e );
+
+    // Re-publish op_mode:= 10 (as is)
+    // Matrix4d __h;
+    // int32_t mode = 10;
+    // republish_nap( msg->c_timestamp, msg->prev_timestamp, __h, mode );
+
+
+    return;
+
   }
 
   ROS_ERROR( "in place_recog_callback: Error computing rel pose. Edge added without pose. This might be fatal!");

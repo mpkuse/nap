@@ -45,6 +45,7 @@ using namespace std;
 #define EDGE_TYPE_LOOP_CLOSURE 1
 
 #define EDGE_TYPE_LOOP_SUBTYPE_BASIC 10 //Has enough sparse matches
+#define EDGE_TYPE_LOOP_SUBTYPE_GUIDED 67 //Guided matching in the msg
 #define EDGE_TYPE_LOOP_SUBTYPE_3WAY 11 //need 3 way matching, not enough sparse-feature matches
 
 
