@@ -319,8 +319,8 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
   ///////////////////////////////////
   // Relative Pose Computation     //
   ///////////////////////////////////
-  cout << "n_sparse_matches : " << msg->n_sparse_matches << endl;
-  cout << "3way match sizes : " << msg->curr.size() << " " << msg->prev.size() << " " << msg->curr_m.size() << endl;
+  // cout << "n_sparse_matches : " << msg->n_sparse_matches << endl;
+  cout << "co-ordinate match sizes : " << msg->curr.size() << " " << msg->prev.size() << " " << msg->curr_m.size() << endl;
 
   // //////////////////
   //---- case-a : If 3way matching is empty : do ordinary way to compute relative pose. Borrow code from Qin. Basically using 3d points from odometry (wrt curr) and having known same points in prev do pnp
@@ -329,6 +329,7 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
   // if( msg->n_sparse_matches >= 200 )
   if( msg->op_mode == 10 )
   {
+    ROS_INFO( "Set closure-edge-subtype : EDGE_TYPE_LOOP_SUBTYPE_BASIC");
     e->setLoopEdgeSubtype(EDGE_TYPE_LOOP_SUBTYPE_BASIC);
 
     // TODO: Put Qin Tong's code here. ie. rel pose computation when we have sufficient number of matches
@@ -358,6 +359,7 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
   // if( msg->n_sparse_matches < 200 && msg->curr.size() > 0 && msg->curr.size() == msg->prev.size() && msg->curr.size() == msg->curr_m.size()  )
   if( msg->op_mode == 29 )
   {
+    ROS_INFO( "Set closure-edge-subtype : EDGE_TYPE_LOOP_SUBTYPE_3WAY");
     e->setLoopEdgeSubtype(EDGE_TYPE_LOOP_SUBTYPE_3WAY);
 
     // TODO: Relative pose from 3way matching
@@ -382,6 +384,7 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
   if( msg->op_mode == 20 )
   {
     // This is when the expanded matches are present. basically need to just forward this. No geometry computation here.
+    ROS_INFO( "Set closure-edge-subtype : EDGE_TYPE_LOOP_SUBTYPE_GUIDED");
 
     e->setLoopEdgeSubtype(EDGE_TYPE_LOOP_SUBTYPE_GUIDED);
 
@@ -392,6 +395,7 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
     // Matrix4d __h;
     // int32_t mode = 10;
     // republish_nap( msg->c_timestamp, msg->prev_timestamp, __h, mode );
+    republish_nap( msg );
 
 
     return;
@@ -403,7 +407,10 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
 
 }
 
-
+void DataManager::republish_nap( const nap::NapMsg::ConstPtr& msg )
+{
+  pub_chatter_colocation.publish( *msg );
+}
 
 void DataManager::republish_nap( const ros::Time& t_c, const ros::Time& t_p, const Matrix4d& p_T_c, int32_t op_mode )
 {

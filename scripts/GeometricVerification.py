@@ -22,6 +22,8 @@ try:
 except:
     print 'If you get this error, your DaisyMeld wrapper is not properly setup. You need to set DaisyMeld in LD_LIBRARY_PATH. and PYTHONPATH contains parent of DaisyMeld'
     print 'See also : https://github.com/mpkuse/daisy_py_wrapper'
+    print 'Do: export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/mpkuse/catkin_ws/src/nap/scripts/DaisyMeld'
+    print 'do: export PYTHONPATH=$PYTHONPATH:/home/mpkuse/catkin_ws/src/nap/scripts'
 from ColorLUT import ColorLUT
 
 
@@ -95,17 +97,23 @@ class GeometricVerification:
 
 
 
-    def set_image( self, image, ch ):
+    def set_image( self, image, ch, enable_dense_daisy=True ):
         if ch==1:
             self.im1 = image
+            if enable_dense_daisy:
+                self.crunch_daisy(ch=1)
             return
 
         if ch==2:
             self.im2 = image
+            if enable_dense_daisy:
+                self.crunch_daisy(ch=2)
             return
 
         if ch==3:
             self.im3 = image
+            if enable_dense_daisy:
+                self.crunch_daisy(ch=3)
             return
 
         print '[FATAL-ERROR] GeometricVerification::set_image'
@@ -147,22 +155,6 @@ class GeometricVerification:
 
     ############################
 
-    # Old setters - mark for removal
-    # def set_im(self,im1, im2):
-    #     self.im1 = im1
-    #     self.im2 = im2
-    #     self.daisy_im1 = None
-    #     self.daisy_im2 = None
-    #
-    # def set_im_lut(self,im1_lut, im2_lut):
-    #     self.im1_lut = im1_lut
-    #     self.im2_lut = im2_lut
-    #
-    # def set_im_lut_raw(self,im1_lut_raw, im2_lut_raw):
-    #     self.im1_lut_raw = im1_lut_raw
-    #     self.im2_lut_raw = im2_lut_raw
-
-    # TODO. Define another function to set full resolution images
 
     def _lowe_ratio_test( self, kp1, kp2, matches_org ):
         """ Input keypoints and matches. Compute keypoints like : kp1, des1 = orb.detectAndCompute(im1, None)
@@ -182,191 +174,28 @@ class GeometricVerification:
                 __pt1.append( np.array(_pt1) )
                 __pt2.append( np.array(_pt2) )
 
-                # cv2.circle( im1, (int(_pt1[0]), int(_pt1[1])), 3, (0,255,0), -1 )
-                # cv2.circle( im2, (int(_pt2[0]), int(_pt2[1])), 3, (0,255,0), -1 )
 
-                # cv2.circle( im1, _pt1, 3, (0,255,0), -1 )
-                # cv2.circle( im2, _pt2, 3, (0,255,0), -1 )
-                # cv2.imshow( 'im1', im1 )
-                # cv2.imshow( 'im2', im2 )
-                # cv2.waitKey(10)
         __pt1 = np.array( __pt1)
         __pt2 = np.array( __pt2)
         return __pt1, __pt2
+
+    def second_largest(self,numbers):
+        count = 0
+        m1 = m2 = float('-inf')
+        for x in numbers:
+            count += 1
+            if x > m2:
+                if x >= m1:
+                    m1, m2 = x, m1
+                else:
+                    m2 = x
+        return m2 if count >= 2 else -1 #None
+
 
     def _print_time(self, msg, startT, endT):
         return
         print tcol.OKBLUE, '%8.2f :%s (ms)'  %( 1000. * (endT - startT), msg ), tcol.ENDC
 
-    # Deprecate support for simple_verify()
-    # Features : ['orb', 'surf']
-    # def simple_verify(self, features='orb', debug_images=False):
-    #     print tcol.OKGREEN, 'This simple_verify() uses im1, im2 only', tcol.ENDC
-    #
-    #     # Simple verification using ORB keypoints and essential matrix
-    #     # 1. Extract Keypoints and descriptor
-    #     startFeatures = time.time()
-    #     if features == 'orb':
-    #         kp1, des1 = self.orb.detectAndCompute( self.im1, None )
-    #         kp2, des2 = self.orb.detectAndCompute( self.im2, None )
-    #     elif features == 'surf':
-    #         kp1, des1 = self.surf.detectAndCompute( self.im1, None )
-    #         kp2, des2 = self.surf.detectAndCompute( self.im2, None )
-    #     else:
-    #         print 'INVALID FEATURE TYPE....quit()'
-    #         quit()
-    #     self._print_time( 'feature ext '+features, startFeatures, time.time() )
-    #
-    #     # code.interact( local=locals() )
-    #     # kp1, des1 = self.orb.detectAndCompute( self.im1, (self.im1_lut_raw==23).astype('uint8') )
-    #     # kp2, des2 = self.orb.detectAndCompute( self.im2, (self.im2_lut_raw==23).astype('uint8') )
-    #
-    #     # 2. Lowe's Ratio Test
-    #     # cv2.imshow( 'kp1', cv2.drawKeypoints( self.im1, kp1, None ) )
-    #     # cv2.imshow( 'kp2', cv2.drawKeypoints( self.im2, kp2, None ) )
-    #     startFLANN = time.time()
-    #     matches_org = self.flann.knnMatch(des1.astype('float32'),des2.astype('float32'),k=2) #find 2 nearest neighbours
-    #     self._print_time( 'flann matcher', startFLANN, time.time() )
-    #
-    #     startLoweRatioTest = time.time()
-    #     __pt1, __pt2 = self._lowe_ratio_test( kp1, kp2, matches_org )
-    #     nMatches = __pt1.shape[0]
-    #     self._print_time( 'lowe ratio', startLoweRatioTest, time.time() )
-    #
-    #
-    #     # 3. Essential Matrix test
-    #     nInliers = 0
-    #     startEssentialMatTest = time.time()
-    #     if __pt1.shape[0] < 10: #only attempt to compute fundamental matrix if atleast 8 correspondences
-    #         if debug_images == True:
-    #             return nMatches, nInliers,  np.concatenate( (self.im1, self.im2), axis=1 )
-    #         else:
-    #             return nMatches, nInliers
-    #
-    #
-    #     # E, mask = cv2.findEssentialMat( __pt1, __pt2 )
-    #     E, mask = cv2.findFundamentalMat( __pt1, __pt2,param1=5 )
-    #     if mask is not None:
-    #         nInliers = mask.sum()
-    #
-    #     self._print_time( 'essential mat test', startEssentialMatTest, time.time() )
-    #
-    #     print 'nMatches   : ', nMatches
-    #     print 'nInliers   : ', nInliers
-    #
-    #     self._print_time( 'total elapsed in simple_verify (ms): ', startFeatures, time.time() )
-    #
-    #     # Make debug images
-    #     if debug_images == True:
-    #         xpt1 = __pt1
-    #         xpt2 = __pt2
-    #
-    #         # Epilines
-    #         if E is not None:
-    #             # lines1 = cv2.computeCorrespondEpilines( xpt1, 1, E ) #Nx1x3
-    #             # lines2 = cv2.computeCorrespondEpilines( xpt2, 2, E )
-    #             # epilines_p1_l2 = self.debug_draw_epilines( self.im1, self.im2, __pt1, __pt2, lines1, lines2, mask )
-    #             # epilines_l1_p1 = self.debug_draw_epilines( self.im2, self.im1, __pt2, __pt1, lines2, lines1, mask, invert_concat=True )
-    #             #
-    #             # cv2.imshow( 'epilines_p1_l2', epilines_p1_l2 )
-    #             # cv2.imshow( 'epilines_l1_p1', epilines_l1_p1 )
-    #             pass
-    #
-    #
-    #         # Draw Point matches
-    #         canvas = self.debug_draw_matches( self.im1, __pt1, self.im2, __pt2, mask ) #im1 is the original input image, __pt1 is an Nx2 matrix of co-ordinates. mask is output from the essential mat computation
-    #         return nMatches, nInliers, canvas
-    #
-    #     return nMatches, nInliers
-
-
-    # def debug_draw_epilines(self,ximg1,ximg2,pts1,pts2, lines1, lines2, mask, invert_concat=False):
-    #     img1 = ximg1.copy()
-    #     img2 = ximg2.copy()
-    #
-    #     _i = 0
-    #     for _i in range( pts1.shape[0] ):
-    #         if mask[_i,0] == 0:
-    #             continue
-    #         p1 = tuple(np.int0(pts1[_i,:]))
-    #         p2 = tuple(np.int0(pts2[_i,:]))
-    #         # l1: 2 points. corresponding to p1 but on img2
-    #         l1 = [ ( 0, np.int0(-lines1[_i,0,2]/lines1[_i,0,1]) ), ( np.int0(-lines1[_i,0,2]/lines1[_i,0,0]), 0) ]
-    #
-    #         color = tuple( np.random.randint(0,255,3).tolist() )
-    #         cv2.circle( img1, p1, 2, color ) #plot 1st pt of im1
-    #         cv2.circle( img2, p2, 2, color ) #plot 1st pt of im2
-    #         cv2.line( img2, l1[0], l1[1], color ) #draw epiline corresponding to p1
-    #
-    #     if invert_concat == False:
-    #         epilines = np.concatenate( (img1, img2), axis=1 )
-    #     else:
-    #         epilines = np.concatenate( (img2, img1), axis=1 )
-    #     return epilines
-    #     # cv2.imshow( 'epilines', np.concatenate( (img1, img2), axis=1 ) )
-    #     # cv2.waitKey(0)
-    #     # code.interact( local=locals() )
-    #
-
-
-    # def debug_draw_matches( self, im1, pt1, im2, pt2, mask ):
-    #     canvas = np.concatenate( (im1, im2), axis=1 )
-    #     cv2.putText( canvas, 'nMatches: %03d' %(pt1.shape[0]), (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255) )
-    #     cv2.putText( canvas, 'nInliers: %03d' %(mask.sum()), (10, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255) )
-    #     for p in range( pt1.shape[0] ): #loop over pt1 (and pt2)
-    #         if mask[p,0] == 0:
-    #             continue
-    #         p1 = tuple(np.int0(pt1[p,:]))
-    #         p2 = tuple(np.int0(pt2[p,:]) + [ 320,0 ] )
-    #
-    #         cv2.circle( canvas, p1, 2, (255,0,0) )
-    #         cv2.circle( canvas, p2, 2, (0,0,255) )
-    #         cv2.line( canvas, p1, p2, (0,0,255) )
-    #         # cv2.arrowedLine( canvas, p1, p2, (0,0,255) )
-    #
-    #     return canvas
-    #     code.interact( local=locals() )
-    #     cv2.imshow( 'canvas', canvas )
-    #     cv2.waitKey(0)
-    #
-
-
-
-
-    # Mark for removal
-    # def obliq_geometry_verify(self ):
-    #
-    #     # Playing with masked detections
-    #     _i = []
-    #     for i in range(64):
-    #         print i, (self.im1_lut_raw==i).sum()
-    #         _i.append((self.im1_lut_raw==i).sum())
-    #
-    #     # 1. Extract Keypoints and descriptor
-    #     # kp1, des1 = self.orb.detectAndCompute( self.im1, None )
-    #     # kp2, des2 = self.orb.detectAndCompute( self.im2, None )
-    #     # code.interact( local=locals() )
-    #     print 'np.argmax(_i)) : ', np.argmax(_i)
-    #     kp1, des1 = self.orb.detectAndCompute( self.im1, (self.im1_lut_raw==np.argmax(_i)).astype('uint8') )
-    #     kp2, des2 = self.orb.detectAndCompute( self.im2, (self.im2_lut_raw==np.argmax(_i)).astype('uint8') )
-    #
-    #     # 2. Lowe's Ratio Test
-    #     cv2.imshow( 'kp1', cv2.drawKeypoints( self.im1, kp1, None ) )
-    #     cv2.imshow( 'kp2', cv2.drawKeypoints( self.im2, kp2, None ) )
-    #     matches_org = self.flann.knnMatch(des1.astype('float32'),des2.astype('float32'),k=2) #find 2 nearest neighbours
-    #     __pt1, __pt2 = self._lowe_ratio_test( kp1, kp2, matches_org )
-    #     nMatches = __pt1.shape[0]
-    #     nInliers = 0
-    #
-    #
-    #     # 3. Essential Matrix test
-    #     if len(__pt1) > 0 and len(__pt2) > 0:
-    #         E, mask = cv2.findEssentialMat( __pt1, __pt2 )
-    #         if mask is not None:
-    #             nInliers = mask.sum()
-    #
-    #     print 'nMatches : ', nMatches
-    #     print 'nInliers : ', nInliers
 
 
     def prominent_clusters( self, im_no=-1 ):
@@ -500,104 +329,6 @@ class GeometricVerification:
 
         return Q
 
-        # No clue why this function is here. not in use
-    ## Given an image (im) and a 4x2 matrix defining 4 co-ordinate points (rotated rect) on the image.
-    ## Computes the affine transform between these 4 points to a right-angled rectangle while maintaining
-    ## the aspect ratio. Returns a 100 x a*100 or a*100 x 100 image.
-    # def affine_warp( self, im, contours, n_cols=100 ):
-    #     #find which dim is larger
-    #     _dima = np.sqrt( np.linalg.norm( contours[0] - contours[1] ) )
-    #     _dimb = np.sqrt( np.linalg.norm( contours[1] - contours[2] ) )
-    #     aspect = max( _dima/_dimb, _dimb/_dima )
-    #     if _dima > _dimb:
-    #         # print 'dima is bigger'
-    #         from_ = contours[0:3]
-    #         to_ = np.array( [ [0,0], [np.int(aspect*n_cols),0], [np.int(aspect*n_cols), n_cols] ] )
-    #         # print 'from_', from_
-    #         # print 'to_', to_
-    #         M = cv2.getAffineTransform( from_.astype('float32'), to_.astype('float32') )
-    #         OU = np.zeros( (n_cols,np.int(n_cols*aspect) ) )
-    #         # OU = np.zeros( (500,500) )
-    #         OU = cv2.warpAffine( im, M, tuple(OU.shape) )
-    #         print 'OU.shape', OU.shape
-    #         return OU
-    #
-    #     else:
-    #         # print 'dimb is bigger'
-    #         from_ = contours[0:3]
-    #         A = aspect
-    #         to_ = np.array( [ [0,0], [0, n_cols], [np.int(A*n_cols), n_cols]  ]  )
-    #         M = cv2.getAffineTransform( from_.astype('float32'), to_.astype('float32') )
-    #         OU = np.zeros( (np.int(n_cols*aspect), n_cols ) )
-    #         # OU = np.zeros( (500,500) )
-    #         OU = np.swapaxes( cv2.warpAffine( im, M, tuple(OU.shape) ), 0, 1 )
-    #         print 'OU.shape', OU.shape
-    #         return OU
-
-
-    # Total change in daisy calling. Remove this function/
-    # Current way is to call crunch_daisy(ch=1) for computation
-    # view_daisy(ch=1) to get view of memory
-    # # Return the daisy image for input image
-    # def static_get_daisy_descriptor_mat( self, xim ):
-    #     startD = time.time()
-    #     xim_gray = cv2.cvtColor( xim, cv2.COLOR_BGR2GRAY ).astype('float32')
-    #     self.dai3.do_daisy_computation( xim_gray )
-    #     print 'py-daisy in (ms) %4.2f' %(1000. * (time.time() - startD) )
-    #     return self.dai3.get_daisy_view()
-    #
-    #     # Old way - Mark for removal
-    #     # xim_gray = cv2.cvtColor( xim, cv2.COLOR_BGR2GRAY ).astype('float64')
-    #     # output = self.dai.hook( xim_gray.flatten(), xim_gray.shape )
-    #     # output = np.array( output ).reshape( xim_gray.shape[0], xim_gray.shape[1], -1 )
-    #     # return output
-
-
-
-    # Total change in daisy calling. Remove this function/
-    # Current way is to call crunch_daisy(ch=1) for computation
-    # view_daisy(ch=1) to get view of memory
-    # Mark for removal
-    # def get_whole_image_daisy(self, im_no):
-    #     # cv2.imshow( 'do_daisy_im1', self.im1 )
-    #     # cv2.imshow( 'do_daisy_im2', self.im2 )
-    #     startD = time.time()
-    #     if im_no == 1:
-    #         im1_gray = cv2.cvtColor( self.im1, cv2.COLOR_BGR2GRAY ).astype('float32')
-    #         self.dai1.do_daisy_computation( im1_gray )
-    #         print 'py-daisy in (ms) %4.2f' %(1000. * (time.time() - startD) )
-    #         return self.dai1.get_daisy_view()
-    #     elif im_no == 2:
-    #         im2_gray = cv2.cvtColor( self.im2, cv2.COLOR_BGR2GRAY ).astype('float32')
-    #         self.dai2.do_daisy_computation( im2_gray )
-    #         print 'py-daisy in (ms) %4.2f' %(1000. * (time.time() - startD) )
-    #         return self.dai2.get_daisy_view()
-    #     else:
-    #         print 'ERROR in get_whole_image_daisy. im_no has to be 1 or 2'
-    #         quit()
-    #
-    #
-    #
-    #     # Old - Mark for removal
-    #     # startD = time.time()
-    #     # printing = False
-    #     # if im_no == 1:
-    #     #     im1_gray = cv2.cvtColor( self.im1, cv2.COLOR_BGR2GRAY ).astype('float64')
-    #     # elif im_no == 2:
-    #     #     im1_gray = cv2.cvtColor( self.im2, cv2.COLOR_BGR2GRAY ).astype('float64')
-    #     # else:
-    #     #     print 'ERROR in get_whole_image_daisy. im_no has to be 1 or 2'
-    #     #     quit()
-    #     #
-    #     # #NOTE: Have DaisyMeld/ is LD_LIBRARY_PATH
-    #     # output = self.dai.hook( im1_gray.flatten(), im1_gray.shape )
-    #     # output = np.array( output ).reshape( im1_gray.shape[0], im1_gray.shape[1], -1 )
-    #     #
-    #     # if printing:
-    #     #     print im1_gray.dtype, im1_gray.shape, output.shape, 'daisy in (ms) %4.2f' %(1000. * (time.time() - startD) )
-    #     # # cv2.imshow( 'do_daisy_im1', output[:,:,0] )
-    #     # return output
-
 
     # Called by daisy_dense_matches() to loop over matches.
     def analyze_dense_matches( self, H1, H2, matches ):
@@ -627,11 +358,6 @@ class GeometricVerification:
             pts_A.append( (a,b) )
             pts_B.append( (c,d) )
 
-            # cv2.circle( canvas, (a,b), 4, (0,0,255) )
-            # cv2.circle( canvas, (c+self.im1.shape[1],d), 4, (0,0,255) )
-            # cv2.line( canvas, (a,b), (c+self.im1.shape[1],d), (0,255,0) )
-        # cv2.imshow( 'canvas_dense', canvas )
-        # return canvas, pts_A, pts_B
 
 
         return pts_A, pts_B
@@ -766,44 +492,32 @@ class GeometricVerification:
         out_im = alpha*im1 + (1 - alpha)*cv2.resize(out_imcurr,  (im1.shape[1], im1.shape[0])  )
         return out_im.astype('uint8')
 
+    def plot_2way_match( self, im1, pt1, im2, pt2, mask=None, color=(255,0,0), enable_text=True, enable_lines=False ):
+        """ pt1, pt2 : 2xN """
+        xcanvas = np.concatenate( (im1, im2), axis=1 )
+        if pt1 is None or pt2 is None:
+            return xcanvas
+
+        for xi in range( pt1.shape[1] ):
+            if (mask is not None) and (mask[xi,0] == 0):
+                continue
+
+            pta = tuple(pt1[0:2,xi])
+            ptb = tuple(np.array(pt2[0:2,xi]) + [im1.shape[1],0])
+
+            cv2.circle( xcanvas, pta, 4, color )
+            cv2.circle( xcanvas, ptb, 4, color )
 
 
-    # Same as plot_3way_match() grid is made with 2x larger images and
-    # index numbers are marked as well
-    # Mark for removal
-    # def plot_3way_match_upscale( self, curr_im, pts_curr, prev_im, pts_prev, curr_m_im, pts_curr_m  ):
-    #     f = 2
-    #
-    #     LINE = False
-    #
-    #     r1 = np.concatenate( ( cv2.resize(curr_im, (0,0), fx=f, fy=f), cv2.resize(prev_im, (0,0), fx=f, fy=f) ), axis=1 )
-    #     r2 = np.concatenate( ( cv2.resize(curr_m_im,(0,0), fx=f, fy=f), np.zeros( cv2.resize(curr_im,(0,0), fx=f, fy=f).shape, dtype='uint8' ) ), axis=1 )
-    #     gridd = np.concatenate( (r1,r2), axis=0 )
-    #
-    #
-    #
-    #     font = cv2.FONT_HERSHEY_SIMPLEX
-    #     for xi in range( len(pts_curr) ):
-    #         ptA = ( pts_curr[xi][0] *f, pts_curr[xi][1] * f )
-    #         cv2.circle( gridd, ptA, 3, (0,255,0), -1 )
-    #         cv2.putText( gridd, str(xi), ptA, font, 0.4, (0,0,255) )
-    #
-    #         ptB = tuple(np.array(pts_prev[xi])*f + [curr_im.shape[1]*f,0])
-    #         cv2.circle( gridd, ptB, 3, (0,255,0), -1 )
-    #         cv2.putText( gridd, str(xi), ptB, font, 0.4, (0,0,255) )
-    #         if LINE:
-    #             cv2.line( gridd, ptA, ptB, (255,0,0) )
-    #
-    #
-    #         ptC = tuple(np.array(pts_curr_m[xi])*f + [0,curr_im.shape[0]*f])
-    #         cv2.circle( gridd, ptC, 3, (0,255,0), -1 )
-    #         cv2.putText( gridd, str(xi), ptC, font, 0.4, (0,0,255) )
-    #         if LINE:
-    #             cv2.line( gridd, ptA, ptC, (255,30,255) )
-    #
-    #     # cv2.imshow( 'bigshow', gridd )
-    #     return gridd
+            color_com = ( 255 - color[0] , 255 - color[1], 255 - color[2] )
 
+            if enable_text:
+                cv2.putText( xcanvas, str(xi), pta, cv2.FONT_HERSHEY_SIMPLEX, .3, color_com )
+                cv2.putText( xcanvas, str(xi), ptb, cv2.FONT_HERSHEY_SIMPLEX, .3, color_com )
+
+            if enable_lines:
+                cv2.line( xcanvas, pta, ptb, (255,0,0) )
+        return xcanvas
 
     # grid : [ [curr, prev], [curr-1  X ] ]
     def plot_3way_match( self, curr_im, pts_curr, prev_im, pts_prev, curr_m_im, pts_curr_m, enable_lines=True, enable_text=True ):
@@ -894,7 +608,7 @@ class GeometricVerification:
     # around the neighbourhood of 40x40 in daisy space.
     #
     #   pts_curr, pts_prev, mask_c_p : output from daisy_dense_matches()
-    #   curr_m_im : curr-1 image
+    #   curr_m_im : curr-1 image (self.im3)
     def expand_matches_to_curr_m( self, pts_curr, pts_prev, mask_c_p,   curr_m_im):
 
         DEBUG = False
@@ -928,7 +642,7 @@ class GeometricVerification:
         # daisy_c_m = self.static_get_daisy_descriptor_mat(  curr_m_im  )#Daisy of (curr-1)
 
         # new code
-        self.crunch_daisy( ch=3 )
+        # self.crunch_daisy( ch=3 ) #if image is set daisy is automatically computed
         daisy_c_m = self.view_daisy( ch=3 )
 
         if DEBUG:
@@ -992,232 +706,6 @@ class GeometricVerification:
 
         ##################### Guided Matching (added 12th Nov, 2017) ############
 
-    # def my_daisy( self, xim, ch ):
-    #     startD = time.time()
-    #     xim_gray = cv2.cvtColor( xim, cv2.COLOR_BGR2GRAY ).astype('float32')
-    #
-    #     if ch==0 :
-    #         self.dai1.do_daisy_computation( xim_gray )
-    #         print 'py-daisy in (ms) %4.2f' %(1000. * (time.time() - startD) )
-    #         return self.dai1.get_daisy_view()
-    #     if ch==1:
-    #         self.dai2.do_daisy_computation( xim_gray )
-    #         print 'py-daisy in (ms) %4.2f' %(1000. * (time.time() - startD) )
-    #         return self.dai2.get_daisy_view()
-    #
-    #     if ch==2:
-    #         self.dai3.do_daisy_computation( xim_gray )
-    #         print 'py-daisy in (ms) %4.2f' %(1000. * (time.time() - startD) )
-    #         return self.dai3.get_daisy_view()
-    #
-    #     print '[FATAL-ERROR] In valid ch in GeometricVerification::my_daisy()'
-    #     quit()
-
-    # def match2_guided_2pointset( self, im_curr, pts_curr, im_prev, pts_prev):
-    #     """ Given images with tracked feature2d pts. Returns matched points
-    #         using the voting mechanism. Loosely inspired from GMS-matcher
-    #
-    #         im_curr : Current Image
-    #         pts_curr : Detected points in current image (3xN) or (2xN)
-    #         im_prev : Previous Image
-    #         pts_prev : Detected points in prev image (3xM) or (2xN)
-    #
-    #
-    #         returns :
-    #         2 1d arrays. the masked index in the original.
-    #         Basically, the index_i in pts_curr <--> index_j in pts_prev as 1d arrays
-    #
-    #         Note: points in pts_curr and pts_prev could be different in count.
-    #         These are the detected features in 2 views in image co-ordinates (ie. NOT normalized co-ordinates)
-    #     """
-    #     #
-    #     # Algorithm Params
-    #
-    #     # a) neighbourhood
-    #     W = 1
-    #     # _R = range( -W, W+1 )
-    #     _R = [-4,0,4]
-    #
-    #
-    #     # b) number of NN
-    #     #
-    #     K_nn = 1
-    #
-    #
-    #     # Enabling this might cause issue. Some debug overlay functions are missing.
-    #     # Caution!
-    #     DEBUG = False
-    #
-    #
-    #
-    #     daisy_curr = self.my_daisy( im_curr, ch=0 )
-    #     daisy_prev = self.my_daisy( im_prev, ch=1 )
-    #
-    #
-    #
-    #     if DEBUG:
-    #         print 'im_curr.shape', im_curr.shape
-    #         print 'im_prev.shape', im_prev.shape
-    #         print 'pts_curr.shape', pts_curr.shape
-    #         print 'pts_prev.shape', pts_prev.shape
-    #         print 'neighbourhood: ', _R
-    #
-    #     # wxw around each of curr
-    #     A = []    # Nd x 20. Nd is usually ~ 2000
-    #     A_i = []  # Nd x 1 (index)
-    #     A_pt = [] # Nd x 2 (every 2d pt)
-    #     for pt_i in range( pts_curr.shape[1] ):
-    #         for u in _R:#range(-W, W+1):
-    #             for v in _R:#range(-W,W+1):
-    #                 pt = np.int0( pts_curr[0:2, pt_i ] ) + np.array([u,v])
-    #                 if pt[1] < 0 or pt[1] >= im_curr.shape[0] or pt[0] < 0 or pt[0] >= im_curr.shape[1]:
-    #                     continue
-    #                 # print pt_i, pt, im_curr.shape
-    #                 A.append( daisy_curr[ pt[1], pt[0], : ] )
-    #                 A_pt.append( pt )
-    #                 A_i.append( pt_i )
-    #
-    #     # wxw around each of prev
-    #     B = []
-    #     B_i = []
-    #     B_pt = []
-    #     for pt_i in range( pts_prev.shape[1] ):
-    #         for u in _R:#range(-W,W+1):
-    #             for v in _R:#range(-W,W+1):
-    #                 pt = np.int0( pts_prev[0:2, pt_i ] )+ np.array([u,v])
-    #                 if pt[1] < 0 or pt[1] >= im_prev.shape[0] or pt[0] < 0 or pt[0] >= im_prev.shape[1]:
-    #                     continue
-    #                 # print pt_i, pt
-    #                 B.append( daisy_prev[ pt[1], pt[0], : ] )
-    #                 B_pt.append( pt )
-    #                 B_i.append( pt_i )
-    #
-    #
-    #     if DEBUG:
-    #         print 'len(A)', len(A)
-    #         print 'len(B)', len(B)
-    #
-    #     #
-    #     # FLANN Matching
-    #     startflann = time.time()
-    #     matches = self.flann.knnMatch( np.array(A), np.array(B), k=K_nn )
-    #     if DEBUG:
-    #         print 'time elaspsed for flann : %4.2f (ms)' %(1000.0 * (time.time() - startflann) )
-    #
-    #
-    #     # Loop over each match and do voting
-    #     startvote = time.time()
-    #     vote = np.zeros( ( pts_curr.shape[1], pts_prev.shape[1] ) )
-    #     for mi, m in enumerate(matches):
-    #         # m[0].queryIdx <--> m[0].trainIdx
-    #         # m[1].queryIdx <--> m[1].trainIdx
-    #         # .
-    #         # m[k].queryIdx <--> m[k].trainIdx
-    #
-    #         # print mi, m[0].queryIdx, m[0].trainIdx, m[0].distance
-    #         # print A_i[m[0].queryIdx], B_i[ m[0].trainIdx ]
-    #
-    #         for k in range( len(m) ):
-    #             ptA = A_pt[ m[k].queryIdx ]
-    #             ptB = B_pt[ m[k].trainIdx ]
-    #
-    #             iA = A_i[ m[k].queryIdx ]
-    #             iB = B_i[ m[k].trainIdx ]
-    #             # print iA, iB
-    #             vote[ iA, iB ] += 1.0/(1.0+k*k) # vote from 2nd nn is 1/4 the 1st nn and 3rd is 1/9th and so on
-    #
-    #     if DEBUG:
-    #         print 'time elaspsed for voting : %4.2f (ms)' %( 1000. * (time.time() - startvote) )
-    #
-    #
-    #         # cv2.imshow( 'curr_overlay', self.points_overlay( im_curr, np.expand_dims(ptA,1)) )
-    #         # cv2.imshow( 'prev_overlay', self.points_overlay( im_prev, np.expand_dims(ptB,1)) )
-    #         # cv2.waitKey(0)
-    #     selected_A = []
-    #     selected_A_i = []
-    #     selected_B = []
-    #     selected_B_i = []
-    #     startSelect = time.time()
-    #     for i in range( vote.shape[0] ):
-    #         iS = vote[i,:]
-    #         nz = iS.nonzero()
-    #         if sum(iS) <= 0:
-    #             continue
-    #         iS /=  sum(iS)
-    #
-    #
-    #
-    #
-    #         top = iS[nz].max()
-    #         toparg = iS[nz].argmax()
-    #         top2 = self.second_largest( iS[nz] )
-    #
-    #         if DEBUG:
-    #             print i, nz, iS[nz]
-    #             print 'toparg=',toparg, 'top=',round(top,2), 'top2=',round(top2,2)
-    #
-    #         if top/top2 >= 2.0 or top2 < 0:
-    #
-    #             # i <---> nz[0]
-    #             # i <---> nz[1]
-    #             # ...
-    #             ptxA = np.int0(   np.expand_dims( pts_curr[0:2,i], 1 )   ) # current point in curr
-    #             ptxB = np.int0(   pts_prev[0:2,nz][:,0,:]    )             # All candidates
-    #             ptyB = np.int0(   np.expand_dims( ptxB[0:2,toparg], 1 )   )# top candidate only
-    #
-    #             selected_A.append( ptxA )
-    #             selected_B.append( ptyB )
-    #
-    #             selected_A_i.append( i )
-    #             selected_B_i.append( nz[0][toparg] )
-    #
-    #             if DEBUG and False:
-    #                 print 'ACCEPTED'
-    #                 cv2.imshow( 'curr_overlay', self.points_overlay( im_curr, ptxA, enable_text=True ))
-    #                 cv2.imshow( 'prev_overlay', self.points_overlay( im_prev, ptxB, enable_text=True ))
-    #                 cv2.imshow( 'prev_overlay top', self.points_overlay( im_prev, ptyB, enable_text=True ))
-    #                 cv2.waitKey(0)
-    #
-    #     selected_A = np.transpose(  np.array( selected_A )[:,:,0]  )
-    #     selected_B = np.transpose(  np.array( selected_B )[:,:,0]  )
-    #
-    #     if DEBUG:
-    #         print 'time elaspsed for selection from voting : %4.2f (ms)' %( 1000. * (time.time() - startSelect) )
-    #
-    #         # cv2.imshow( 'xxx' , self.plot_point_sets( im_curr, np.int0(pts_curr[0:2,selected_A_i]), im_prev, np.int0(pts_prev[0:2,selected_B_i] ) ) )
-    #
-    #     #
-    #     # Fundamental Matrix Text
-    #     startFundamentalMatrixTest = time.time()
-    #     E, mask = cv2.findFundamentalMat( np.transpose( selected_A ), np.transpose( selected_B ),param1=5 )
-    #     if mask is not None:
-    #         nInliers = mask.sum()
-    #
-    #     masked_pts_curr = np.transpose( np.array( list( selected_A[:,i] for i in np.where( mask[:,0] == 1 )[0] ) ) )
-    #     masked_pts_prev = np.transpose( np.array( list( selected_B[:,i] for i in np.where( mask[:,0] == 1 )[0] ) ) )
-    #
-    #     if DEBUG:
-    #         print 'nInliers : ', nInliers
-    #         print 'time elaspsed for fundamental matrix test : %4.2f (ms)' %( 1000. * (time.time() - startFundamentalMatrixTest) )
-    #
-    #
-    #     masked_selected_A_i = list( selected_A_i[q] for q in np.where( mask[:,0] == 1 )[0] )
-    #     masked_selected_B_i = list( selected_B_i[q] for q in np.where( mask[:,0] == 1 )[0] )
-    #
-    #
-    #
-    #     if DEBUG:
-    #         cv2.imshow( 'curr_overlay', self.points_overlay( im_curr, pts_curr) )
-    #         cv2.imshow( 'prev_overlay', self.points_overlay( im_prev, pts_prev) )
-    #         cv2.imshow( 'selected', self.plot_point_sets( im_curr, selected_A, im_prev, selected_B) )
-    #         cv2.imshow( 'selected+fundamentalmatrixtest', self.plot_point_sets( im_curr, masked_pts_curr, im_prev, masked_pts_prev) )
-    #
-    #         cv2.imshow( 'yyy selected+fundamentalmatrixtest', self.plot_point_sets( im_curr, np.int0(pts_curr[0:2,masked_selected_A_i]), im_prev, np.int0(pts_prev[0:2,masked_selected_B_i])  ) )
-    #
-    #
-    #     # Return the masked index in the original
-    #     return np.array(masked_selected_A_i), np.array(masked_selected_B_i)
-
     def release_candidate_match2_guided_2way( self, pts_curr, pts_prev):
         """ Given images with tracked feature2d pts. Returns matched points
             using the voting mechanism. Loosely inspired from GMS-matcher
@@ -1258,8 +746,8 @@ class GeometricVerification:
         im_curr = self.im1
         im_prev = self.im2
 
-        self.crunch_daisy( ch=1 )
-        self.crunch_daisy( ch=2 )
+        # self.crunch_daisy( ch=1 ) #if image is set daisy is automatially computed
+        # self.crunch_daisy( ch=2 )
 
         daisy_curr = self.view_daisy( ch=1 ) #self.my_daisy( im_curr, ch=0 )
         daisy_prev = self.view_daisy( ch=2 ) #my_daisy( im_prev, ch=1 )
@@ -1389,6 +877,9 @@ class GeometricVerification:
                     cv2.imshow( 'prev_overlay top', self.points_overlay( im_prev, ptyB, enable_text=True ))
                     cv2.waitKey(0)
 
+        if len(selected_A) == 0:
+            return np.array([]), np.array([])
+
         selected_A = np.transpose(  np.array( selected_A )[:,:,0]  )
         selected_B = np.transpose(  np.array( selected_B )[:,:,0]  )
 
@@ -1403,7 +894,10 @@ class GeometricVerification:
         E, mask = cv2.findFundamentalMat( np.transpose( selected_A ), np.transpose( selected_B ),param1=5 )
         if mask is not None:
             nInliers = mask.sum()
+        else: #mask is None (no inliers)
+            return np.array([]), np.array([])
 
+        print 'A: %s ; B: %s ; nInliers:%d' %(str(selected_A.shape), str(selected_B.shape), nInliers)
         masked_pts_curr = np.transpose( np.array( list( selected_A[:,i] for i in np.where( mask[:,0] == 1 )[0] ) ) )
         masked_pts_prev = np.transpose( np.array( list( selected_B[:,i] for i in np.where( mask[:,0] == 1 )[0] ) ) )
 
@@ -1428,18 +922,6 @@ class GeometricVerification:
 
         # Return the masked index in the original
         return np.array(masked_selected_A_i), np.array(masked_selected_B_i)
-
-    def second_largest(self,numbers):
-        count = 0
-        m1 = m2 = float('-inf')
-        for x in numbers:
-            count += 1
-            if x > m2:
-                if x >= m1:
-                    m1, m2 = x, m1
-                else:
-                    m2 = x
-        return m2 if count >= 2 else -1 #None
 
 
     def release_candidate_match3way( self ):

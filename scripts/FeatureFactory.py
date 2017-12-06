@@ -22,7 +22,8 @@ class FeatureFactory:
         print 'FeatureFactory'
         self.timestamp = []
         self.features = [] #in Normalized co-ordinates or original image.
-        self.global_index = [] #2d array
+        self.global_index = [] #list of 1d array
+        self.point3d = []
 
         self.K_org = np.array( [  [530.849368,0.0,476.381888], [0.0,530.859614,300.383281], [0.0,0.0,1.0]  ]  ) #K for 240, 320 image
 
@@ -33,23 +34,40 @@ class FeatureFactory:
 
 
     def tracked_features_callback(self, data ):
-        # print 'Received tracked feature', data.header.stamp, len( data.points ), len( data.channels )
+        print 'Received tracked feature', data.header.stamp, len( data.points ), len( data.channels )
+        assert len( data.points ) == len( data.channels ) , "in FeatureFactor/tracked_features_callback() data.channels and data.points must have same count"
+        nPts = len( data.points )
 
         # Store Timestamp
         self.timestamp.append( data.header.stamp )
 
+        # msg.points have 3d points.
+        # There will be nPts number of channels. Each channel will have 4 numbers denoting [ u_normed, v_normed, u, v]
+
+        # Store 3d points
+        X_3d = np.zeros( (4, nPts) )
+        for i,pt in enumerate( data.points ):
+            X_3d[0,i] = pt.x
+            X_3d[1,i] = pt.y
+            X_3d[2,i] = pt.z
+            X_3d[3,i] = 1.0
+        self.point3d.append( X_3d )
+
+
         # Store normalized co-ordinates
-        X_normed = np.zeros( (3, len(data.points)) ) #in homogeneous co-ordinates
-        for i,pt in enumerate(data.points):
-            X_normed[0,i] = pt.x
-            X_normed[1,i] = pt.y
+        X_normed = np.zeros( (3, nPts) ) #in homogeneous co-ordinates
+        for i, ch in enumerate( data.channels ):
+            X_normed[0,i] = ch.values[0]
+            X_normed[1,i] = ch.values[1]
             X_normed[2,i] = 1.0
-        # print X_normed.shape
         self.features.append( X_normed )
 
+        #TODO: Now there is no concept of global indices. This needs fixing.
+        # Also I have disabled subscribing to keyframe image in nap node for debugging. remember to uncomment it. Also deal with global index
+
         # Store Global Index of these pts
-        gindex = np.array( data.channels[0].values )
-        self.global_index.append( gindex )
+        # gindex = np.array( data.channels[0].values )
+        # self.global_index.append( gindex )
         # print 'gindex.shape', gindex.shape
         # print gindex
 

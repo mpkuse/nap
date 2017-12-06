@@ -125,7 +125,8 @@ int main(int argc, char ** argv )
   //--- Subscribers ---//
   //
   // TODO To compare my pose-graph-optimization with qin-tong's might be useful.
-  string camera_pose_topic = string("/vins_estimator/camera_pose_no_loop");
+  // string camera_pose_topic = string("/vins_estimator/camera_pose_no_loop");
+  string camera_pose_topic = string("/vins_estimator/camera_pose");
   ROS_INFO( "Subscribe to %s", camera_pose_topic.c_str() );
   ros::Subscriber sub_odometry = nh.subscribe( camera_pose_topic, 1000, &DataManager::camera_pose_callback, &dataManager );
 
@@ -137,16 +138,16 @@ int main(int argc, char ** argv )
 
 
   // 3d points
-  string point_cloud_topic = string( "/vins_estimator/point_cloud_no_loop" );
-  ROS_INFO( "Subscribed to %s", point_cloud_topic.c_str() );
-  ros::Subscriber sub_pcl_topic = nh.subscribe( point_cloud_topic, 1000, &DataManager::point_cloud_callback, &dataManager );
+  // string point_cloud_topic = string( "/vins_estimator/point_cloud_no_loop" );
+  // ROS_INFO( "Subscribed to %s", point_cloud_topic.c_str() );
+  // ros::Subscriber sub_pcl_topic = nh.subscribe( point_cloud_topic, 1000, &DataManager::point_cloud_callback, &dataManager );
 
 
 
   // 2d features in normalized cords
-  string features_tracked_topic = string( "/feature_tracker/feature" );
-  ROS_INFO( "Subscribed to %s", features_tracked_topic.c_str() );
-  ros::Subscriber sub_features_tracked_topic = nh.subscribe( features_tracked_topic, 1000, &DataManager::tracked_features_callback, &dataManager );
+  // string features_tracked_topic = string( "/feature_tracker/feature" );
+  // ROS_INFO( "Subscribed to %s", features_tracked_topic.c_str() );
+  // ros::Subscriber sub_features_tracked_topic = nh.subscribe( features_tracked_topic, 1000, &DataManager::tracked_features_callback, &dataManager );
 
 
   //

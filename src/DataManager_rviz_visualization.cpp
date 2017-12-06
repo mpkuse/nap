@@ -257,8 +257,8 @@ void DataManager::publish_pose_graph_edges( const std::vector<Edge*>& x_edges )
           marker.color.r = 1.0; marker.color.g = 0.0; marker.color.b = 1.0; marker.ns = "loop_edges";
           break;
 
-        case EDGE_TYPE_LOOP_SUBTYPE_GUIDED: // Dark green
-          marker.color.r = .2; marker.color.g = 0.4; marker.color.b = 0.0; marker.ns = "loop_edges";
+        case EDGE_TYPE_LOOP_SUBTYPE_GUIDED: // Dark blue
+          marker.color.r = .2; marker.color.g = 0.0; marker.color.b = 0.8; marker.ns = "loop_edges";
           break;
 
         default:
