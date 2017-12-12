@@ -1,6 +1,7 @@
 DUMP*
 other_seqs*
 tf.logs*
+tf2.logs*
 *.swp
 *.pyc
 *.dat
