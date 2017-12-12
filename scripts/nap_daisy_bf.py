@@ -75,7 +75,11 @@ PARAM_MODEL = PKG_PATH+'/tf.logs/netvlad_k64_b20_tokyoTM_pos_set_dev/model-6500'
 PARAM_MODEL = PKG_PATH+'/tf.logs/netvlad_k64_b20_resnet/model-3750' # trained similar to above but with a resnet neural net - the default model
 
 # tf2.logs
-# PARAM_MODEL = PKG_PATH+'/tf2.logs/attempt_resnet6_K64_P8_N8/model-5500'
+PARAM_MODEL = PKG_PATH+'/tf2.logs/attempt_resnet6_K64_P8_N8/model-5000' # new resnet6_64
+PARAM_MODEL = PKG_PATH+'/tf2.logs/attempt_vgg6_K64_P8_N8/model-9500' #new vgg
+
+PARAM_MODEL = PKG_PATH+'/tf2.logs/attempt_resnet6_K32_P8_N8/model-2250' #K=16
+
 # Dont forget to load the eigen values, eigen vectors and mean
 
 
@@ -239,7 +243,7 @@ def match2_guided_gms( curr_im, feature_factory_index, prev_im ):
 place_mod = PlaceRecognitionNetvlad(\
                                     PARAM_MODEL,\
                                     PARAM_CALLBACK_SKIP=PARAM_CALLBACK_SKIP,\
-                                    PARAM_K = 64
+                                    PARAM_K = 32
                                     )
 
 feature_factory = FeatureFactory()
