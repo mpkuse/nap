@@ -932,7 +932,7 @@ class VGGDescriptor:
         self.initial_t = tf.placeholder( dtype='int32')
 
         t, outputs = tf.while_loop( self.should_continue, self.iteration, [self.initial_t,initial_outputs] )
-        outputs = tf.transpose( outputs.pack(), [1,0,2] )
+        outputs = tf.transpose( outputs.stack(), [1,0,2] )
         self.nl_outputs = outputs
         return outputs
 

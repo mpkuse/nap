@@ -37,10 +37,12 @@ class PlaceRecognitionNetvlad:
         self.is_training = tf.placeholder( tf.bool, [], name='is_training')
         self.vgg_obj = VGGDescriptor(b=1, K=PARAM_K)
         self.tf_vlad_word = self.vgg_obj.vgg16(self.tf_x, self.is_training)
-        self.tensorflow_session = tf.Session()
+	gpu_options = tf.GPUOptions( per_process_gpu_memory_fraction=0.333 )
+        self.tensorflow_session = tf.Session( config=tf.ConfigProto(gpu_options=gpu_options, log_device_placement=False) )
         tensorflow_saver = tf.train.Saver()
         print tcolor.OKGREEN,'Restore model from : ', PARAM_MODEL, tcolor.ENDC
         tensorflow_saver.restore( self.tensorflow_session, PARAM_MODEL )
+	print 'Done saver.restore' 
 
 
 
@@ -55,6 +57,7 @@ class PlaceRecognitionNetvlad:
 
         self.PARAM_MODEL = PARAM_MODEL
         self.PARAM_MODEL_DIM_RED = None
+	print 'Done Init'
 
     def load_siamese_dim_red_module( self, PARAM_MODEL_DIM_RED, PARAM_input_dim, PARAM_net_intermediate_dim, PARAM_net_out_dim ):
         #
