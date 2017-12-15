@@ -75,10 +75,11 @@ PARAM_MODEL = PKG_PATH+'/tf.logs/netvlad_k64_b20_tokyoTM_pos_set_dev/model-6500'
 PARAM_MODEL = PKG_PATH+'/tf.logs/netvlad_k64_b20_resnet/model-3750' # trained similar to above but with a resnet neural net - the default model
 
 # tf2.logs
-PARAM_MODEL = PKG_PATH+'/tf2.logs/attempt_resnet6_K64_P8_N8/model-5000' # new resnet6_64
-PARAM_MODEL = PKG_PATH+'/tf2.logs/attempt_vgg6_K64_P8_N8/model-9500' #new vgg
+# PARAM_MODEL = PKG_PATH+'/tf2.logs/attempt_resnet6_K64_P8_N8/model-5000' # new resnet6_64
+# PARAM_MODEL = PKG_PATH+'/tf2.logs/attempt_vgg6_K64_P8_N8/model-9500' #new vgg
 
-PARAM_MODEL = PKG_PATH+'/tf2.logs/attempt_resnet6_K32_P8_N8/model-2250' #K=16
+PARAM_MODEL = PKG_PATH+'/tf2.logs/attempt_resnet6_K16_P8_N8/model-9250' #K=16
+# PARAM_MODEL = PKG_PATH+'/tf2.logs/attempt_resnet6_K32_P8_N8/model-2250' #K=32
 
 # Dont forget to load the eigen values, eigen vectors and mean
 
@@ -91,7 +92,7 @@ PARAM_NETVLAD_WORD_DIM = 16384#12288 # If these are not compatible with tensorfl
 
 INPUT_IMAGE_TOPIC = '/semi_keyframes' #this is t be used for launch
 PARAM_CALLBACK_SKIP = 2
-
+PARAM_K = 16
 PARAM_FPS = 25
 
 BASE__DUMP = '/home/mpkuse/Desktop/a/drag_nap'
@@ -243,7 +244,7 @@ def match2_guided_gms( curr_im, feature_factory_index, prev_im ):
 place_mod = PlaceRecognitionNetvlad(\
                                     PARAM_MODEL,\
                                     PARAM_CALLBACK_SKIP=PARAM_CALLBACK_SKIP,\
-                                    PARAM_K = 32
+                                    PARAM_K = PARAM_K
                                     )
 
 feature_factory = FeatureFactory()
@@ -327,6 +328,7 @@ startTotalTime = time.time()
 
 
 loop_candidates = []
+loop_candidates2 = []
 
 while not rospy.is_shutdown():
     rate.sleep()
@@ -470,7 +472,7 @@ while not rospy.is_shutdown():
         loop_candidates.append( [L-1, aT, sim_scores_logistic[aT], nMatches, nInliers] ) #here was L in original
 
         if nInliers > 0:
-            _now_edges.append( (L-1, aT, nInliers) )
+            _now_edges.append( (L-1, aT, sim_scores_logistic[aT], nMatches, nInliers) )
 
 
 
@@ -491,7 +493,11 @@ while not rospy.is_shutdown():
 
     i_curr = _now_edges[pick][0]
     i_prev = _now_edges[pick][1]
-    i_inliers = _now_edges[pick][2]
+    i_sim_score = _now_edges[pick][2]
+    i_matches = _now_edges[pick][3]
+    i_inliers = _now_edges[pick][4]
+    loop_candidates2.append( [i_curr, i_prev, i_sim_score, i_matches, i_inliers] ) #Only selected candidates
+
 
     nap_msg = make_nap_msg( i_curr, i_prev, (0.6,1.0,0.6) ) # puts in msg.c_timestamp, msg.prev_timestamp, msg.goodness
     nap_msg.n_sparse_matches = i_inliers #Not required
@@ -541,7 +547,7 @@ while not rospy.is_shutdown():
     print 'set_image, ch=1 and ch=2 : %4.2f (ms)' %( 1000. * (time.time() - startSet) )
 
     startT = time.time()
-    selected_curr_i, selected_prev_i = VV.release_candidate_match2_guided_2way( feat2d_curr, feat2d_prev )
+    selected_curr_i, selected_prev_i, sieve_stat = VV.release_candidate_match2_guided_2way( feat2d_curr, feat2d_prev )
     print 'matcher.release_candidate_match2_guided_2way() : %4.2f (ms)' %(1000. * (time.time() - startT) )
     print 'guided 2way matches : ', selected_curr_i.shape[0], selected_prev_i.shape[0]
     n_guided_2way = selected_curr_i.shape[0]
@@ -848,6 +854,8 @@ else:
 
 print 'Writing Loop Candidates : ', BASE__DUMP+'/loop_candidates.csv'
 np.savetxt( BASE__DUMP+'/loop_candidates.csv', loop_candidates, delimiter=',', comments='NAP loop_candidates' )
+print 'Writing Loop Candidates : ', BASE__DUMP+'/loop_candidates2.csv'
+np.savetxt( BASE__DUMP+'/loop_candidates2.csv', loop_candidates2, delimiter=',', comments='NAP loop_candidates picked' )
 
 
 print 'Writing as pickle, FeatureFactory'

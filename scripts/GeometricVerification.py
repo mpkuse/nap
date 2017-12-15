@@ -921,7 +921,8 @@ class GeometricVerification:
 
 
         # Return the masked index in the original
-        return np.array(masked_selected_A_i), np.array(masked_selected_B_i)
+        # return np.array(masked_selected_A_i), np.array(masked_selected_B_i)
+        return np.array(masked_selected_A_i), np.array(masked_selected_B_i), (min(pts_curr.shape[1], pts_prev.shape[1]), selected_A.shape[1], nInliers)
 
 
     def release_candidate_match3way( self ):
