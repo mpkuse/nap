@@ -36,8 +36,8 @@
     <!-- <arg name="bag_file" default="2017-07-04-16-32-46.bag" /> -->
     <!-- <arg name="bag_file" default="2017-07-04-16-36-37.bag" doc="bad for testing" /> -->
     <!-- <arg name="bag_file" default="2017-07-04-16-39-32.bag" /> -->
-    <!-- <arg name="bag_file" default="2017-07-04-16-41-25.bag" /> -->
-    <!-- <arg name="bag_file" default="2017-07-04-16-43-59.bag" /> -->
+    <!-- <arg name="bag_file" default="2017-07-04-16-41-25.bag" doc="in the BASE. rotated comes to same place" /> -->
+    <!-- <arg name="bag_file" default="2017-07-04-16-43-59.bag" doc="outdoor of BASE to towerA and back from the bridge, Only 1 loop missed by my method. Not a good seq for testing"/> -->
     <!-- <arg name="bag_file" default="2017-07-04-16-51-41.bag" /> -->
     <!--<arg name="bag_file" default="2017-07-04-17-06-23.bag" />-->
     <!-- END OF BAG 02 -->
@@ -54,11 +54,11 @@
 
     <!-- Bag set 05, 4 seq in Tai Po Tsai. Captured on 12th Dec, cloudy weather -->
     <arg name="bag_path" default="/media/mpkuse/Bulk_Data/other_seqs/pointgrey_color_seq/bag05" />
-    <arg name="bag_file" default="2017-12-12-10-46-42.bag" />
-    <!-- <arg name="bag_file" default="2017-12-12-10-51-52.bag" /> -->
+    <!-- <arg name="bag_file" default="2017-12-12-10-46-42.bag" doc="around 7/11 in tpt. Not good for testing too many silloutes due to pointing camera to the sky"/> -->
+    <!-- <arg name="bag_file" default="2017-12-12-10-51-52.bag" doc="useless. No loop" /> -->
     <!-- <arg name="bag_file" default="2017-12-12-10-53-04.bag" doc="building near the garbage dump in tpt" /> -->
     <!-- <arg name="bag_file" default="2017-12-12-11-04-45.bag" doc="!!tpt childrens garden, Another nice seq to test" /> -->
-    <!-- <arg name="bag_file" default="2017-12-13-11-12-35.bag" doc="!!indoors of LSK building G/F. Usable" /> -->
+    <arg name="bag_file" default="2017-12-13-11-12-35.bag" doc="!!indoors of LSK building G/F. Usable" />
 
 
 

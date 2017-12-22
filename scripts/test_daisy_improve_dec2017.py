@@ -110,7 +110,7 @@ feature_factory.load_from_pickle( FEATURE_FACTORY )
 ###############################################################################
 VV = GeometricVerification()
 # for i in [10]: #range( len(loop_candidates) ):
-for i in range(len(loop_candidates)):
+for i in range( len(loop_candidates)):
     print '==='
     l = loop_candidates[i]
     curr = int(l[0])
@@ -120,7 +120,7 @@ for i in range(len(loop_candidates)):
     nConsistentMatches = int(l[4])
 
 
-    print '%04d of %04d] curr=%04d, prev=%04d, score=%4.2f, nMatch=%3d, nConsistentMatch=%3d' %(i, loop_candidates.shape[0],curr,prev,score,nMatches,nConsistentMatches)
+    print tcol.OKBLUE, '%04d of %04d] curr=%04d, prev=%04d, score=%4.2f, nMatch=%3d, nConsistentMatch=%3d' %(i, loop_candidates.shape[0],curr,prev,score,nMatches,nConsistentMatches), tcol.ENDC
     t_curr = S_timestamp[curr]
     t_prev = S_timestamp[prev]
 
@@ -128,7 +128,9 @@ for i in range(len(loop_candidates)):
     prev_im = S_thumbnails[prev, :,:,:]
 
     curr_lut = S_thumbnails_lut[curr,:,:,:]
+    curr_lut_raw = S_thumbnails_lut_raw[curr,:,:]
     prev_lut = S_thumbnails_lut[prev,:,:,:]
+    prev_lut_raw = S_thumbnails_lut_raw[prev,:,:]
 
     feat2d_curr_idx = feature_factory.find_index( t_curr )
     feat2d_prev_idx = feature_factory.find_index( t_prev )
@@ -149,63 +151,71 @@ for i in range(len(loop_candidates)):
 
     VV.set_image( curr_im, 1 ) #set current image
     VV.set_image( prev_im, 2 )# set previous image (at this stage dont need lut_raw to be set as it is not used by release_candidate_match2_guided_2way() )
+
     selected_curr_i, selected_prev_i, sieve_stat = VV.release_candidate_match2_guided_2way( feat2d_curr, feat2d_prev )
+
+    #
+    #
+    # # # min/ max
+    # # if (float(min(feat2d_curr.shape[1],feat2d_prev.shape[1])) / max(feat2d_curr.shape[1],feat2d_prev.shape[1])) < 0.70:
+    # #     match2_total_score -= 3
+    # #     print 'nTracked features are very different.'
+    # #
+    #
+    match2_total_score = VV.sieve_stat_to_score( sieve_stat ) #remember to do min/max scoring. ie. reduce score if nTracked features are very different in both frames
+    print '=X=Total_score : ', match2_total_score, '=X='
+
+
     xcanvas_2way = VV.plot_2way_match( curr_im, np.int0(feat2d_curr[0:2,selected_curr_i]), prev_im, np.int0(feat2d_prev[0:2,selected_prev_i]),  enable_lines=True )
-
-
-    print 'Tracked features in curr: %d' %(feat2d_curr.shape[1])
-    print 'Tracked features in prev: %d' %(feat2d_prev.shape[1])
-    print 'Tracked Features              :', sieve_stat[0]
-    print 'Features retained post voting :', sieve_stat[1]
-    print 'Features retained post f-test :', sieve_stat[2]
-
-    # Finding-1: if atleast 20% of the tracked points of min(feat2d_curr, feat2d_prev)
-    # are retained than it indicates that this one is probably a true match.
-
-    # Finding-2: If tracked features in both images are dramatically different,
-    # then, most likely it is a false match and hence need to be rejected.
-
     cv2.imshow( 'xcanvas_2way', xcanvas_2way )
 
-    match2_voting_score = float(sieve_stat[1]) / sieve_stat[0] #how many remain after voting. More retained means better confident I am. However less retained doesn't mean it is wrong match. Particularly, there could be less overlaping area and the tracked features are uniformly distributed on image space.
-    match2_tretained_score = float(sieve_stat[2]) / sieve_stat[0] #how many remain at the end
-    match2_geometric_score  = (sieve_stat[1] - sieve_stat[2]) / sieve_stat[1]#how many were eliminated by f-test. lesser is better here. If few were eliminated means that the matching after voting is more geometrically consistent
-    print 'match2_voting_score: %4.2f; ' %(match2_voting_score),
-    print 'match2_tretained_score: %4.2f; ' %(match2_tretained_score),
-    print 'match2_geometric_score: %4.2f' %(match2_geometric_score)
+    if match2_total_score > 3:
+        # Accept this match and move on
+        print 'Accept this match and move on'
+        print tcol.OKGREEN, 'Accept', tcol.ENDC
+        pass
+
+    if match2_total_score > 2 and match2_total_score <= 3 and len(selected_curr_i) > 20:
+        # Boundry case, if you see sufficient number of 2way matches, also accpt 2way match
+        print 'Boundary case, if you see sufficient number of 2way matches, also accept 2way match'
+        print tcol.OKGREEN, 'Accept', tcol.ENDC
+
+
+    if match2_total_score >= 0.5 and match2_total_score <= 3:
+        # Try 3way. But plot 2way and 3way.
+        # Beware, 3way match function returns None when it has early-rejected the match
+        print 'Attempt robust_3way_matching()'
+
+        # set-data
+        curr_m_im = S_thumbnails[curr-1,:,:,:]
+
+        VV.set_image( curr_m_im, 3 )  #set curr-1 image
+        VV.set_lut_raw( curr_lut_raw, 1 ) #set lut of curr and prev
+        VV.set_lut_raw( prev_lut_raw, 2 )
+        VV.set_lut( curr_lut, 1 ) #only needed for in debug mode of 3way match
+        VV.set_lut( prev_lut, 2 ) #only needed for in debug mode of 3way match
+
+        # Attempt 3way match
+        q1,q2,q3,q4,q5 = VV.robust_match3way()
+        print 'dense_match_quality     : ', q5[0]
+        print 'after_vote_match_quality: ', q5[1]
+
+        if q1 is None:
+            print 'Early Reject from robust_match3way()'
+            print tcol.FAIL, 'Reject', tcol.ENDC
+
+        else:
+            print 'nPts_3way_match     : ', q1.shape
+            print 'Accept 3way match'
+            print tcol.OKGREEN, 'Accept', tcol.ENDC
+            gridd = VV.plot_3way_match( VV.im1, np.array(q1), VV.im2, np.array(q2), VV.im3, np.array(q3) )
+            cv2.imshow( '3way Matchi', gridd )
 
 
 
-    match2_total_score = 0.
-    if match2_voting_score > 0.5:
-        match2_total_score += 1.0
+    if match2_total_score < 0.5:
+        # Reject (don't bother computing 3way)
+        print 'Reject 2way matching, and do not compute 3way matching'
+        print tcol.FAIL, 'Reject', tcol.ENDC
 
-    if match2_tretained_score > 0.25:
-        match2_total_score += 2.5
-    else:
-        if match2_tretained_score > 0.2 and match2_tretained_score <= 0.25:
-            match2_total_score += 1.0
-        if match2_tretained_score > 0.15 and match2_tretained_score <= 0.2:
-            match2_total_score += 0.5
-
-
-    if match2_geometric_score > 0.55:
-        match2_total_score -= 1.
-    else:
-        if match2_geometric_score < 0.4 and match2_geometric_score >= 0.3:
-            match2_total_score += 1.0
-        if match2_geometric_score < 0.3 and match2_geometric_score >= 0.2:
-            match2_total_score += 1.5
-        if match2_geometric_score < 0.2 :
-            match2_total_score += 1.5
-
-    # min/ max
-    if (float(min(feat2d_curr.shape[1],feat2d_prev.shape[1])) / max(feat2d_curr.shape[1],feat2d_prev.shape[1])) < 0.70:
-        match2_total_score -= 3
-        print 'nTracked features are very different.'
-
-    print '==Total_score : ', match2_total_score, '=='
-
-
-    if match2_total_score > 0.0:
-        cv2.waitKey(0)
+    cv2.waitKey(0)

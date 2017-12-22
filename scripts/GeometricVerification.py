@@ -331,13 +331,14 @@ class GeometricVerification:
 
 
     # Called by daisy_dense_matches() to loop over matches.
-    def analyze_dense_matches( self, H1, H2, matches ):
+    def analyze_dense_matches( self, H1, H2, matches, return_lowe_ratio=False ):
         M = []
         # Lowe's ratio test
         for i, (m,n) in enumerate( matches ):
             #print i, m.trainIdx, m.queryIdx, m.distance, n.trainIdx, n.queryIdx, n.distance
-            if m.distance < 0.8 * n.distance:
-                M.append( m )
+            if m.distance < 0.8 * n.distance: #originally 0.8. Making it lower will tighten
+                r = float(m.distance)/n.distance
+                M.append( (m,r)  )
 
         # print '%d of %d pass lowe\'s ratio test' %( len(M), len(matches) )
 
@@ -345,8 +346,16 @@ class GeometricVerification:
         # canvas = np.concatenate( (self.im1, self.im2), axis=1 )
         pts_A = []
         pts_B = []
+        pts_lowe_ratios = []
 
-        for m in M: #good matches
+        # -a- lowe's ratios are scored as. Note: lower ratio is better here:
+        #       note, this scoring is done in call analyze_dense_matches() on per match basis
+        #              x <= 0.67  ---> +2
+        #       0.67 < x <= 0.72  ---> +1
+        #       0.72 < x <= 0.75  ---> +0.5
+        #       0.75 < x <= 0.8   ---> +0
+
+        for (m,r) in M: #good matches
             # print m.trainIdx, m.queryIdx, m.distance
 
             a = H1[1][m.queryIdx]*4
@@ -359,6 +368,22 @@ class GeometricVerification:
             pts_B.append( (c,d) )
 
 
+            if r <= 0.67:
+                r_score = 2.0
+            else:
+                if r > 0.67 and r <= 0.72:
+                    r_score = 1.0
+                else:
+                    if r > 0.72 and r <= 0.75:
+                        r_score = 0.5
+                    if r > 0.75 :
+                        r_score = 0
+
+            pts_lowe_ratios.append( r_score )
+
+
+        if return_lowe_ratio:
+            return pts_A, pts_B, pts_lowe_ratios
 
         return pts_A, pts_B
 
@@ -472,7 +497,7 @@ class GeometricVerification:
         else:
             return pts_A, pts_B, mask
 
-    def plot_point_sets( self, im1, pt1, im2, pt2, mask=None ):
+    def plot_point_sets( self, im1, pt1, im2, pt2, mask=None, enable_text=False ):
         xcanvas = np.concatenate( (im1, im2), axis=1 )
         for xi in range( len(pt1) ):
             if (mask is not None) and (mask[xi,0] == 0):
@@ -482,6 +507,12 @@ class GeometricVerification:
             ptb = tuple(np.array(pt2[xi]) + [im1.shape[1],0])
             cv2.circle( xcanvas, ptb, 4, (255,0,255) )
             cv2.line( xcanvas, pt1[xi], ptb, (255,0,0) )
+
+
+            if enable_text:
+                color_com = (0,0,255)
+                cv2.putText( xcanvas, str(xi), pt1[xi], cv2.FONT_HERSHEY_SIMPLEX, .3, color_com )
+                cv2.putText( xcanvas, str(xi), ptb, cv2.FONT_HERSHEY_SIMPLEX, .3, color_com )
         return xcanvas
 
 
@@ -706,7 +737,7 @@ class GeometricVerification:
 
         ##################### Guided Matching (added 12th Nov, 2017) ############
 
-    def release_candidate_match2_guided_2way( self, pts_curr, pts_prev):
+    def release_candidate_match2_guided_2way( self, pts_curr, pts_prev, return_per_match_vote_score=False):
         """ Given images with tracked feature2d pts. Returns matched points
             using the voting mechanism. Loosely inspired from GMS-matcher
 
@@ -714,6 +745,7 @@ class GeometricVerification:
             pts_curr : Detected points in current image (3xN) or (2xN)
             im_prev : Previous Image (get from im2)
             pts_prev : Detected points in prev image (3xM) or (2xN)
+
 
 
             returns :
@@ -761,7 +793,9 @@ class GeometricVerification:
             print 'pts_prev.shape', pts_prev.shape
             print 'neighbourhood: ', _R
 
-        # wxw around each of curr
+        #
+        # Step-1a: wxw around each of curr
+        #
         A = []    # Nd x 20. Nd is usually ~ 2000
         A_i = []  # Nd x 1 (index)
         A_pt = [] # Nd x 2 (every 2d pt)
@@ -776,7 +810,9 @@ class GeometricVerification:
                     A_pt.append( pt )
                     A_i.append( pt_i )
 
-        # wxw around each of prev
+        #
+        # Step-1b: wxw around each of prev
+        #
         B = []
         B_i = []
         B_pt = []
@@ -797,16 +833,22 @@ class GeometricVerification:
             print 'len(B)', len(B)
 
         #
-        # FLANN Matching
+        # Step-2: FLANN Matching
+        #
         startflann = time.time()
         matches = self.flann.knnMatch( np.array(A), np.array(B), k=K_nn )
         if DEBUG:
             print 'time elaspsed for flann : %4.2f (ms)' %(1000.0 * (time.time() - startflann) )
 
 
-        # Loop over each match and do voting
+        #
+        # Step-3a: Loop over each match and do voting
+        #
         startvote = time.time()
+
+
         vote = np.zeros( ( pts_curr.shape[1], pts_prev.shape[1] ) )
+
         for mi, m in enumerate(matches):
             # m[0].queryIdx <--> m[0].trainIdx
             # m[1].queryIdx <--> m[1].trainIdx
@@ -828,14 +870,25 @@ class GeometricVerification:
         if DEBUG:
             print 'time elaspsed for voting : %4.2f (ms)' %( 1000. * (time.time() - startvote) )
 
+        # # consider removal
+        # # Step-4b: Scale the actual votes with the priors
+        # #
+        # if prior_vote_matrix is not None:
+        #     assert prior_vote_matrix.shape[0] == vote.shape[0]
+        #     assert prior_vote_matrix.shape[1] == vote.shape[1]
+        #     print 'do vote scaling'
+        #     code.interact( local=locals(), banner='vote scaling')
+        #     vote = np.multiply( vote / vote.sum(axis=1), prior_vote_matrix ) #`vote/sum(vote) ` normalizes the votes as a probability measure
 
-            # cv2.imshow( 'curr_overlay', self.points_overlay( im_curr, np.expand_dims(ptA,1)) )
-            # cv2.imshow( 'prev_overlay', self.points_overlay( im_prev, np.expand_dims(ptB,1)) )
-            # cv2.waitKey(0)
+
+        #
+        # Step-4: Evaluating Votes (or Scaled votes)
+        #
         selected_A = []
         selected_A_i = []
         selected_B = []
         selected_B_i = []
+        selected_score = []
         startSelect = time.time()
         for i in range( vote.shape[0] ):
             iS = vote[i,:]
@@ -855,7 +908,7 @@ class GeometricVerification:
                 print i, nz, iS[nz]
                 print 'toparg=',toparg, 'top=',round(top,2), 'top2=',round(top2,2)
 
-            if top/top2 >= 2.0 or top2 < 0:
+            if top/top2 >= 1.3 or top2 < 0: #smaller ratio will mean looser constraint
 
                 # i <---> nz[0]
                 # i <---> nz[1]
@@ -869,6 +922,12 @@ class GeometricVerification:
 
                 selected_A_i.append( i )
                 selected_B_i.append( nz[0][toparg] )
+
+                selected_score.append( top )
+                # if top2<0:
+                #     selected_score.append( 10 ) #this means all votes are going to one match
+                # else:
+                #     selected_score.append( top/top2 )
 
                 if DEBUG and False:
                     print 'ACCEPTED'
@@ -889,7 +948,8 @@ class GeometricVerification:
             # cv2.imshow( 'xxx' , self.plot_point_sets( im_curr, np.int0(pts_curr[0:2,selected_A_i]), im_prev, np.int0(pts_prev[0:2,selected_B_i] ) ) )
 
         #
-        # Fundamental Matrix Text
+        # Step-5: Fundamental Matrix Text
+        #
         startFundamentalMatrixTest = time.time()
         E, mask = cv2.findFundamentalMat( np.transpose( selected_A ), np.transpose( selected_B ),param1=5 )
         if mask is not None:
@@ -909,7 +969,7 @@ class GeometricVerification:
         masked_selected_A_i = list( selected_A_i[q] for q in np.where( mask[:,0] == 1 )[0] )
         masked_selected_B_i = list( selected_B_i[q] for q in np.where( mask[:,0] == 1 )[0] )
 
-
+        masked_selected_score = list( selected_score[q]  for q in np.where( mask[:,0] == 1 )[0] )
 
         if DEBUG:
             cv2.imshow( 'curr_overlay', self.points_overlay( im_curr, pts_curr) )
@@ -922,7 +982,17 @@ class GeometricVerification:
 
         # Return the masked index in the original
         # return np.array(masked_selected_A_i), np.array(masked_selected_B_i)
-        return np.array(masked_selected_A_i), np.array(masked_selected_B_i), (min(pts_curr.shape[1], pts_prev.shape[1]), selected_A.shape[1], nInliers)
+        if return_per_match_vote_score is False:
+            return np.array(masked_selected_A_i), np.array(masked_selected_B_i), (min(pts_curr.shape[1], pts_prev.shape[1]), selected_A.shape[1], nInliers)
+        else:
+            # return np.array(masked_selected_A_i), np.array(masked_selected_B_i), (min(pts_curr.shape[1], pts_prev.shape[1]), selected_A.shape[1], nInliers), selected_score
+            try:
+                # code.interact( local=locals() , banner="before returning votes")
+                _stat_ = (min(pts_curr.shape[1], pts_prev.shape[1]), selected_A.shape[1], nInliers)
+                return np.array(masked_selected_A_i), np.array(masked_selected_B_i), _stat_, np.array(masked_selected_score)#max(masked_selected_score)
+            except:
+                code.interact( local=locals(), banner="Exception occured in voting" )
+
 
 
     def release_candidate_match3way( self ):
@@ -957,3 +1027,432 @@ class GeometricVerification:
         masked_pts_prev = np.array( masked_pts_prev )
         _pts_curr_m =  np.array(_pts_curr_m )
         return  masked_pts_curr, masked_pts_prev, _pts_curr_m
+
+    ###########################################################################
+
+    def sieve_stat_to_score( self, sieve_stat ):
+        print 'Tracked Features              :', sieve_stat[0]
+        print 'Features retained post voting :', sieve_stat[1]
+        print 'Features retained post f-test :', sieve_stat[2]
+
+        # Finding-1: if atleast 20% of the tracked points of min(feat2d_curr, feat2d_prev)
+        # are retained than it indicates that this one is probably a true match.
+
+        # Finding-2: If tracked features in both images are dramatically different,
+        # then, most likely it is a false match and hence need to be rejected.
+
+
+
+        match2_voting_score = float(sieve_stat[1]) / sieve_stat[0] #how many remain after voting. More retained means better confident I am. However less retained doesn't mean it is wrong match. Particularly, there could be less overlaping area and the tracked features are uniformly distributed on image space.
+        match2_tretained_score = float(sieve_stat[2]) / sieve_stat[0] #how many remain at the end
+        match2_geometric_score  = (sieve_stat[1] - sieve_stat[2]) / sieve_stat[1]#how many were eliminated by f-test. lesser is better here. If few were eliminated means that the matching after voting is more geometrically consistent
+        print 'match2_voting_score: %4.2f; ' %(match2_voting_score),
+        print 'match2_tretained_score: %4.2f; ' %(match2_tretained_score),
+        print 'match2_geometric_score: %4.2f' %(match2_geometric_score)
+
+
+
+        match2_total_score = 0.
+        if match2_voting_score > 0.5:
+            match2_total_score += 1.0
+
+        if match2_tretained_score > 0.25:
+            match2_total_score += 2.5
+        else:
+            if match2_tretained_score > 0.2 and match2_tretained_score <= 0.25:
+                match2_total_score += 1.0
+            if match2_tretained_score > 0.15 and match2_tretained_score <= 0.2:
+                match2_total_score += 0.5
+
+
+        if match2_geometric_score > 0.55:
+            match2_total_score -= 1.
+        else:
+            if match2_geometric_score < 0.4 and match2_geometric_score >= 0.3:
+                match2_total_score += 1.0
+            if match2_geometric_score < 0.3 and match2_geometric_score >= 0.2:
+                match2_total_score += 1.5
+            if match2_geometric_score < 0.2 :
+                match2_total_score += 1.5
+
+        # min/ max
+        # if (float(min(feat2d_curr.shape[1],feat2d_prev.shape[1])) / max(feat2d_curr.shape[1],feat2d_prev.shape[1])) < 0.70:
+            # match2_total_score -= 3
+            # print 'nTracked features are very different.'
+
+        print '==Total_score : ', match2_total_score, '=='
+        return match2_total_score
+
+
+
+    def robust_match3way( self, DEBUG=False ):
+        """
+
+        Returns:
+            pts_curr, pts_prev, _pts_curr_m,  --> 3 point sets in curr, prev and curr-1
+            per_match_vote,                   --> Match quality of each, a number between 0,5
+            (dense_match_quality, after_vote_match_quality) --> 2-scalars to give quality after each of the 2 steps involved
+
+            if pts_curr is None indicates that dense_match_quality was too low to proceed further and hence this match
+            was REJECTed after step-1.
+
+            Often times match can also be REJECTed after voting, ie. after step-2. In that case as well
+            pts_curr will be zero.
+        """
+        assert( self.im1 is not None and self.im2 is not None and self.im3 is not None )
+        assert( self.im1_lut_raw is not None and self.im2_lut_raw is not None )
+
+        # DEBUG = False
+        # Step-1: Daisy Dense Match.
+        # Enabling DEBUG for this step will show matches in each prominent clusters. Will be useful to generate results
+        pts_curr, pts_prev, mask_c_p, pt_match_quality_scores = self.daisy_dense_matches_with_scores(DEBUG=False)
+
+        #######################################################################
+        ## If there are not enough high-quality matches, consider giving up! ##
+        #######################################################################
+        npts_score_gt_2 = (np.array(pt_match_quality_scores) >= 2).sum() #0.5 (top-half)
+        npts_score_gt_3 = (np.array(pt_match_quality_scores) >= 3).sum() #0.75 (top-quarter)
+        dense_match_quality = 0
+        # (-inf,35): +0; [35,50): +1 ; [50,inf]: +2
+        if npts_score_gt_2 > 35 and npts_score_gt_2 <= 50:
+            dense_match_quality += 1
+        else:
+            if npts_score_gt_2 > 50 :
+                dense_match_quality += 2
+
+        # (-inf,20): +0; [20,35): +1 ; [35,inf]: +2
+        if npts_score_gt_3 > 20 and npts_score_gt_3 <= 35:
+            dense_match_quality += 1
+        else:
+            if npts_score_gt_3 > 35 :
+                dense_match_quality += 2
+
+
+        if DEBUG:
+            print '===Step-1: Daisy Dense Match==='
+
+            # xcanvas_c_p = self.plot_point_sets( self.im1, pts_curr, self.im2, pts_prev, mask_c_p)
+            xcanvas_c_p = self.plot_point_sets_with_quality_scores( self.im1, pts_curr, self.im2, pts_prev, pt_match_quality_scores, mask_c_p, enable_text=True)
+            print 'nPts                : ', len(pts_curr)
+            print 'nPts.score > 2      : ', (np.array(pt_match_quality_scores) >= 2).sum()
+            print 'nPts.score > 3      : ', (np.array(pt_match_quality_scores) >= 3).sum()
+            print 'Dense Match Quality : ', dense_match_quality
+
+            print 'Point Set Match Quality : %4.2f' %( np.mean(pt_match_quality_scores) )
+            # fname = '/home/mpkuse/Desktop/a/drag_nap/%d.jpg' %(loop_index)
+            # print 'Write(match3way_daisy) : ', fname
+            # cv2.imwrite( fname, xcanvas_c_p )
+            cv2.imshow( 'xcanvas_c_p__daisy_dense_matches', xcanvas_c_p )
+
+
+
+        # if dense_match_quality is less than 2, there is no point continuing. Possibly reject
+        if dense_match_quality < 2 :
+            print 'REJECT after daisy_dense_matches(), as the quality of dense-matches is too low'
+            return None, None, None, None, (dense_match_quality,0)
+        #############################################
+        ## end evaluating quality of dense matches ##
+        #############################################
+
+
+
+        # Step-1.5: Filter Dense Matches with voting
+        #   Ideally, these dense matches with daisy+netvlad_mask need to be
+        #   filtered using GMS-style-voting scheme. Note that fundamentalmatrix-test
+        #   is already performed in self.daisy_dense_matches(). Possibly using
+        #   the percentage of matches eliminated from original matching can be of
+        #   value.
+        #
+        if DEBUG:
+            print 'f-test: (%d/%d) : %4.2f' %( mask_c_p.sum(), len(mask_c_p), float(mask_c_p.sum()) / len(mask_c_p))
+        masked_pts_curr = list( pts_curr[i] for i in np.where( mask_c_p[:,0] == 1 )[0] )
+        masked_pts_prev = list( pts_prev[i] for i in np.where( mask_c_p[:,0] == 1 )[0] )
+        masked_pt_match_quality_scores = list( pt_match_quality_scores[i] for i in np.where( mask_c_p[:,0] == 1 )[0] )
+
+        masked_pts_curr_2N = np.transpose( np.array( masked_pts_curr ) )
+        masked_pts_prev_2N = np.transpose( np.array( masked_pts_prev ) )
+        # code.interact( local=locals() )
+        # Without prior
+        # ind_curr, ind_prev, _stat_ = self.release_candidate_match2_guided_2way( masked_pts_curr_2N, masked_pts_prev_2N)
+
+        # With prior
+        prior_vote_matrix = None#.01 + .25*np.diag(masked_pt_match_quality_scores)
+        # code.interact( local=locals() )
+        ind_curr, ind_prev, _stat_, per_match_vote = self.release_candidate_match2_guided_2way( masked_pts_curr_2N, masked_pts_prev_2N, return_per_match_vote_score=True)
+
+        #
+        # Scale pt_match_quality_scores here
+        _tmp = np.array(masked_pt_match_quality_scores)[ind_curr]
+        per_match_vote = np.multiply( 1.5*_tmp, per_match_vote )
+
+        #########  XX Eval Quality after Voting XX ##########
+
+        npts_score_gt_2 = (np.array(per_match_vote) >= 2.).sum() #0.5 (top-half)
+        npts_score_gt_3 = (np.array(per_match_vote) >= 3.).sum() #0.75 (top-quarter)
+        after_vote_match_quality = 0
+        # (-inf,35): +0; [35,50): +1 ; [50,inf]: +2
+        if npts_score_gt_2 > 25 and npts_score_gt_2 <= 40:
+            after_vote_match_quality += 1
+        else:
+            if npts_score_gt_2 > 40 :
+                after_vote_match_quality += 2
+
+        # (-inf,20): +0; [20,35): +1 ; [35,inf]: +2
+        if npts_score_gt_3 > 10 and npts_score_gt_3 <= 25:
+            after_vote_match_quality += 1
+        else:
+            if npts_score_gt_3 > 25 :
+                after_vote_match_quality += 2
+
+
+
+        #####################################################
+
+
+        if len(ind_curr) != 0:
+            pts_curr = list( map(tuple,np.transpose(masked_pts_curr_2N[:,ind_curr])) )
+            pts_prev = list( map(tuple,np.transpose(masked_pts_prev_2N[:,ind_prev])) )
+            mask_c_p = np.ones( (len(pts_curr),1), dtype=mask_c_p.dtype )
+        else:
+            pts_curr = []
+            pts_prev = []
+            mask_c_p = []
+
+
+
+
+        if DEBUG:
+            # xcanvas_c_p = self.plot_point_sets( self.im1, pts_curr, self.im2, pts_prev, mask_c_p)
+            xcanvas_c_p = self.plot_point_sets_with_quality_scores( self.im1, pts_curr, self.im2, pts_prev, per_match_vote, mask_c_p, enable_text=True)
+            print '=== Step-1.5: Voting ==='
+            # print '_stat_', _stat_
+            # self.sieve_stat_to_score( _stat_ )
+            print 'nPts returned by voting : ', len(pts_curr)
+            print 'average per_match_vote  : %4.2f' %(np.mean(per_match_vote))
+
+            print 'nPts.score > 2           : ', npts_score_gt_2
+            print 'nPts.score > 3           : ', npts_score_gt_3
+            print 'After Vote Match Quality : ', after_vote_match_quality
+            print 'per_match_vote', per_match_vote
+
+            # fname = '/home/mpkuse/Desktop/a/drag_nap/%d.jpg' %(loop_index)
+            # print 'Write(match3way_daisy) : ', fname
+            # cv2.imwrite( fname, xcanvas_c_p )
+            cv2.imshow( 'xcanvas_c_p__after_voting', xcanvas_c_p )
+            # code.interact( local=locals() )
+
+
+
+        if after_vote_match_quality < 2 :
+            print 'REJECT after voting ie. release_candidate_match2_guided_2way(), as the quality after voting was too low'
+            return None, None, None, None, (dense_match_quality,after_vote_match_quality)
+
+
+        # Step-2: Match expansion
+        _pts_curr_m = self.expand_matches_to_curr_m( pts_curr, pts_prev, mask_c_p, self.im3  )
+
+        # code.interact( local=locals() )
+        if DEBUG:
+            gridd = self.plot_3way_match( self.im1, np.array(pts_curr), self.im2, np.array(pts_prev), self.im3, np.array(_pts_curr_m) )
+            # fname = '/home/mpkuse/Desktop/a/drag_nap/%d_3way.jpg' %(loop_index)
+            # print 'Write(match3way_daisy) : ', fname
+            # cv2.imwrite(fname, gridd )
+            cv2.imshow( 'gridd0', gridd )
+            cv2.waitKey(10)
+
+        assert( len(pts_curr) == len(pts_prev) )
+        assert( len(pts_curr) == len(_pts_curr_m) )
+
+        pts_curr = np.array(pts_curr) #Nx2
+        pts_prev = np.array( pts_prev )
+        _pts_curr_m =  np.array(_pts_curr_m )
+
+        # code.interact( local=locals() )
+        return  pts_curr, pts_prev, _pts_curr_m, per_match_vote, (dense_match_quality, after_vote_match_quality)
+
+
+
+    # This function will compute the daisy matches, given the cluster assignments
+    # from netvlad and dense daisy. Need to set_im() and set_im_lut() before calling this
+    def daisy_dense_matches_with_scores(self, DEBUG=False):
+        # DEBUG = True # in debug mode 4 things are returned, : m1, m2, mask and [xcanvas]
+        #               in non-debug mode 3 things r returned
+        assert self.im1 is not None, "GeometricVerification.daisy_dense_matches(): im1 was not set. "
+        assert self.im2 is not None, "GeometricVerification.daisy_dense_matches(): im2 was not set. "
+        assert self.im1_lut_raw is not None, "GeometricVerification.daisy_dense_matches(): im1_lut_raw was not set. "
+        assert self.im2_lut_raw is not None, "GeometricVerification.daisy_dense_matches(): im2_lut was not set. "
+
+
+        if DEBUG:
+            assert self.im1_lut is not None, "GeometricVerification.daisy_dense_matches(): im1_lut was not set. "
+            assert self.im2_lut is not None, "GeometricVerification.daisy_dense_matches(): im2_lut was not set. "
+
+
+        # Get prominent_clusters
+        startProminentClusters = time.time()
+        Z_curr = self.prominent_clusters(im_no=1)
+        Z_prev = self.prominent_clusters(im_no=2)
+        self._print_time( 'Prominent clusters', startProminentClusters, time.time() )
+
+
+        # Step-1 : Get Daisy at every point
+        startDaisy = time.time()
+        # Old code
+        # D_curr = self.get_whole_image_daisy( im_no=1 )
+        # D_prev = self.get_whole_image_daisy( im_no=2 )
+        # self.daisy_im1 = D_curr
+        # self.daisy_im2 = D_prev
+
+        # new code (12th Nov, assumes daisy was already computed, just get views). Possibly dirty
+        D_curr = self.view_daisy( ch=1 ) #self.my_daisy( im_curr, ch=0 )
+        D_prev = self.view_daisy( ch=2 ) #my_daisy( im_prev, ch=1 )
+        self._print_time( 'Daisy (2 images)', startDaisy, time.time() )
+
+        # Step-2 : Given a k which is in both images, compare clusters with daisy. To do that do NN followd by Lowe's ratio test etc
+        startDenseFLANN = time.time()
+        Z_curr_uniq = np.unique( Z_curr )[1:] #from 1 to avoid 0 which is for no assigned cluster
+        Z_prev_uniq = np.unique( Z_prev )[1:]
+        # print Z_curr_uniq #list of uniq k
+        # print Z_prev_uniq
+
+
+        # Prepare FLANN Matcher
+        FLANN_INDEX_KDTREE = 0
+        index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 5)
+        search_params = dict(checks=50)   # or pass empty dictionary
+        flann = cv2.FlannBasedMatcher(index_params,search_params)
+
+        # Loop over intersection, and merge all the pts from each of the k
+        pts_A = []
+        pts_B = []
+        pt_match_quality_scores = [] #equal to size of pts_A or pts_B.
+        k_intersection = set(Z_curr_uniq).intersection( set(Z_prev_uniq) )
+        xcanvas_array = []
+        if DEBUG:
+            print 'k_intersection: ', k_intersection
+        for k in k_intersection:
+            H_curr = np.where( Z_curr==k ) #co-ordinates. these co-ordinates need testing
+            desc_c = np.array( D_curr[ H_curr[0]*4, H_curr[1]*4 ] ) # This is since D_curr is (240,320) and H_curr is (60,80)
+
+            H_prev = np.where( Z_prev==k ) #co-ordinates #remember , Z_prev is (80,60)
+            desc_p = np.array( D_prev[ H_prev[0]*4, H_prev[1]*4 ] )
+
+            matches = flann.knnMatch(desc_c.astype('float32'),desc_p.astype('float32'),k=2)
+            _pts_A, _pts_B, _pts_lowe_ratio = self.analyze_dense_matches(  H_curr, H_prev, matches, return_lowe_ratio=True )
+
+            # Scores to assess the quality of matches for this segment
+            # -a- lowe's ratios are scored as. Note: lower ratio is better here:
+            #       note, this scoring is done in call analyze_dense_matches() on per match basis
+            #              x <= 0.67  ---> +2
+            #       0.67 < x <= 0.72  ---> +1
+            #       0.72 < x <= 0.75  ---> +0.5
+            #       0.75 < x <= 0.8   ---> +0
+            #
+            # -b- percentage of dense points retained. Usually more than 10% is a good sign
+            #          0 < x <= 10  --->  +0
+            #         10 < x <= 15  --->  +1
+            #         15 < x <= 30  --->  +1.5
+            #         30 < x        --->  +2
+            mean_of_lowe_ratios = np.mean( _pts_lowe_ratio )
+            retained_percent = 0
+            if len(_pts_A) != 0:
+                retained_percent = float(len(_pts_A)) * 100. /desc_c.shape[0]
+
+            if retained_percent > 0 and retained_percent <= 10:
+                retained_percent_score = 0.
+            else:
+                if retained_percent > 10 and retained_percent <= 15:
+                    retained_percent_score = 1.
+                else:
+                    if retained_percent > 15 and retained_percent <= 30:
+                        retained_percent_score = 1.5
+                    else:
+                        retained_percent_score = 2.
+            # End of Scoring
+
+
+            pts_A += _pts_A
+            pts_B += _pts_B
+            # pts_lowe_ratio += _pts_lowe_ratio #Old way
+            pt_match_quality_scores += list( np.array(_pts_lowe_ratio) + np.array(retained_percent_score) )
+            # DEBUG
+            if DEBUG:
+                print '-_-_-_'
+                print 'k=', k
+                print 'Input Pts: ', desc_c.shape[0]
+                print 'Retained : %d matches; %4.2f percent' %( len(_pts_A),  retained_percent)
+                print 'Mean %4.2f' %(mean_of_lowe_ratios)
+                xim1 = self.s_overlay( self.im1, np.int0(Z_curr==k), 0.7 )
+                xim2 = self.s_overlay( self.im2, np.int0(Z_prev==k), 0.7 )
+                # xcanvas = self.plot_point_sets( self.im1, _pts_A, self.im2, _pts_B)
+                xcanvas = self.plot_point_sets( xim1, _pts_A, xim2, _pts_B, enable_text=True)
+                cv2.imshow( 'xcanvas', xcanvas)
+                cv2.waitKey(10)
+                xcanvas_array.append( xcanvas )
+                code.interact( local=locals(), banner='In daisy_dense_matches_with_scores()' )
+            # END Debug
+
+
+        self._print_time( 'Dense FLANN over common k=%s' %(str(k_intersection)), startDenseFLANN, time.time() )
+
+
+        # DEBUG, checking pts_A, pts_B
+        if DEBUG:
+            print 'Total Matches : %d' %(len(pts_A))
+            xcanvas = self.plot_point_sets( self.im1, pts_A, self.im2, pts_B)
+            cv2.imshow( 'full_xcanvas', xcanvas)
+            cv2.waitKey(0)
+
+        # End DEBUG
+
+
+        # Step-3 : Essential Matrix Text
+        E, mask = cv2.findFundamentalMat( np.array( pts_A ), np.array( pts_B ), param1=5 )
+        if DEBUG:
+            print 'Total Dense Matches : ', len(pts_A)
+            print 'Total Verified Dense Matches : ', mask.sum()
+        # code.interact( local=locals() )
+
+
+        return pts_A, pts_B, mask, pt_match_quality_scores
+
+
+
+    def plot_point_sets_with_quality_scores( self, im1, pt1, im2, pt2, pt_match_quality_scores, mask=None, enable_text=False ):
+        """
+            Color coding according to pt_match_quality_scores.
+            0 : E7D9D9 (rgb:231,217,217)
+            1 : E7B7B7 (231,183,183)
+            2 : E78A8A (231,138,138)
+            3 : E75050 (231,80,80)
+            4 : E70000 (231,0,0)
+            5 : FF0000 (255,0,0)
+        """
+        xcolor = []
+        xcolor.append( (217,217,231) )
+        xcolor.append( (183,183,231) )
+        xcolor.append( (138,138,231) )
+        xcolor.append( ( 80, 80,231) )
+        xcolor.append( (  0,  0,231) )
+        xcolor.append( (  0,  0,255) )
+
+        assert( len(pt1) == len(pt2) )
+        assert( len(pt1) == len(pt_match_quality_scores) )
+        xcanvas = np.concatenate( (im1, im2), axis=1 )
+        for xi in range( len(pt1) ):
+            if (mask is not None) and (mask[xi,0] == 0):
+                continue
+
+            cv2.circle( xcanvas, pt1[xi], 4, (255,0,255) )
+            ptb = tuple(np.array(pt2[xi]) + [im1.shape[1],0])
+            cv2.circle( xcanvas, ptb, 4, (255,0,255) )
+
+            c_indx = min(5,int( np.floor(pt_match_quality_scores[xi]) ) )
+            cv2.line( xcanvas, pt1[xi], ptb, xcolor[ c_indx ] )
+
+
+            if enable_text:
+                color_com = (0,0,255)
+                cv2.putText( xcanvas, str(xi), pt1[xi], cv2.FONT_HERSHEY_SIMPLEX, .3, color_com )
+                cv2.putText( xcanvas, str(xi), ptb, cv2.FONT_HERSHEY_SIMPLEX, .3, color_com )
+        return xcanvas
