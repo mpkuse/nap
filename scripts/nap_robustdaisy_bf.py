@@ -25,6 +25,11 @@
     c) op_mode=30. 3way match given out. This is captured by another node which
                     inturn computes the pnp pose from these 3way matches
 
+    In this edition (5), we are going to do robust daisy. In this we have a
+    voting scheme and quantitative metrics to judge quality of match. This
+    scoring can essentially eliminate false matches early before going to
+    loop-closure module or the pnp computation module.
+
     The descriptor comparison can be in either i) Brute force or ii) Using FAISS
     (product quantization). The matchings can be done with either daisy or gms-matcher.
 
@@ -32,6 +37,7 @@
         Created : 3rd Apr, 2017
         Edition : 2 (of nap_time_node.py)
         Edition : 4 (nap_daisy_bf.py 3rd Nov, 2017)
+        Edition : 5 (nap_robustdaisy_bf.py 25th Dec, 2017)
 
 """
 
