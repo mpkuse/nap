@@ -240,6 +240,7 @@ def match2_guided_gms( curr_im, feature_factory_index, prev_im ):
 
 #---           END        ---#
 
+
 ########### Init PlaceRecognitionNetvlad ##########
 place_mod = PlaceRecognitionNetvlad(\
                                     PARAM_MODEL,\
@@ -247,7 +248,10 @@ place_mod = PlaceRecognitionNetvlad(\
                                     PARAM_K = PARAM_K
                                     )
 
-feature_factory = FeatureFactory()
+
+vins_config_yaml = rospy.get_param( '/nap/config_file')
+print 'VINS-CONFIG-YAML', vins_config_yaml
+feature_factory = FeatureFactory(vins_config_yaml)
 
 ############# GEOMETRIC VERIFICATION #################
 VV = GeometricVerification()

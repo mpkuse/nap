@@ -21,11 +21,11 @@
       ################# -->
 
     <!-- BAG SET 01, captured 29th June, 2017 -->
-    <arg name="bag_path" default="/media/mpkuse/Bulk_Data/other_seqs/pointgrey_color_seq/" />
+    <!-- <arg name="bag_path" default="/media/mpkuse/Bulk_Data/other_seqs/pointgrey_color_seq/" /> -->
     <!-- <arg name="bag_file" default="2017-06-29-15-09-10.bag" doc="OK, on stairs for quick testing"/> -->
     <!-- <arg name="bag_file" default="2017-06-29-15-11-31.bag"/> -->
     <!-- <arg name="bag_file" default="2017-06-29-15-16-50.bag" doc="start from UG flr of cyt to lawn and back. not a good seq to test with"/> -->
-    <arg name="bag_file" default="2017-06-29-15-23-43.bag" doc="ok"/>
+    <!-- <arg name="bag_file" default="2017-06-29-15-23-43.bag" doc="ok"/> -->
     <!--<arg name="bag_file" default="2017-06-29-15-29-46.bag" doc="traj ok, but not ok to test netvlad"/>-->
     <!-- <arg name="bag_file" default="2017-06-29-15-31-19.bag" doc="dont use"/> -->
     <!-- END OF BAG 01 -->
@@ -52,11 +52,11 @@
 
 
     <!-- Bag set 05, 4 seq in Tai Po Tsai. Captured on 12th Dec, cloudy weather -->
-    <!-- <arg name="bag_path" default="/media/mpkuse/Bulk_Data/other_seqs/pointgrey_color_seq/bag05" /> -->
+    <arg name="bag_path" default="/media/mpkuse/Bulk_Data/other_seqs/pointgrey_color_seq/bag05" />
     <!-- <arg name="bag_file" default="2017-12-12-10-46-42.bag" doc="around 7/11 in tpt. Not good for testing too many silloutes due to pointing camera to the sky"/> -->
     <!-- <arg name="bag_file" default="2017-12-12-10-51-52.bag" doc="useless. No loop" /> -->
     <!-- <arg name="bag_file" default="2017-12-12-10-53-04.bag" doc="building near the garbage dump in tpt" /> -->
-    <!-- <arg name="bag_file" default="2017-12-12-11-04-45.bag" doc="!!tpt childrens garden, Another nice seq to test" /> -->
+    <arg name="bag_file" default="2017-12-12-11-04-45.bag" doc="!!tpt childrens garden, Another nice seq to test" />
     <!-- <arg name="bag_file" default="2017-12-13-11-12-35.bag" doc="!!indoors of LSK building G/F. Usable" /> -->
 
 
@@ -106,8 +106,8 @@
       <!--NAP Node -->
       <!-- <node name="nap" pkg="nap" type="nap_graph_modelling.py" output="screen" > -->
       <node name="nap" pkg="nap" type="nap_daisy_bf.py" output="screen" >
-        <param name="config_file" type="string" value="$(arg config_path)" />
         <remap to="$(arg bag_color_im_topic)" from="/semi_keyframes"/>
+        <param name="config_file" type="string" value="$(arg config_path)" />
       </node>
 
 

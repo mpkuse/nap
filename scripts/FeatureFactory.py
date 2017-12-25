@@ -153,11 +153,11 @@ class FeatureFactory:
             pickle.dump( self.global_index, fp )
 
         # Save self.K and self.K_org
-        print 'Writing pickle: '. fname+'_cam_intrinsic_K.pickle'
+        print 'Writing pickle: ', fname+'_cam_intrinsic_K.pickle'
         with open( fname+'_cam_intrinsic_K.pickle', 'wb') as fp:
             pickle.dump( self.K, fp )
 
-        print 'Writing pickle: '. fname+'_cam_intrinsic_K_org.pickle'
+        print 'Writing pickle: ', fname+'_cam_intrinsic_K_org.pickle'
         with open( fname+'_cam_intrinsic_K_org.pickle', 'wb') as fp:
             pickle.dump( self.K_org, fp )
 
