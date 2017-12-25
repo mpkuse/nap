@@ -109,6 +109,10 @@ feature_factory.load_from_pickle( FEATURE_FACTORY )
 # quit()
 ###############################################################################
 VV = GeometricVerification()
+human_a = 0
+human_s = 0
+human_d = 0
+human_f = 0
 # for i in [10]: #range( len(loop_candidates) ):
 for i in range( len(loop_candidates)):
     print '==='
@@ -172,7 +176,7 @@ for i in range( len(loop_candidates)):
     if match2_total_score > 3:
         # Accept this match and move on
         print 'Accept this match and move on'
-        print tcol.OKGREEN, 'Accept', tcol.ENDC
+        print tcol.OKGREEN, 'Accept (Strong)', tcol.ENDC
         pass
 
     if match2_total_score > 2 and match2_total_score <= 3 and len(selected_curr_i) > 20:
@@ -216,6 +220,24 @@ for i in range( len(loop_candidates)):
     if match2_total_score < 0.5:
         # Reject (don't bother computing 3way)
         print 'Reject 2way matching, and do not compute 3way matching'
-        print tcol.FAIL, 'Reject', tcol.ENDC
+        print tcol.FAIL, 'Reject (Strong)', tcol.ENDC
 
-    cv2.waitKey(0)
+    key_press = cv2.waitKey(0)
+    if key_press == ord('a'):
+        print tcol.HEADER, '[HUMAN-a] False match accepted by geometry', tcol.ENDC
+        human_a += 1
+    if key_press == ord('s'):
+        print tcol.HEADER, '[HUMAN-s] True  match rejected by geometry', tcol.ENDC
+        human_s += 1
+    if key_press == ord('d'):
+        print tcol.HEADER, '[HUMAN-d] Yes-Yes case', tcol.ENDC
+        human_d += 1
+    if key_press == ord('f'):
+        print tcol.HEADER, '[HUMAN-f] No-No case', tcol.ENDC
+        human_f += 1
+
+
+print tcol.HEADER, '[HUMAN-a:%d] False match accepted by geometry' %(human_a), tcol.ENDC
+print tcol.HEADER, '[HUMAN-s:%d] True  match rejected by geometry' %(human_s), tcol.ENDC
+print tcol.HEADER, '[HUMAN-d:%d] Yes-Yes case' %(human_d), tcol.ENDC
+print tcol.HEADER, '[HUMAN-f:%d] No-No case' %(human_f), tcol.ENDC
