@@ -38,7 +38,9 @@ DataManager::~DataManager()
 {
   cout << "In ~DataManager\n";
 
-  string base_path = string( "/home/mpkuse/Desktop/a/drag/" );
+#ifdef _DEBUG_POSEGRAPH_2_FILE
+  // string base_path = string( "/home/mpkuse/Desktop/a/drag/" );
+  string base_path = string( _DEBUG_SAVE_BASE_PATH );
   // string base_path = ros::package::getPath( "nap" ) + "/DUMP_pose_graph/";
 
   // string file_name = ros::package::getPath( "nap" ) + "/DUMP_pose_graph/pose_graph.nodes.csv";
@@ -92,7 +94,7 @@ DataManager::~DataManager()
                       << ", "<< e->b_id << ", "<< e->b_timestamp << endl;
   }
   fp_loop_edge.close();
-
+#endif
 
 }
 

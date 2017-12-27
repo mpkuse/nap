@@ -85,7 +85,7 @@ class FeatureFactory:
 
 
     def tracked_features_callback(self, data ):
-        print 'Received tracked feature', data.header.stamp, len( data.points ), len( data.channels )
+        # print 'Received tracked feature', data.header.stamp, len( data.points ), len( data.channels )
         assert len( data.points ) == len( data.channels ) , "in FeatureFactor/tracked_features_callback() data.channels and data.points must have same count"
         nPts = len( data.points )
 

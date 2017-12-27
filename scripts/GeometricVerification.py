@@ -24,6 +24,7 @@ except:
     print 'See also : https://github.com/mpkuse/daisy_py_wrapper'
     print 'Do: export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/mpkuse/catkin_ws/src/nap/scripts/DaisyMeld'
     print 'do: export PYTHONPATH=$PYTHONPATH:/home/mpkuse/catkin_ws/src/nap/scripts'
+    quit()
 from ColorLUT import ColorLUT
 
 

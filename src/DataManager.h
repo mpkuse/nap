@@ -79,6 +79,13 @@ using namespace std;
 #include "PinholeCamera.h"
 
 
+// Debug enable/disable flags
+#define _DEBUG_3WAY
+#define _DEBUG_PNP
+#define _DEBUG_POSEGRAPH_2_FILE
+
+// make sure this folder exisits.!
+#define _DEBUG_SAVE_BASE_PATH "/home/mpkuse/Desktop/a/drag_posecompute_node/"
 
 class DataManager
 {
@@ -251,7 +258,8 @@ private:
   // pts2d   : 2d Points 2xN 1-channel
   // [Output]
   // im_T_c  : Pose of model-cordinates (system in which 3d pts are specified) wrt to camera in which the 2d points are specified
-  void estimatePnPPose( const cv::Mat& c_3dpts, const cv::Mat& pts2d,
+  // returns : nInliners as returned by opencv's ransacpnp call
+  int estimatePnPPose_opencv( const cv::Mat& c_3dpts, const cv::Mat& pts2d,
                         Matrix4d& im_T_c  );
   void estimatePnPPose_withguess( const cv::Mat& c_3dpts, const cv::Mat& pts2d,
                         Matrix4d& im_T_c, const Matrix4d& odom_w_T_c, const Matrix4d& odom_w_T_p );

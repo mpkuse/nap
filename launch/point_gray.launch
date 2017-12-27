@@ -105,7 +105,8 @@
 
       <!--NAP Node -->
       <!-- <node name="nap" pkg="nap" type="nap_graph_modelling.py" output="screen" > -->
-      <node name="nap" pkg="nap" type="nap_daisy_bf.py" output="screen" >
+      <!-- <node name="nap" pkg="nap" type="nap_daisy_bf.py" output="screen" > -->
+      <node name="nap" pkg="nap" type="nap_robustdaisy_bf.py" output="screen" >
         <remap to="$(arg bag_color_im_topic)" from="/semi_keyframes"/>
         <param name="config_file" type="string" value="$(arg config_path)" />
       </node>

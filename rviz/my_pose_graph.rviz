@@ -8,14 +8,10 @@ Panels:
         - /Ref1/GridXZ1
         - /Ref1/Grid1
         - /Pose Graph1/Namespaces1
-        - /Paths1
         - /Paths1/Path1
         - /Paths1/No Loop1
-        - /Image1
-        - /Original Pose Graph1/Namespaces1
-        - /DBOW Colocation1
         - /DBOW Colocation1/Status1
-      Splitter Ratio: 0.508720934
+      Splitter Ratio: 0.622093022
     Tree Height: 745
   - Class: rviz/Selection
     Name: Selection
@@ -35,7 +31,7 @@ Panels:
     Experimental: false
     Name: Time
     SyncMode: 0
-    SyncSource: PointCloud
+    SyncSource: ""
 Visualization Manager:
   Class: ""
   Displays:
@@ -91,10 +87,15 @@ Visualization Manager:
       Marker Topic: /mish/pose_nodes
       Name: Pose Graph
       Namespaces:
-        loop_edges: true
-        odom_edges: true
-        spheres: true
-        text_label: false
+        {}
+      Queue Size: 100
+      Value: true
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /mish/pose_nodes_original
+      Name: Original Pose Graph
+      Namespaces:
+        {}
       Queue Size: 100
       Value: true
     - Alpha: 1
@@ -195,21 +196,12 @@ Visualization Manager:
         {}
       Queue Size: 100
       Value: true
-    - Class: rviz/Marker
-      Enabled: true
-      Marker Topic: /mish/pose_nodes_original
-      Name: Original Pose Graph
-      Namespaces:
-        spheres: true
-        text_label: true
-      Queue Size: 100
-      Value: true
     - Class: rviz/MarkerArray
       Enabled: true
       Marker Topic: /pose_graph/camera_pose_visual
       Name: MarkerArray
       Namespaces:
-        CameraPoseVisualization: true
+        {}
       Queue Size: 100
       Value: true
     - Class: rviz/MarkerArray
@@ -217,7 +209,7 @@ Visualization Manager:
       Marker Topic: /pose_graph/pose_graph
       Name: MarkerArray
       Namespaces:
-        CameraPoseVisualization: true
+        {}
       Queue Size: 100
       Value: true
     - Class: rviz/Image
@@ -280,24 +272,24 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/XYOrbit
-      Distance: 171.857483
+      Distance: 43.181797
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.0599999987
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -16.4223881
-        Y: -7.25989437
-        Z: -3.24844405e-05
+        X: -5.04556942
+        Y: 5.61489439
+        Z: -0.00019167061
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.0500000007
       Name: Current View
       Near Clip Distance: 0.00999999978
-      Pitch: 1.50479639
+      Pitch: 1.55979633
       Target Frame: <Fixed Frame>
       Value: XYOrbit (rviz)
-      Yaw: 4.41199303
+      Yaw: 0.231962398
     Saved: ~
 Window Geometry:
   Cluster Assgn:
