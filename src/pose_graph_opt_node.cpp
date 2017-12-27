@@ -143,11 +143,11 @@ int main(int argc, char ** argv )
   // ros::Subscriber sub_pcl_topic = nh.subscribe( point_cloud_topic, 1000, &DataManager::point_cloud_callback, &dataManager );
 
 
-
+#if defined _DEBUG_3WAY || defined _DEBUG_PNP
   // 2d features in normalized cords
-  // string features_tracked_topic = string( "/feature_tracker/feature" );
-  // ROS_INFO( "Subscribed to %s", features_tracked_topic.c_str() );
-  // ros::Subscriber sub_features_tracked_topic = nh.subscribe( features_tracked_topic, 1000, &DataManager::tracked_features_callback, &dataManager );
+  string features_tracked_topic = string( "/feature_tracker/feature" );
+  ROS_INFO( "Subscribed to %s", features_tracked_topic.c_str() );
+  ros::Subscriber sub_features_tracked_topic = nh.subscribe( features_tracked_topic, 1000, &DataManager::tracked_features_callback, &dataManager );
 
 
   //
@@ -162,7 +162,7 @@ int main(int argc, char ** argv )
   string nap_cluster_assgn_topic = string( "/nap/cluster_assignment" );
   ROS_INFO( "Subscribed to %s", nap_cluster_assgn_topic.c_str() );
   ros::Subscriber sub_nap_cl_asgn = nh.subscribe( nap_cluster_assgn_topic, 1000, &DataManager::raw_nap_cluster_assgn_callback, &dataManager );
-
+#endif
 
 
   //--- END Subscribes ---//

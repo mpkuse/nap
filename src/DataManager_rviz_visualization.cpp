@@ -77,7 +77,8 @@ void DataManager::publish_pose_graph_nodes()
     //
     // Write Node Image along with feat2d to file //
     char imfile_name[200];
-    sprintf( imfile_name, "/home/mpkuse/Desktop/a/drag2/kf_%d.png", i );
+    // sprintf( imfile_name, "/home/mpkuse/Desktop/a/drag2/kf_%d.png", i );
+    sprintf( imfile_name, "%s/kf_%d.png", _DEBUG_SAVE_BASE_PATH, i );
 
     if( !if_file_exist(imfile_name) )
     {
@@ -91,7 +92,8 @@ void DataManager::publish_pose_graph_nodes()
 
         // Write Node data to file.
         char debug_fname[100];
-        sprintf( debug_fname, "/home/mpkuse/Desktop/a/drag2/kf_%d.yaml", i );
+        // sprintf( debug_fname, "/home/mpkuse/Desktop/a/drag2/kf_%d.yaml", i );
+        sprintf( debug_fname, "%s/kf_%d.yaml", _DEBUG_SAVE_BASE_PATH, i );
         n->write_debug_xml( debug_fname );
 
 
@@ -128,7 +130,8 @@ void DataManager::publish_pose_graph_nodes()
 
         // Write annotated image
         // Write Node data to file.
-        sprintf( debug_fname, "/home/mpkuse/Desktop/a/drag2/kf_%d_anno.png", i );
+        // sprintf( debug_fname, "/home/mpkuse/Desktop/a/drag2/kf_%d_anno.png", i );
+        sprintf( debug_fname, "%s/kf_%d_anno.png", _DEBUG_SAVE_BASE_PATH, i );
         cv::imwrite( debug_fname, dst );
 
 
@@ -249,20 +252,21 @@ void DataManager::publish_pose_graph_edges( const std::vector<Edge*>& x_edges )
     {
       switch(e->sub_type)
       {
-        case EDGE_TYPE_LOOP_SUBTYPE_BASIC: // basic loop-edge in red
-          marker.color.r = 1.0; marker.color.g = 0.0; marker.color.b = 0.0; marker.ns = "loop_edges";
+        case EDGE_TYPE_LOOP_SUBTYPE_BASIC: // basic loop-edge in cyan
+          marker.color.r = 1.0; marker.color.g = 1.0; marker.color.b = 1.0; marker.ns = "loop_edges_basic";
           break;
 
-        case EDGE_TYPE_LOOP_SUBTYPE_3WAY: // 3way matched loop-edge in pink
-          marker.color.r = 1.0; marker.color.g = 0.0; marker.color.b = 1.0; marker.ns = "loop_edges";
+        case EDGE_TYPE_LOOP_SUBTYPE_3WAY: // 3way matched loop-edge in red
+          marker.color.r = 1.0; marker.color.g = 0.0; marker.color.b = 0.0; marker.ns = "loop_edges_3way";
+          marker.scale.y = 0.1; //fat arrow for 3way
           break;
 
         case EDGE_TYPE_LOOP_SUBTYPE_GUIDED: // Dark blue
-          marker.color.r = .2; marker.color.g = 0.0; marker.color.b = 0.8; marker.ns = "loop_edges";
+          marker.color.r = .2; marker.color.g = 0.0; marker.color.b = 0.8; marker.ns = "loop_edges_2way_guided";
           break;
 
         default:
-          marker.color.r = 1.0; marker.color.g = 1.0; marker.color.b = 1.0; marker.ns = "loop_edges";
+          marker.color.r = 1.0; marker.color.g = 1.0; marker.color.b = 1.0; marker.ns = "loop_edges_default";
           break;
 
       }
