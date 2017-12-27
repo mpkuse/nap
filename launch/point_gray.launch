@@ -46,9 +46,9 @@
     <!-- Bag set 03, Captured on 16th Aug, 2017 -->
     <arg name="bag_path" default="/media/mpkuse/Bulk_Data/other_seqs/pointgrey_color_seq/bag03/" />
     <!-- <arg name="bag_file" default="2017-08-16-14-54-01.bag" doc="start UG outside CYT, takes stairs down to enterprise center walk back" /> -->
-    <!-- <arg name="bag_file" default="2017-08-16-15-00-56.bag" doc="start from SENG towards BASE. Good results!"/> -->
+    <arg name="bag_file" default="2017-08-16-15-00-56.bag" doc="start from SENG towards BASE. Good results!"/>
     <!-- <arg name="bag_file" default="2017-08-16-15-06-12.bag" doc="Walking in BASE. Alright! but a little short the seq. 1 wrong"/> -->
-    <arg name="bag_file" default="2017-08-16-15-09-15.bag" doc="!!Perfect seq for testing" />
+    <!-- <arg name="bag_file" default="2017-08-16-15-09-15.bag" doc="!!Perfect seq for testing" /> -->
 
 
     <!-- Bag set 05, 4 seq in Tai Po Tsai. Captured on 12th Dec, cloudy weather -->

@@ -77,6 +77,7 @@ tcol = TerminalColors.bcolors()
 ############# PARAMS #############
 PKG_PATH = rospkg.RosPack().get_path('nap')
 # PKG_PATH = '/home/mpkuse/catkin_ws/src/nap/'
+
 # PARAM_MODEL = PKG_PATH+'/tf.logs/netvlad_k48/model-13000' #PKG_PATH+'/tf.logs/netvlad_angular_loss_w_mini_dev/model-4000'
 # PARAM_MODEL = PKG_PATH+'/tf.logs/netvlad_k64_tokyoTM/model-3500' #trained with tokyo, normalization is simple '
 # PARAM_MODEL = PKG_PATH+'/tf.logs/netvlad_k64_b20_tokyoTM_mean_aggregation/model-3750' #trained with mean aggregation in place of usual sum aggregation in netvlad_layer
@@ -90,21 +91,35 @@ PARAM_MODEL = PKG_PATH+'/tf.logs/netvlad_k64_b20_resnet/model-3750' # trained si
 PARAM_MODEL = PKG_PATH+'/tf2.logs/attempt_resnet6_K16_P8_N8/model-9250' #K=16
 # PARAM_MODEL = PKG_PATH+'/tf2.logs/attempt_resnet6_K32_P8_N8/model-2250' #K=32
 
-# Dont forget to load the eigen values, eigen vectors and mean
 
-
-# PARAM_MODEL_DIM_RED = PKG_PATH+'/tf.logs/netvlad_k48/db2/siamese_dimred/model-400' #PKG_PATH+'/tf.logs/siamese_dimred_fc/model-400'
-
-
-
+# Topics
 INPUT_IMAGE_TOPIC = '/semi_keyframes' #this is t be used for launch
+# TRACKED_FEATURE_TOPIC = '/feature_tracker/feature'
+TRACKED_FEATURE_TOPIC = '/vins_estimator/keyframe_point'
+OUTPUT_EDGES_TOPIC = '/raw_graph_edge'
+# End Topics
+
+# Place-recognition
 PARAM_CALLBACK_SKIP = 2
 PARAM_K = 16
 PARAM_FPS = 25 #used in ros.spin() loop
+# End of Place-recognition
 
-BASE__DUMP = '/home/mpkuse/Desktop/a/drag_nap'
+# Feature-matching
+# True : Enable the Robust Daisy Matching ie, mode_20 and mode_30
+# False: Disable robust daisy. Will publish all found loops as mode_10. It will later be matched with SIFT-like descriptors in VINS-pose-graph-opt (pose_graph_node.cpp) code
+ROBUST_DAISY_MATCHING = True
+
+BASE__DUMP = None #'/home/mpkuse/Desktop/a/drag_nap'  #set this to None, to disable data-writing
 DEBUG_IMAGE_PUBLISH = True
 DEBUG_PLOTTER = False
+# End of Feature-matching
+
+# VINS-CONFIG-YAML
+# To read camera instrinsics
+VINS_CONFIG_YAML_FNAME = rospy.get_param( '/nap/config_file')
+
+############## End of PARAMS #################
 
 def publish_time( PUB, time_ms ):
     PUB.publish( Float32(time_ms) )
@@ -272,97 +287,6 @@ def robust_daisy():
 
 
 
-# #--- Geometry and Matching ---#
-# def match3way_daisy( curr_im, prev_im, curr_m_im,    __lut_curr_im, __lut_prev_im ):
-#     """ Gives out 3 way matching 3 3xN matrix (i think)"""
-#     DEBUG = True #on enable, writes images to disk
-#     # Step-1: Compute dense matches between curr and prev --> SetA
-#     VV.set_im( curr_im, prev_im )
-#     VV.set_im_lut_raw( S_lut_raw[i_curr], S_lut_raw[i_prev] )
-#
-#     pts_curr, pts_prev, mask_c_p = VV.daisy_dense_matches()
-#     if DEBUG:
-#         xcanvas_c_p = VV.plot_point_sets( VV.im1, pts_curr, VV.im2, pts_prev, mask_c_p)
-#         fname = '/home/mpkuse/Desktop/a/drag_nap/%d.jpg' %(loop_index)
-#         print 'Write(match3way_daisy) : ', fname
-#         cv2.imwrite( fname, xcanvas_c_p )
-#
-#
-#     # Step-2: Match expansion
-#     _pts_curr_m = VV.expand_matches_to_curr_m( pts_curr, pts_prev, mask_c_p, curr_m_im  )
-#     masked_pts_curr = list( pts_curr[i] for i in np.where( mask_c_p[:,0] == 1 )[0] )
-#     masked_pts_prev = list( pts_prev[i] for i in np.where( mask_c_p[:,0] == 1 )[0] )
-#
-#     if DEBUG:
-#         gridd = VV.plot_3way_match( curr_im, masked_pts_curr, prev_im, masked_pts_prev, curr_m_im, _pts_curr_m )
-#         fname = '/home/mpkuse/Desktop/a/drag_nap/%d_3way.jpg' %(loop_index)
-#         print 'Write(match3way_daisy) : ', fname
-#         cv2.imwrite(fname, gridd )
-#
-#     assert( len(masked_pts_curr) == len(masked_pts_prev) )
-#     assert( len(masked_pts_curr) == len(_pts_curr_m) )
-#
-#     masked_pts_curr = np.array(masked_pts_curr) #Nx2
-#     masked_pts_prev = np.array( masked_pts_prev )
-#     _pts_curr_m =  np.array(_pts_curr_m )
-#     return  masked_pts_curr, masked_pts_prev, _pts_curr_m
-#
-#
-# def match3way_gms( curr_im, prev_im, curr_m_im ):
-#     start3way = time.time()
-#     pts_C, pts_P, pts_Cm = GMS.match3( curr_im, prev_im, curr_m_im )
-#     print 'time elapsed GMS.match3 : %4.2f' %( 1000. * (time.time() - start3way) )
-#     print 'match3way_gms() : pts_C.shape', pts_C.shape
-#     print 'match3way_gms() : pts_P.shape', pts_P.shape
-#     print 'match3way_gms() : pts_Cm.shape', pts_Cm.shape
-#     return np.transpose(pts_C), np.transpose(pts_P), np.transpose(pts_Cm)
-#
-#
-# def match2_guided_gms( curr_im, feature_factory_index, prev_im ):
-#     feat2d_normed = feature_factory.features[ feature_factory_index ] #3xN
-#     K = feature_factory.K
-#
-#     pts_curr = np.dot( K, feat2d_normed )
-#     print 'match2: Input pts : ', pts_curr.shape
-#     curr_annotate = curr_im.copy()
-#     for i in range( pts_curr.shape[1] ):
-#         xpt = np.int0( pts_curr[0:2,i] )
-#         cv2.circle( curr_annotate, (xpt[0], xpt[1]), 2, (55,255,55), -1 )
-#     #
-#     # fname = '/home/mpkuse/Desktop/a/drag_nap/%d.png' %(feature_factory_index)
-#     # print 'Writing file : ', fname
-#     # cv2.imwrite( fname, dst )
-#
-#     pts2_curr, pts2_prev = GMS.match2_guided( curr_im, pts_curr[0:2,:], prev_im )
-#
-#     # dst = GMS.plot_point_sets( curr_im, pts2_curr, prev_im, pts2_prev )
-#     dst = GMS.plot_point_sets( curr_annotate, pts2_curr, prev_im, pts2_prev )
-#     fname = '/home/mpkuse/Desktop/a/drag_nap/%d.png' %(feature_factory_index)
-#     print 'Writing file : ', fname
-#     cv2.imwrite( fname, dst )
-#
-#
-#
-#
-#
-#
-#     pts2x_curr, pts2x_prev = GMS.match2( curr_im, prev_im )
-#
-#     # dst = GMS.plot_point_sets( curr_im, pts2_curr, prev_im, pts2_prev )
-#     dst = GMS.plot_point_sets( curr_annotate, pts2x_curr, prev_im, pts2x_prev )
-#     fname = '/home/mpkuse/Desktop/a/drag_nap/%d_match2.png' %(feature_factory_index)
-#     print 'Writing file : ', fname
-#     cv2.imwrite( fname, dst )
-#
-#
-#     print 'match2: Output pts : ', pts2_curr.shape
-#     return np.transpose( pts2_curr), np.transpose( pts2_prev )
-#
-#
-#
-#
-#
-# #---           END        ---#
 
 
 ########### Init PlaceRecognitionNetvlad ##########
@@ -373,9 +297,11 @@ place_mod = PlaceRecognitionNetvlad(\
                                     )
 
 
-vins_config_yaml = rospy.get_param( '/nap/config_file')
-print 'VINS-CONFIG-YAML', vins_config_yaml
-feature_factory = FeatureFactory(vins_config_yaml)
+
+######### Init FeatureFactory###############
+print 'VINS-CONFIG-YAML', VINS_CONFIG_YAML_FNAME
+feature_factory = FeatureFactory(VINS_CONFIG_YAML_FNAME)
+
 
 ############# GEOMETRIC VERIFICATION #################
 VV = GeometricVerification()
@@ -390,15 +316,14 @@ rospy.Subscriber( INPUT_IMAGE_TOPIC, Image, place_mod.callback_image )
 rospy.loginfo( 'Subscribed to '+INPUT_IMAGE_TOPIC )
 
 # Tracked Features
-# TRACKED_FEATURE_TOPIC = '/feature_tracker/feature'
-TRACKED_FEATURE_TOPIC = '/vins_estimator/keyframe_point'
+
 rospy.Subscriber( TRACKED_FEATURE_TOPIC, PointCloud, feature_factory.tracked_features_callback )
 rospy.loginfo( 'Subscribed to '+TRACKED_FEATURE_TOPIC )
 
 
 # raw edges
-pub_edge_msg = rospy.Publisher( '/raw_graph_edge', NapMsg, queue_size=1000 )
-rospy.loginfo( 'Publish to /raw_graph_edge' )
+pub_edge_msg = rospy.Publisher( OUTPUT_EDGES_TOPIC, NapMsg, queue_size=1000 )
+rospy.loginfo( 'Publish to %s' %(OUTPUT_EDGES_TOPIC) )
 
 # raw visual edges
 # pub_visual_edge_msg = rospy.Publisher( '/raw_graph_visual_edge', NapVisualEdgeMsg, queue_size=1000 )
@@ -633,237 +558,149 @@ while not rospy.is_shutdown():
     nap_msg = make_nap_msg( i_curr, i_prev, (0.6,1.0,0.6) ) # puts in msg.c_timestamp, msg.prev_timestamp, msg.goodness
     nap_msg.n_sparse_matches = i_inliers #Not required
 
+    ######## op_mode: 10, ie. SIFT-like matching for geometry #############
+    # Publish with op_mode:10 for SIFT matching by qin tong. Uncomment
+    # next 4 lines to go for robustdaisy.
+    if ROBUST_DAISY_MATCHING is False:
+        nap_msg.op_mode = 10
+        pub_edge_msg.publish( nap_msg )
+
+        if DEBUG_IMAGE_PUBLISH:
+            curr_im = S_thumbnail[i_curr].astype('uint8')
+            prev_im = S_thumbnail[i_prev].astype('uint8')
+            xcanvas = VV.plot_2way_match( curr_im, None, prev_im, None )
+            publish_image( pub_feat2d_matching, xcanvas,  t=im_raw_timestamp )
+
+
+        publish_time( pub_time_publish, 1000.*(time.time() - startPublish) )
+        continue
+    ######################### END OF op_mode:10 ############################
+
 
     ################## Fill feature matching part of nap_msg ###########################
     # Task is to fill up nap msg.
+    if ROBUST_DAISY_MATCHING is True:
+        #
+        # Collect Image Data for processing
+        #
+        curr_im = S_thumbnail[i_curr].astype('uint8')
+        prev_im = S_thumbnail[i_prev].astype('uint8')
+        curr_m_im = S_thumbnail[i_curr-1].astype('uint8')
+        t_curr = S_timestamp[i_curr]
+        t_prev = S_timestamp[i_prev]
+        t_curr_m = S_timestamp[i_curr-1]
 
-    #
-    # Collect Image Data for processing
-    #
-    curr_im = S_thumbnail[i_curr].astype('uint8')
-    prev_im = S_thumbnail[i_prev].astype('uint8')
-    curr_m_im = S_thumbnail[i_curr-1].astype('uint8')
-    t_curr = S_timestamp[i_curr]
-    t_prev = S_timestamp[i_prev]
-    t_curr_m = S_timestamp[i_curr-1]
-
-    __lut_curr_im = S_lut_raw[i_curr]
-    __lut_prev_im = S_lut_raw[i_prev]
-
-
-    #
-    # Collect Features data
-    #
-    feat2d_curr_idx = feature_factory.find_index( t_curr )
-    feat2d_prev_idx = feature_factory.find_index( t_prev )
-
-    feat2d_curr_normed = feature_factory.features[feat2d_curr_idx ]
-    feat2d_prev_normed = feature_factory.features[feat2d_prev_idx ]
+        __lut_curr_im = S_lut_raw[i_curr]
+        __lut_prev_im = S_lut_raw[i_prev]
 
 
-    feat2d_curr = np.dot( feature_factory.K, feature_factory.features[feat2d_curr_idx ] ) #3xN in homogeneous cords
-    feat2d_prev = np.dot( feature_factory.K, feature_factory.features[feat2d_prev_idx ] )
+        #
+        # Collect Features data
+        #
+        feat2d_curr_idx = feature_factory.find_index( t_curr )
+        feat2d_prev_idx = feature_factory.find_index( t_prev )
 
-    feat3d_curr = feature_factory.point3d[feat2d_curr_idx]
-
-    # feat2d_curr_global_idx = feature_factory.global_index[feat2d_curr_idx]
-    # feat2d_prev_global_idx = feature_factory.global_index[feat2d_prev_idx]
-
-    # This call uses VV, and other variables (global)
-    _2way, _3way, _info_txt = robust_daisy()
-    if geometric_verify_log_fp is not None:
-        geometric_verify_log_fp.write( '\n---i_curr=%5d, i_prev=%5d---\n' %(i_curr, i_prev) )
-        geometric_verify_log_fp.write( _info_txt )
-
-    if _2way is not None:
-        # Step-1a: Get indices of matches
-        selected_curr_i, selected_prev_i = _2way
-
-        # Step-1b: Save as image
-        if BASE__DUMP is not None or DEBUG_IMAGE_PUBLISH:
-
-            if selected_curr_i.shape[0] > 0:
-                xcanvas_2way = VV.plot_2way_match( curr_im, np.int0(feat2d_curr[0:2,selected_curr_i]), prev_im, np.int0(feat2d_prev[0:2,selected_prev_i]),  enable_lines=True )
-            else:
-                # xcanvas_2way = np.zeros( (100,100), dtype=np.uint8)
-                xcanvas_2way = VV.plot_2way_match( curr_im, None, prev_im, None,  enable_lines=True )
-
-            if DEBUG_IMAGE_PUBLISH:
-                publish_image( pub_feat2d_matching, xcanvas_2way,  t=im_raw_timestamp )
-
-            if BASE__DUMP is not None:
-                _xfname = '%s/%d_%d_2way.png' %(BASE__DUMP, i_curr, i_prev )
-                print 'Writing ', _xfname
-                cv2.imwrite( _xfname,  xcanvas_2way )
-
-        # Step-2: Fill up nap-msg
-        nap_msg = make_nap_msg( i_curr, i_prev, (0.6,1.0,0.6) )
-        nap_msg.op_mode = 20
-        nap_msg.t_curr = t_curr
-        nap_msg.t_prev = t_prev
-        # feat2d_curr_global_idx.shape : 96,
-        # feat2d_curr_normed.shape : 3x96
-        # selected_curr_i.shape: 21,
-        #    out of 96 tracked features 21 were selected
-        for h in range( len(selected_curr_i) ):
-            _u = feat2d_curr_normed[ 0:2, selected_curr_i[h] ]
-            _U = feat3d_curr[0:3, selected_curr_i[h] ]
-            _g_idx = -100#feat2d_curr_global_idx[ selected_curr_i[h] ]
-            # nap_msg.curr will be 2X length, where nap_msg.prev will be X length.
-            nap_msg.curr.append( Point32(_u[0], _u[1], _g_idx) )
-            nap_msg.curr.append( Point32(_U[0], _U[1], _U[2])  )
-
-            _u = feat2d_prev_normed[ 0:2, selected_prev_i[h] ]
-            _g_idx = -100#feat2d_prev_global_idx[ selected_prev_i[h] ]
-            nap_msg.prev.append( Point32(_u[0], _u[1], _g_idx) )
-
-        # Step-3: Publish nap-msg
-        pub_edge_msg.publish( nap_msg )
+        feat2d_curr_normed = feature_factory.features[feat2d_curr_idx ]
+        feat2d_prev_normed = feature_factory.features[feat2d_prev_idx ]
 
 
-    if _3way is not None:
-        # Step-1a: Get co-ordinates of matches
-        xpts_curr, xpts_prev, xpts_currm = _3way
+        feat2d_curr = np.dot( feature_factory.K, feature_factory.features[feat2d_curr_idx ] ) #3xN in homogeneous cords
+        feat2d_prev = np.dot( feature_factory.K, feature_factory.features[feat2d_prev_idx ] )
 
-        # Step-1b: Save image for debugging
-        if BASE__DUMP is not None or DEBUG_IMAGE_PUBLISH:
-            gridd = VV.plot_3way_match( curr_im, xpts_curr, prev_im, xpts_prev, curr_m_im, xpts_currm, enable_lines=False, enable_text=True )
-            if DEBUG_IMAGE_PUBLISH:
-                publish_image( pub_feat2d_matching, gridd,  t=im_raw_timestamp )
+        feat3d_curr = feature_factory.point3d[feat2d_curr_idx]
+
+        # feat2d_curr_global_idx = feature_factory.global_index[feat2d_curr_idx]
+        # feat2d_prev_global_idx = feature_factory.global_index[feat2d_prev_idx]
+
+        # This call uses VV, and other variables (global)
+        _2way, _3way, _info_txt = robust_daisy()
+        if geometric_verify_log_fp is not None:
+            geometric_verify_log_fp.write( '\n---i_curr=%5d, i_prev=%5d---\n' %(i_curr, i_prev) )
+            geometric_verify_log_fp.write( _info_txt )
+
+        if _2way is not None:
+            # Step-1a: Get indices of matches
+            selected_curr_i, selected_prev_i = _2way
+
+            # Step-1b: Save as image
+            if BASE__DUMP is not None or DEBUG_IMAGE_PUBLISH:
+
+                if selected_curr_i.shape[0] > 0:
+                    xcanvas_2way = VV.plot_2way_match( curr_im, np.int0(feat2d_curr[0:2,selected_curr_i]), prev_im, np.int0(feat2d_prev[0:2,selected_prev_i]),  enable_lines=True )
+                else:
+                    # xcanvas_2way = np.zeros( (100,100), dtype=np.uint8)
+                    xcanvas_2way = VV.plot_2way_match( curr_im, None, prev_im, None,  enable_lines=True )
+
+                if DEBUG_IMAGE_PUBLISH:
+                    publish_image( pub_feat2d_matching, xcanvas_2way,  t=im_raw_timestamp )
+
+                if BASE__DUMP is not None:
+                    _xfname = '%s/%d_%d_2way.png' %(BASE__DUMP, i_curr, i_prev )
+                    print 'Writing ', _xfname
+                    cv2.imwrite( _xfname,  xcanvas_2way )
+
+            # Step-2: Fill up nap-msg
+            nap_msg = make_nap_msg( i_curr, i_prev, (0.6,1.0,0.6) )
+            nap_msg.op_mode = 20
+            nap_msg.t_curr = t_curr
+            nap_msg.t_prev = t_prev
+            # feat2d_curr_global_idx.shape : 96,
+            # feat2d_curr_normed.shape : 3x96
+            # selected_curr_i.shape: 21,
+            #    out of 96 tracked features 21 were selected
+            for h in range( len(selected_curr_i) ):
+                _u = feat2d_curr_normed[ 0:2, selected_curr_i[h] ]
+                _U = feat3d_curr[0:3, selected_curr_i[h] ]
+                _g_idx = -100#feat2d_curr_global_idx[ selected_curr_i[h] ]
+                # nap_msg.curr will be 2X length, where nap_msg.prev will be X length.
+                nap_msg.curr.append( Point32(_u[0], _u[1], _g_idx) )
+                nap_msg.curr.append( Point32(_U[0], _U[1], _U[2])  )
+
+                _u = feat2d_prev_normed[ 0:2, selected_prev_i[h] ]
+                _g_idx = -100#feat2d_prev_global_idx[ selected_prev_i[h] ]
+                nap_msg.prev.append( Point32(_u[0], _u[1], _g_idx) )
+
+            # Step-3: Publish nap-msg
+            pub_edge_msg.publish( nap_msg )
 
 
-            if BASE__DUMP is not None:
-                _xfname = '%s/%d_%d_3way.png' %(BASE__DUMP, i_curr, i_prev )
-                print 'Writing ', _xfname
-                cv2.imwrite( _xfname,  gridd )
+        if _3way is not None:
+            # Step-1a: Get co-ordinates of matches
+            xpts_curr, xpts_prev, xpts_currm = _3way
 
-        # Step-2: Fill up nap msg
-        nap_msg = make_nap_msg( i_curr, i_prev, (0.6,1.0,0.6) )
-        nap_msg.op_mode = 29
-        nap_msg.t_curr = t_curr
-        nap_msg.t_prev = t_prev
-        nap_msg.t_curr_m = t_curr_m
-        for ji in range( len(xpts_curr) ): #len(xpts_curr) is same as xpts_curr.shape[0]
-            pt_curr = xpts_curr[ji]
-            pt_prev = xpts_prev[ji]
-            pt_curr_m = xpts_currm[ji]
+            # Step-1b: Save image for debugging
+            if BASE__DUMP is not None or DEBUG_IMAGE_PUBLISH:
+                gridd = VV.plot_3way_match( curr_im, xpts_curr, prev_im, xpts_prev, curr_m_im, xpts_currm, enable_lines=False, enable_text=True )
+                if DEBUG_IMAGE_PUBLISH:
+                    publish_image( pub_feat2d_matching, gridd,  t=im_raw_timestamp )
 
-            nap_msg.curr.append(   Point32(pt_curr[0], pt_curr[1],-1) )
-            nap_msg.prev.append(   Point32(pt_prev[0], pt_prev[1],-1) )
-            nap_msg.curr_m.append( Point32(pt_curr_m[0], pt_curr_m[1],-1) )
 
-        pub_edge_msg.publish( nap_msg )
+                if BASE__DUMP is not None:
+                    _xfname = '%s/%d_%d_3way.png' %(BASE__DUMP, i_curr, i_prev )
+                    print 'Writing ', _xfname
+                    cv2.imwrite( _xfname,  gridd )
 
-    publish_time( pub_time_publish, 1000.*(time.time() - startPublish) )
-    #TODO: publish_image( pub_2way_matching, xcanvas_2way,  t=im_raw_timestamp )
-    # based on a flag for visualization
-    continue
+            # Step-2: Fill up nap msg
+            nap_msg = make_nap_msg( i_curr, i_prev, (0.6,1.0,0.6) )
+            nap_msg.op_mode = 29
+            nap_msg.t_curr = t_curr
+            nap_msg.t_prev = t_prev
+            nap_msg.t_curr_m = t_curr_m
+            for ji in range( len(xpts_curr) ): #len(xpts_curr) is same as xpts_curr.shape[0]
+                pt_curr = xpts_curr[ji]
+                pt_prev = xpts_prev[ji]
+                pt_curr_m = xpts_currm[ji]
 
-    # #
-    # # Attempt Guided 2way matching (old)
-    # #
-    # startSet = time.time()
-    # VV.set_image( curr_im, 1 ) #set current image
-    # VV.set_image( prev_im, 2 )# set previous image (at this stage dont need lut_raw to be set as it is not used by release_candidate_match2_guided_2way() )
-    # print 'set_image, ch=1 and ch=2 : %4.2f (ms)' %( 1000. * (time.time() - startSet) )
-    #
-    # startT = time.time()
-    # selected_curr_i, selected_prev_i, sieve_stat = VV.release_candidate_match2_guided_2way( feat2d_curr, feat2d_prev )
-    # print 'matcher.release_candidate_match2_guided_2way() : %4.2f (ms)' %(1000. * (time.time() - startT) )
-    # print 'guided 2way matches : ', selected_curr_i.shape[0], selected_prev_i.shape[0]
-    # n_guided_2way = selected_curr_i.shape[0]
-    #
-    # if n_guided_2way > 0:
-    #     xcanvas_2way = VV.plot_2way_match( curr_im, np.int0(feat2d_curr[0:2,selected_curr_i]), prev_im, np.int0(feat2d_prev[0:2,selected_prev_i]),  enable_lines=True )
-    # else:
-    #     # xcanvas_2way = np.zeros( (100,100), dtype=np.uint8)
-    #     xcanvas_2way = VV.plot_2way_match( curr_im, None, prev_im, None,  enable_lines=True )
-    # publish_image( pub_feat2d_matching, xcanvas_2way, t=im_raw_timestamp )
-    # if BASE__DUMP is not None:
-    #     _xfname = '%s/%d_%d_2way.png' %(BASE__DUMP, i_curr, i_prev )
-    #     print 'Writing ', _xfname
-    #     cv2.imwrite( _xfname,  xcanvas_2way )
-    #
-    #
-    # if( n_guided_2way > 20 ):
-    #     # if we get more than 20 matches set these matches in nap_msg and publish
-    #     nap_msg.op_mode = 20
-    #     nap_msg.t_curr = t_curr
-    #     nap_msg.t_prev = t_prev
-    #
-    #     # feat2d_curr_global_idx.shape : 96,
-    #     # feat2d_curr_normed.shape : 3x96
-    #     # selected_curr_i.shape: 21,
-    #     #    out of 96 tracked features 21 were selected
-    #     for h in range( len(selected_curr_i) ):
-    #         _u = feat2d_curr_normed[ 0:2, selected_curr_i[h] ]
-    #         _U = feat3d_curr[0:3, selected_curr_i[h] ]
-    #         _g_idx = -100#feat2d_curr_global_idx[ selected_curr_i[h] ]
-    #         # nap_msg.curr will be 2X length, where nap_msg.prev will be X length.
-    #         nap_msg.curr.append( Point32(_u[0], _u[1], _g_idx) )
-    #         nap_msg.curr.append( Point32(_U[0], _U[1], _U[2])  )
-    #
-    #         _u = feat2d_prev_normed[ 0:2, selected_prev_i[h] ]
-    #         _g_idx = -100#feat2d_prev_global_idx[ selected_prev_i[h] ]
-    #         nap_msg.prev.append( Point32(_u[0], _u[1], _g_idx) )
-    #
-    #     pass
-    #     publish_image( pub_2way_matching, xcanvas_2way,  t=im_raw_timestamp )
-    #
-    # else:
-    #     #
-    #     # Attempt 3way Matching (old)
-    #     #
-    #     # if few matches, than attempt a 3way matching
-    #     startSet = time.time()
-    #     VV.set_image( curr_m_im, 3 )  #set curr-1 image
-    #     print 'set_image ch=3 : %4.2f (ms)' %( 1000. * (time.time() - startSet) )
-    #
-    #     VV.set_lut_raw( __lut_curr_im, 1 ) #set lut of curr and prev
-    #     VV.set_lut_raw( __lut_prev_im, 2 )
-    #     # lut for curr-1 is not set as it is not used.
-    #
-    #
-    #     # these will be 3 co-ordinate point sets
-    #     start3way = time.time()
-    #     xpts_curr, xpts_prev, xpts_currm = VV.release_candidate_match3way() #this function reuses daisy for im1, and im2, just 1 daisy computation inside.
-    #     print 'n3way matches : ', xpts_curr.shape
-    #     print 'matcher.release_candidate_match3way() : %4.2f (ms)' %(1000. * (time.time() - start3way) )
-    #
-    #     gridd = VV.plot_3way_match( curr_im, xpts_curr, prev_im, xpts_prev, curr_m_im, xpts_currm, enable_lines=False, enable_text=True )
-    #     publish_image( pub_feat2d_matching, gridd, t=im_raw_timestamp )
-    #     if BASE__DUMP is not None:
-    #         _xfname = '%s/%d_%d_3way.png' %(BASE__DUMP, i_curr, i_prev )
-    #         print 'Writing ', _xfname
-    #         cv2.imwrite( _xfname,  gridd )
-    #
-    #
-    #     # Set in nam_msg
-    #     # code.interact( local=locals() )
-    #     # xpts_curr.shape : 57x2
-    #     # xpts_prev.shape : 57x2
-    #     # xpts_currm.shape : 57x2
-    #
-    #     nap_msg.op_mode = 29
-    #     nap_msg.t_curr = t_curr
-    #     nap_msg.t_prev = t_prev
-    #     nap_msg.t_curr_m = t_curr_m
-    #
-    #     for ji in range( len(xpts_curr) ): #len(xpts_curr) is same as xpts_curr.shape[0]
-    #         pt_curr = xpts_curr[ji]
-    #         pt_prev = xpts_prev[ji]
-    #         pt_curr_m = xpts_currm[ji]
-    #
-    #         nap_msg.curr.append(   Point32(pt_curr[0], pt_curr[1],-1) )
-    #         nap_msg.prev.append(   Point32(pt_prev[0], pt_prev[1],-1) )
-    #         nap_msg.curr_m.append( Point32(pt_curr_m[0], pt_curr_m[1],-1) )
-    #
-    #     publish_image( pub_3way_matching, gridd,  t=im_raw_timestamp )
-    # # continue
+                nap_msg.curr.append(   Point32(pt_curr[0], pt_curr[1],-1) )
+                nap_msg.prev.append(   Point32(pt_prev[0], pt_prev[1],-1) )
+                nap_msg.curr_m.append( Point32(pt_curr_m[0], pt_curr_m[1],-1) )
 
-    #############################################
+            pub_edge_msg.publish( nap_msg )
 
-    # pub_edge_msg.publish( nap_msg )
+        publish_time( pub_time_publish, 1000.*(time.time() - startPublish) )
+        #TODO: publish_image( pub_2way_matching, xcanvas_2way,  t=im_raw_timestamp )
+        # based on a flag for visualization
+        continue
 
 
     # Comment following 2 lines to not debug-publish loop-candidate

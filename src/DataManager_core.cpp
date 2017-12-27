@@ -347,7 +347,8 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
     // Re-publish op_mode:= 10 (as is)
     Matrix4d __h;
     int32_t mode = 10;
-    republish_nap( msg->c_timestamp, msg->prev_timestamp, __h, mode );
+    // republish_nap( msg->c_timestamp, msg->prev_timestamp, __h, mode );
+    republish_nap( msg );
 
 
     return;
@@ -416,7 +417,6 @@ void DataManager::republish_nap( const nap::NapMsg::ConstPtr& msg )
 
 void DataManager::republish_nap( const ros::Time& t_c, const ros::Time& t_p, const Matrix4d& p_T_c, int32_t op_mode )
 {
-  cout << "Not Implemented Republish\n";
   nap::NapMsg msg;
 
   msg.c_timestamp = t_c;
