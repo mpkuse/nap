@@ -8,8 +8,7 @@ void DataManager::pose_from_2way_matching( const nap::NapMsg::ConstPtr& msg, Mat
 
 }
 
-#define _DEBUG_3WAY
-#define _DEBUG_PNP
+
 void DataManager::pose_from_3way_matching( const nap::NapMsg::ConstPtr& msg, Matrix4d& p_T_c )
 {
   cout << "Code here for 3way match pose computation\n";
@@ -34,17 +33,19 @@ void DataManager::pose_from_3way_matching( const nap::NapMsg::ConstPtr& msg, Mat
   Matrix4d Tr;
   Tr = w_T_cm.inverse() * w_T_c; //relative transform
 
-  Matrix3d F_c_cm;
-  cv::Mat mat_F_c_cm;
-  make_fundamentalmatrix_from_pose( w_T_c, w_T_cm, F_c_cm );
-  cv::eigen2cv( F_c_cm, mat_F_c_cm );
-  cout << "F_c_cm:\n" << F_c_cm << endl;
+  // fundamental matrix was used only in jointUndistortPointSets(). Currently not in use.
+  // Matrix3d F_c_cm;
+  // cv::Mat mat_F_c_cm;
+  // make_fundamentalmatrix_from_pose( w_T_c, w_T_cm, F_c_cm );
+  // cv::eigen2cv( F_c_cm, mat_F_c_cm );
+  // cout << "F_c_cm:\n" << F_c_cm << endl;
 
 
   #ifdef _DEBUG_3WAY
     // Open DEBUG file
     char fname[200];
-    sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d.opencv", ix_curr, ix_prev, ix_curr_m );
+    // sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d.opencv", ix_curr, ix_prev, ix_curr_m );
+    sprintf( fname, "%s/pg_%d_%d___%d.opencv", _DEBUG_SAVE_BASE_PATH, ix_curr, ix_prev, ix_curr_m );
     cout << "Writing file : " << fname << endl;
     cv::FileStorage debug_fp( fname, cv::FileStorage::WRITE );
   #endif
@@ -69,14 +70,14 @@ void DataManager::pose_from_3way_matching( const nap::NapMsg::ConstPtr& msg, Mat
   camera.undistortPointSet( mat_pts_curr_m, undistorted_pts_curr_m);
   camera.undistortPointSet( mat_pts_prev, undistorted_pts_prev);
 
-
-
-#ifdef _DEBUG_3WAY
-  // Collect undistortedPoints in normalized cords for analysis
-  cv::Mat undist_normed_curr, undist_normed_curr_m, undist_normed_prev; //TODO, these 3 normalized image co-ordinate are in use. Move them outside debug
+  // This is redundant, TODO: normalized cordinates can be infered from `undistorted_pts_curr`. Low priority.
+  cv::Mat undist_normed_curr, undist_normed_curr_m, undist_normed_prev;
   camera.getUndistortedNormalizedCords( mat_pts_curr,  undist_normed_curr );
   camera.getUndistortedNormalizedCords( mat_pts_curr_m,  undist_normed_curr_m );
   camera.getUndistortedNormalizedCords( mat_pts_prev,  undist_normed_prev );
+
+#ifdef _DEBUG_3WAY
+  // Collect undistortedPoints in normalized cords for analysis
   debug_fp << "undist_normed_curr" << undist_normed_curr;
   debug_fp << "undist_normed_curr_m" << undist_normed_curr_m;
   debug_fp << "undist_normed_prev" << undist_normed_prev;
@@ -101,21 +102,28 @@ void DataManager::pose_from_3way_matching( const nap::NapMsg::ConstPtr& msg, Mat
 
 
   // Start images writing. Writing to FileStorage is too slow
-  cv::Mat grey_curr_im, grey_curr_m_im, grey_prev_im;
-  cv::cvtColor(curr_im, grey_curr_im, cv::COLOR_BGR2GRAY);
-  cv::cvtColor(curr_m_im, grey_curr_m_im, cv::COLOR_BGR2GRAY);
-  cv::cvtColor(prev_im, grey_prev_im, cv::COLOR_BGR2GRAY);
+
+  // grey images currently not in use
+  // cv::Mat grey_curr_im, grey_curr_m_im, grey_prev_im;
+  // cv::cvtColor(curr_im, grey_curr_im, cv::COLOR_BGR2GRAY);
+  // cv::cvtColor(curr_m_im, grey_curr_m_im, cv::COLOR_BGR2GRAY);
+  // cv::cvtColor(prev_im, grey_prev_im, cv::COLOR_BGR2GRAY);
   // debug_fp << "curr_im" << grey_curr_im;
   // debug_fp << "curr_m_im" << grey_curr_m_im;
   // debug_fp << "prev_im" << grey_prev_im;
 
-  sprintf( fname, "/home/mpkuse/Desktop/a/drag/%d.png", ix_curr );
+  // sprintf( fname, "/home/mpkuse/Desktop/a/drag/%d.png", ix_curr );
+  sprintf( fname, "%s/%d.png", _DEBUG_SAVE_BASE_PATH, ix_curr );
   cout << "Writing : " << fname << endl;
   cv::imwrite( fname, curr_im );
-  sprintf( fname, "/home/mpkuse/Desktop/a/drag/%d.png", ix_curr_m );
+
+  // sprintf( fname, "/home/mpkuse/Desktop/a/drag/%d.png", ix_curr_m );
+  sprintf( fname, "%s/%d.png", _DEBUG_SAVE_BASE_PATH, ix_curr_m );
   cout << "Writing : " << fname << endl;
   cv::imwrite( fname, curr_m_im );
-  sprintf( fname, "/home/mpkuse/Desktop/a/drag/%d.png", ix_prev );
+
+  // sprintf( fname, "/home/mpkuse/Desktop/a/drag/%d.png", ix_prev );
+  sprintf( fname, "%s/%d.png", _DEBUG_SAVE_BASE_PATH, ix_prev );
   cout << "Writing : " << fname << endl;
   cv::imwrite( fname, prev_im );
   // End of Images Writing
@@ -127,14 +135,17 @@ void DataManager::pose_from_3way_matching( const nap::NapMsg::ConstPtr& msg, Mat
                         prev_im, mat_pts_prev,
                         curr_m_im, mat_pts_curr_m,
                         dst_plot_3way );
-  sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d.jpg", ix_curr, ix_prev, ix_curr_m );
+  // sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d.jpg", ix_curr, ix_prev, ix_curr_m );
+  sprintf( fname, "%s/pg_%d_%d___%d.jpg", _DEBUG_SAVE_BASE_PATH, ix_curr, ix_prev, ix_curr_m );
+  cout << "Writing file : " << fname << endl;
   cv::imwrite( fname, dst_plot_3way );
+
   this->plot_3way_match_clean( curr_im, mat_pts_curr,
                         prev_im, mat_pts_prev,
                         curr_m_im, mat_pts_curr_m,
                         dst_plot_3way );
-  sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d.png", ix_curr, ix_prev, ix_curr_m );
-
+  // sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d.png", ix_curr, ix_prev, ix_curr_m );
+  sprintf( fname, "%s/pg_%d_%d___%d.png", _DEBUG_SAVE_BASE_PATH, ix_curr, ix_prev, ix_curr_m );
   cout << "Writing file : " << fname << endl;
   cv::imwrite( fname, dst_plot_3way );
 
@@ -142,19 +153,22 @@ void DataManager::pose_from_3way_matching( const nap::NapMsg::ConstPtr& msg, Mat
   // Plot points  on images
   cv::Mat dst;
   plot_point_sets( curr_im, mat_pts_curr, dst, cv::Scalar(255,0,0) );
-  sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d_curr_observed.png", ix_curr, ix_prev, ix_curr_m );
+  // sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d_curr_observed.png", ix_curr, ix_prev, ix_curr_m );
+  sprintf( fname, "%s/pg_%d_%d___%d_curr_observed.png", _DEBUG_SAVE_BASE_PATH, ix_curr, ix_prev, ix_curr_m );
   cout << "Writing file : " << fname << endl;
   cv::imwrite( fname, dst );
 
   cv::Mat dst2;
   plot_point_sets( curr_m_im, mat_pts_curr_m, dst2, cv::Scalar(255,0,0) );
-  sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d_currm_observed.png", ix_curr, ix_prev, ix_curr_m );
+  // sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d_currm_observed.png", ix_curr, ix_prev, ix_curr_m );
+  sprintf( fname, "%s/pg_%d_%d___%d_currm_observed.png", _DEBUG_SAVE_BASE_PATH, ix_curr, ix_prev, ix_curr_m );
   cout << "Writing file : " << fname << endl;
   cv::imwrite( fname, dst2 );
 
   cv::Mat dst2_5;
   plot_point_sets( prev_im, mat_pts_prev, dst2_5, cv::Scalar(255,0,0) );
-  sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d_prev_observed.png", ix_curr, ix_prev, ix_curr_m );
+  // sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d_prev_observed.png", ix_curr, ix_prev, ix_curr_m );
+  sprintf( fname, "%s/pg_%d_%d___%d_prev_observed.png", _DEBUG_SAVE_BASE_PATH, ix_curr, ix_prev, ix_curr_m );
   cout << "Writing file : " << fname << endl;
   cv::imwrite( fname, dst2_5 );
 
@@ -187,7 +201,7 @@ void DataManager::pose_from_3way_matching( const nap::NapMsg::ConstPtr& msg, Mat
 
   // Reproject 3d pts on image-curr_m
 
-  Matrix4f Tr_float = Tr.cast<float>();
+  Matrix4f Tr_float = Tr.cast<float>(); //   Tr is relative transform, ie. cm_T_c
 
   cv::Mat _reprojected_pts_into_cm;
   camera.perspectiveProject3DPoints( c_3dpts_4N, Tr_float, _reprojected_pts_into_cm );
@@ -203,20 +217,22 @@ void DataManager::pose_from_3way_matching( const nap::NapMsg::ConstPtr& msg, Mat
   debug_fp << "cm_T_c" << mat_cm_T_c;
 
 
-  debug_fp << "F_c_cm" << mat_F_c_cm;
+  // debug_fp << "F_c_cm" << mat_F_c_cm;
 
 
   // Plot reprojected pts on image-curr
   cv::Mat dst3;
   plot_point_sets( curr_im, _reprojected_pts_into_c, dst3, cv::Scalar(0,0,255) );
-  sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d_curr_reproj.png", ix_curr, ix_prev, ix_curr_m );
+  // sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d_curr_reproj.png", ix_curr, ix_prev, ix_curr_m );
+  sprintf( fname, "%s/pg_%d_%d___%d_curr_reproj.png", _DEBUG_SAVE_BASE_PATH, ix_curr, ix_prev, ix_curr_m );
   cout << "Writing file : " << fname << endl;
   cv::imwrite( fname, dst3 );
 
   // Plot reprojected pts on image-curr_m
   cv::Mat dst4;
   plot_point_sets( curr_m_im, _reprojected_pts_into_cm, dst4, cv::Scalar(0,0,255) );
-  sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d_currm_reproj.png", ix_curr, ix_prev, ix_curr_m );
+  // sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d_currm_reproj.png", ix_curr, ix_prev, ix_curr_m );
+  sprintf( fname, "%s/pg_%d_%d___%d_currm_reproj.png", _DEBUG_SAVE_BASE_PATH, ix_curr, ix_prev, ix_curr_m );
   cout << "Writing file : " << fname << endl;
   cv::imwrite( fname, dst4 );
 
@@ -229,26 +245,25 @@ void DataManager::pose_from_3way_matching( const nap::NapMsg::ConstPtr& msg, Mat
   // Step-3 : PnP using a) 3d pts from step2 and b) corresponding matches from prev
   //
   // 3dpts (in frame of curr), 2dpts (in prev)
-  // TODO: Consider naming these outputs of pnp with a prefix `pnp`
   // TODO: Try and use only pitch and roll (do not use yaw as initialization for pnp)
   Matrix4d prev_T_c = Matrix4d::Identity();
-  // estimatePnPPose(  c_3dpts_4N, mat_pts_prev, prev_T_c ); //This is the real deal. Above 2 only for debug
-  // estimatePnPPose(  c_3dpts_4N, undist_normed_prev, prev_T_c );
-  // estimatePnPPose_withguess( c_3dpts_4N, undist_normed_prev, prev_T_c, w_T_c, w_T_p );
-  estimatePnPPose_ceres( c_3dpts_4N, undist_normed_prev, prev_T_c );
+
+  int pnp_input_pts_count = undist_normed_prev.cols;
+  // estimatePnPPose_ceres( c_3dpts_4N, undist_normed_prev, prev_T_c );
+  int pnp_inlier_count = estimatePnPPose_opencv( c_3dpts_4N, undist_normed_prev, prev_T_c );
 
 
 
 #ifdef _DEBUG_PNP
   // 3dpts, curr-image
   Matrix4d curr_T_c = Matrix4d::Identity();
-  //estimatePnPPose(  c_3dpts_4N, mat_pts_curr, curr_T_c ); // This should giveout identity, for debug/verification
-  estimatePnPPose_ceres(  c_3dpts_4N, undist_normed_curr, curr_T_c );
+  // estimatePnPPose_ceres(  c_3dpts_4N, undist_normed_curr, curr_T_c );
+  estimatePnPPose_opencv(  c_3dpts_4N, undist_normed_curr, curr_T_c );
 
   // 3dpts, curr_m-image
   Matrix4d currm_T_c = Matrix4d::Identity();
-  //estimatePnPPose(  c_3dpts_4N, mat_pts_curr_m, currm_T_c ); // This should be same as cm_T_c, for debug/verification
-  estimatePnPPose_ceres(  c_3dpts_4N, undist_normed_curr_m, currm_T_c );
+  // estimatePnPPose_ceres(  c_3dpts_4N, undist_normed_curr_m, currm_T_c );
+  estimatePnPPose_opencv(  c_3dpts_4N, undist_normed_curr_m, currm_T_c );
 
   cv::Mat pnp_curr_T_c, pnp_currm_T_c, pnp_prev_T_c;
   cv::eigen2cv( curr_T_c, pnp_curr_T_c );
@@ -283,7 +298,8 @@ void DataManager::pose_from_3way_matching( const nap::NapMsg::ConstPtr& msg, Mat
   double err_c = _diff_2d( mat_pts_curr, _reprojected_pts_into_c );
   double err_cm = _diff_2d( mat_pts_curr_m, _reprojected_pts_into_cm );
   double err_p = _diff_2d( mat_pts_prev, _reprojected_pts_into_prev );
-  sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d_reproj_err.txt", ix_curr, ix_prev, ix_curr_m );
+  // sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d_reproj_err.txt", ix_curr, ix_prev, ix_curr_m );
+  sprintf( fname, "%s/pg_%d_%d___%d_reproj_err.txt", _DEBUG_SAVE_BASE_PATH, ix_curr, ix_prev, ix_curr_m );
   ofstream myf;
   myf.open( fname );
   myf << ix_curr << ", " << ix_prev << ", "<< ix_curr_m << ", " <<
@@ -294,8 +310,10 @@ void DataManager::pose_from_3way_matching( const nap::NapMsg::ConstPtr& msg, Mat
 
   // Plot reprojected pts on prev
   cv::Mat dst5;
-  plot_point_sets( prev_im, _reprojected_pts_into_prev, dst5, cv::Scalar(0,0,255), matrix4f_to_string(prev_Tr_c_float) );
-  sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d_prev_reproj.png", ix_curr, ix_prev, ix_curr_m );
+  string mxsg = matrix4f_to_string(prev_Tr_c_float) + ";" + std::to_string( pnp_inlier_count ) + " of " + std::to_string( pnp_input_pts_count );
+  plot_point_sets( prev_im, _reprojected_pts_into_prev, dst5, cv::Scalar(0,0,255), mxsg );
+  // sprintf( fname, "/home/mpkuse/Desktop/a/drag/pg_%d_%d___%d_prev_reproj.png", ix_curr, ix_prev, ix_curr_m );
+  sprintf( fname, "%s/pg_%d_%d___%d_prev_reproj.png", _DEBUG_SAVE_BASE_PATH, ix_curr, ix_prev, ix_curr_m );
   cout << "Writing file : " << fname << endl;
   cv::imwrite( fname, dst5 );
 
@@ -415,7 +433,7 @@ void DataManager::triangulate_points( int ix_curr, const cv::Mat& mat_pts_curr,
 
 }
 
-
+/*
 void DataManager::estimatePnPPose( const cv::Mat& c_3dpts, const cv::Mat& pts2d,
                       Matrix4d& im_T_c  )
 {
@@ -480,6 +498,103 @@ void DataManager::estimatePnPPose( const cv::Mat& c_3dpts, const cv::Mat& pts2d,
   im_T_c.topLeftCorner<3,3>() = eig_rot;
   im_T_c.block<3,1>(0,3) = eig_trans;
 
+
+}
+*/
+
+// pts2d : undist_normed_prev
+// returns, number of inliers
+int DataManager::estimatePnPPose_opencv( const cv::Mat& c_3dpts, const cv::Mat& pts2d,
+                      Matrix4d& im_T_c  )
+// void estimatePnPPose( const cv::Mat& c_3dpts, const cv::Mat& pts2d,
+                      // Matrix4d& im_T_c  )
+{
+  assert( (c_3dpts.cols == pts2d.cols) &&  pts2d.cols>0 );
+  #define ___JH_ROT_PRINT
+#ifdef ___JH_ROT_PRINT
+  cout << "c_3dpts: "<< c_3dpts.rows << "x" << c_3dpts.cols << endl;
+  cout << "pts2d  : "<< pts2d.rows << "x" << pts2d.cols << endl;
+#endif
+
+  //cv::Mat to std::vector<cv::Point3f>
+  //cv::Mat to std::vector<cv::Point2f>
+  vector<cv::Point3f> _3d;
+  vector<cv::Point2f> _2d;
+  for( int i=0 ; i<pts2d.cols ; i++ )
+  {
+    cv::Point3f point3d_model = cv::Point3f( c_3dpts.at<float>(0,i), c_3dpts.at<float>(1,i), c_3dpts.at<float>(2,i) );
+    cv::Point2f point2d_scene = cv::Point2f( pts2d.at<float>(0,i), pts2d.at<float>(1,i) );
+
+    _3d.push_back( point3d_model );
+    _2d.push_back( point2d_scene );
+  }
+
+
+
+  // solvePnP
+  cv::Mat rvec, tvec; //CV_64FC1
+
+  // Simple PnP
+  // cv::solvePnP( _3d, _2d, camera.m_K, camera.m_D, rvec, tvec );
+
+
+  // When 2d pts are in normalized undistorted image co-ordinates
+  cv::Mat eye = cv::Mat::eye(3,3,CV_64FC1);
+  cv::Mat zer = cv::Mat::zeros(1,4,CV_64FC1);
+
+  // cv::solvePnP( _3d, _2d, eye, zer, rvec, tvec );
+  // cout << "solvePnP returned : " << flag << endl;
+  cv::Mat inliers;
+
+  //Try out solvePnPRansac
+  // cv::solvePnPRansac( _3d, _2d, eye, zer, rvec, tvec );
+  // cv::solvePnPRansac( _3d, _2d, eye, zer, rvec, tvec, false, 100, 8.0, .99, cv::noArray(), cv::SOLVEPNP_ITERATIVE  );
+
+
+#ifdef ___JH_ROT_PRINT
+  printf( "OpenCV Version : %d.%d\n", CV_MAJOR_VERSION, CV_MINOR_VERSION );
+#endif
+  if( CV_MAJOR_VERSION < 3)
+    cv::solvePnPRansac( _3d, _2d, eye, zer, rvec, tvec, true, 100, 10.0 / 460., 100, inliers );
+  else
+  {
+    if( CV_MINOR_VERSION < 2 )
+      cv::solvePnPRansac( _3d, _2d, eye, zer, rvec, tvec, true, 100, sqrt(10.0 / 460.), .99, inliers);
+    else
+      cv::solvePnPRansac( _3d, _2d, eye, zer, rvec, tvec, true, 100, 10.0 / 460., .99, inliers);
+  }
+
+
+#ifdef ___JH_ROT_PRINT
+  cout << "nInliers: "<< inliers.rows << "x" << inliers.cols;
+  cout << inliers << endl;
+#endif
+
+  // Convert rvec, tvec to Eigen::Matrix4d or Eigen::Matrix4f
+#ifdef ___JH_ROT_PRINT
+  print_cvmat_info( "rvec", rvec );cout << "rvec:"<< rvec << endl;
+  print_cvmat_info( "tvec", tvec );cout << "tvec:"<< tvec << endl;
+#endif
+
+  cv::Mat rot;
+  cv::Rodrigues( rvec, rot );
+
+#ifdef ___JH_ROT_PRINT
+  print_cvmat_info( "rot", rot );cout << "rot:\n" << rot << endl;
+#endif
+
+  Matrix3d eig_rot;
+  cv::cv2eigen( rot, eig_rot );
+
+  Vector3d eig_trans;
+  cv::cv2eigen( tvec, eig_trans );
+
+
+  im_T_c = Matrix4d::Identity();
+  im_T_c.topLeftCorner<3,3>() = eig_rot;
+  im_T_c.block<3,1>(0,3) = eig_trans;
+
+  return inliers.rows;
 
 }
 
@@ -597,8 +712,8 @@ void DataManager::estimatePnPPose_ceres( const cv::Mat& c_3dpts_4N, const cv::Ma
   // options.trust_region_strategy_type = ceres::LEVENBERG_MARQUARDT;
   options.trust_region_strategy_type = ceres::DOGLEG;
   options.dogleg_type = ceres::SUBSPACE_DOGLEG;
-  options.max_num_iterations = 5;
-  options.max_solver_time_in_seconds = 100E-3;
+  options.max_num_iterations = 25;
+  // options.max_solver_time_in_seconds = 100E-3;
   ceres::Solver::Summary summary;
   ceres::Solve(options, &problem, &summary);
 
