@@ -8,12 +8,45 @@
 #include <tf/tf.h>
 #include <tf/transform_broadcaster.h>
 #include <string>
+#include <vector>
+#include <iterator>
+#include <sstream>
 using namespace std;
 using namespace visualization_msgs;
 
 boost::shared_ptr<interactive_markers::InteractiveMarkerServer> server;
 interactive_markers::MenuHandler menu_handler;
 ros::Publisher pub_obj_pose;
+
+
+template<typename Out>
+void split(const std::string &s, char delim, Out result) {
+    std::stringstream ss(s);
+    std::string item;
+    while (std::getline(ss, item, delim)) {
+        *(result++) = item;
+    }
+}
+
+std::vector<std::string> split(const std::string &s, char delim) {
+    std::vector<std::string> elems;
+    split(s, delim, std::back_inserter(elems));
+    return elems;
+}
+
+void publish_marker_pose( const string& marker_name, const geometry_msgs::Pose& pose )
+{
+  geometry_msgs::PoseStamped msg_to_send;
+  // msg_to_send.header.seq = 0;
+  // msg_to_send.header.stamp.secs = 0;
+  // msg_to_send.header.stamp.nsecs = 0;
+
+  msg_to_send.header.frame_id = marker_name;
+  msg_to_send.pose = pose;
+  ROS_WARN( "interactive_marker_server: Publish geometry_msgs::PoseStamped");
+  pub_obj_pose.publish( msg_to_send );
+
+}
 
 void processFeedback(
     const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback )
@@ -74,11 +107,7 @@ void processFeedback(
          ROS_INFO_STREAM( s.str() << ": mouse up" << mouse_point_ss.str() << "." );
 
          // publish updated pose
-         geometry_msgs::PoseStamped msg_to_send;
-         msg_to_send.header = feedback->header;
-         msg_to_send.header.frame_id = feedback->marker_name;
-         msg_to_send.pose = feedback->pose;
-         pub_obj_pose.publish( msg_to_send );
+         publish_marker_pose( feedback->marker_name, feedback->pose );
 
 
          break;
@@ -163,7 +192,7 @@ void make6DofMarker( const tf::Vector3& position, string name )
   if ( fixed )
   {
     // int_marker.name += "_fixed";
-    int_marker.description += "\n(fixed orientation)";
+    int_marker.description += "\n(click object to publish pose)";
     control.orientation_mode = InteractiveMarkerControl::FIXED;
   }
 
@@ -215,6 +244,7 @@ void make6DofMarker( const tf::Vector3& position, string name )
 
   server->insert(int_marker);
   server->setCallback(int_marker.name, &processFeedback);
+
   if (interaction_mode != visualization_msgs::InteractiveMarkerControl::NONE)
     menu_handler.apply( *server, int_marker.name );
 }
@@ -224,20 +254,47 @@ int main(int argc, char** argv)
   ros::init( argc, argv, "interactive_marker_server" );
   ros::NodeHandle n;
 
+  ROS_INFO( "Started Interactive Marker Server" );
   server.reset( new interactive_markers::InteractiveMarkerServer("interactive_marker_server", "", false) );
 
+
+
+
+    // A Publisher
+    pub_obj_pose = n.advertise<geometry_msgs::PoseStamped>( "object_mesh_pose", 1000 );
+
+
+
+
+  string all_obj = string( "1.obj;chair.obj");
+  vector<string> objs = split( all_obj, ';' );
+  cout << "size: " << objs.size() << endl;
+  for( int i=0 ; i<objs.size() ; i++ )
+    cout << objs[i] << endl;
+
+
   tf::Vector3 position;
+  string resource_fname;
 
-  // Start multiple markers here.
+  for( int i=0 ; i<objs.size() ; i++ )
+  {
+
+  resource_fname = objs[i]; //"chair.obj"; //this should exist in nap/resources/
+  ROS_INFO_STREAM( "Load Mesh: " << resource_fname );
   position = tf::Vector3( -3,3, 0 );
-  make6DofMarker( position, "chair.obj" );
+  ROS_INFO_STREAM( "Set Initial Pose: "<< position.getX() <<", " << position.getY() << ", " << position.getZ() );
+  make6DofMarker( position,  resource_fname);
 
-
-  // A Publisher
-  pub_obj_pose = n.advertise<geometry_msgs::PoseStamped>( "object_mesh_pose", 1000 );
+  //TODO: Only make marker if that resouce exists.
+  }
 
 
   server->applyChanges();
+
+
+
+
+
   ros::spin();
 
   server.reset();

@@ -410,7 +410,7 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
 
 }
 
-
+///////////////////////////// AR Callbacks //////////////////////////////////
 void DataManager::path_vio_callback( const nav_msgs::Path::ConstPtr& msg )
 {
   cout << "+    path_vio_callback()     " <<  msg->header.stamp << "size=" << msg->poses.size() << endl;
@@ -426,6 +426,15 @@ void DataManager::path_posegraph_callback( const nav_msgs::Path::ConstPtr& msg )
   //collect path and associate it with nodes if possible
   cout << "+    path_posegraph_callback() " <<  msg->header.stamp << "size=" << msg->poses.size() << endl;
 }
+
+
+void DataManager::mesh_pose_callback( const geometry_msgs::PoseStamped& msg )
+{
+  ROS_INFO_STREAM( "+        XXXXX mesh_pose_callback() " );
+
+  
+}
+///////////////////////////// END AR Callbacks //////////////////////////////////
 
 
 void DataManager::republish_nap( const nap::NapMsg::ConstPtr& msg )

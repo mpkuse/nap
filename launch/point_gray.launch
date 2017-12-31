@@ -173,6 +173,19 @@
 
 
 
+<!--  #########################
+      #####   Pseudo AR   #####
+      ######################### -->
 
+      <!-- rosrun nap interactive_marker_server
+              puts several mesh on rviz and publishes a geometry_msgs::PoseStamped whenever there
+              is a change in the object's pose.
+
+              publishes topic /object_mesh_pose. Which is subscribed by my visualization node, ie. pose_graph_opt_node
+     -->
+      <node name="interactive_marker_server" pkg="nap" type="interactive_marker_server" output="log">
+      </node>
+
+<!-- ##### End Visualization ##### -->
 
 </launch>
