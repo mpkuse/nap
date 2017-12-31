@@ -410,6 +410,24 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
 
 }
 
+
+void DataManager::path_vio_callback( const nav_msgs::Path::ConstPtr& msg )
+{
+  cout << "+    path_vio_callback()     " <<  msg->header.stamp << "size=" << msg->poses.size() << endl;
+  //path from VIO (before incorporation of loopclosure)
+
+
+  //collect path and associate it with nodes if possible
+}
+
+void DataManager::path_posegraph_callback( const nav_msgs::Path::ConstPtr& msg ) //path after incorporation of loopclosure
+{
+  //path from VIO (before incorporation of loopclosure)
+  //collect path and associate it with nodes if possible
+  cout << "+    path_posegraph_callback() " <<  msg->header.stamp << "size=" << msg->poses.size() << endl;
+}
+
+
 void DataManager::republish_nap( const nap::NapMsg::ConstPtr& msg )
 {
   pub_chatter_colocation.publish( *msg );
@@ -572,10 +590,10 @@ void DataManager::flush_unclaimed_pt_cld()
 }
 void DataManager::flush_unclaimed_2d_feat()
 {
-  ROS_WARN( "flush2dfeat %d, %d", (int)unclaimed_2d_feat.size(), (int)unclaimed_2d_feat_time.size() );
+  // ROS_WARN( "flush2dfeat %d, %d", (int)unclaimed_2d_feat.size(), (int)unclaimed_2d_feat_time.size() );
   // int M = max(20,(int)unclaimed_2d_feat.size());
   int M = unclaimed_2d_feat.size();
-  cout << "flush_feat2d()\n";
+  // cout << "flush_feat2d()\n";
   for( int i=0 ; i<M ; i++ )
   {
     Matrix<double,3,Dynamic> e;
@@ -592,7 +610,7 @@ void DataManager::flush_unclaimed_2d_feat()
     }
     else
     {
-      cout << "found "<< t << "--> " << i_ << endl;
+      // cout << "found "<< t << "--> " << i_ << endl;
       nNodes[i_]->setFeatures2dHomogeneous(t, e); //this will be set2dFeatures()
       return;
     }

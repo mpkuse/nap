@@ -162,6 +162,22 @@ int main(int argc, char ** argv )
   string nap_cluster_assgn_topic = string( "/nap/cluster_assignment" );
   ROS_INFO( "Subscribed to %s", nap_cluster_assgn_topic.c_str() );
   ros::Subscriber sub_nap_cl_asgn = nh.subscribe( nap_cluster_assgn_topic, 1000, &DataManager::raw_nap_cluster_assgn_callback, &dataManager );
+
+
+#endif
+
+
+#if defined _DEBUG_AR
+  //
+  //  Subscribers for path (2 paths)
+  string path_vio_topic = string( "/vins_estimator/path");
+  ROS_INFO( "Subscribe to %s", path_vio_topic.c_str() );
+  ros::Subscriber sub_path_vio = nh.subscribe( path_vio_topic, 1000, &DataManager::path_vio_callback, &dataManager );
+
+  string path_posegraph_topic = string( "/pose_graph/pose_graph_path" );
+  ROS_INFO( "Subscribe to %s", path_vio_topic.c_str() );
+  ros::Subscriber sub_path_posegraph = nh.subscribe( path_posegraph_topic, 1000, &DataManager::path_posegraph_callback, &dataManager );
+
 #endif
 
 

@@ -12,7 +12,8 @@ find_package(catkin REQUIRED COMPONENTS
   message_generation
   image_transport
   cv_bridge
-
+  visualization_msgs
+  interactive_markers
 )
 
 list(APPEND CMAKE_MODULE_PATH "/usr/local/lib/cmake")
@@ -81,6 +82,8 @@ add_executable( pose_graph_opt_node
                     src/cnpy.cpp
               )
 
+add_executable( interactive_marker_server src/interactive_marker_server.cpp )
+
 target_link_libraries( ls_pose_graph_opt ${CERES_LIBRARIES}  ${catkin_LIBRARIES} )
 target_link_libraries( toy_vertigo ${CERES_LIBRARIES}  ${catkin_LIBRARIES} )
 target_link_libraries( toy_vertigo_dcs ${CERES_LIBRARIES}  ${catkin_LIBRARIES} )
@@ -88,3 +91,6 @@ target_link_libraries( toy_vertigo_dcs ${CERES_LIBRARIES}  ${catkin_LIBRARIES} )
 target_link_libraries( dbow3_test ${DBoW3_LIBRARIES} ${OpenCV_LIBRARIES} )
 target_link_libraries( dbow3_naive  ${OpenCV_LIBRARIES} ${DBoW3_LIBRARIES} ${catkin_LIBRARIES} )
 target_link_libraries( pose_graph_opt_node  ${OpenCV_LIBRARIES} ${DBoW3_LIBRARIES} ${catkin_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT}  ${CERES_LIBRARIES} )
+
+# Interactive Markers
+target_link_libraries( interactive_marker_server  ${OpenCV_LIBRARIES} ${catkin_LIBRARIES} )

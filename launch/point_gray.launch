@@ -44,11 +44,11 @@
 
 
     <!-- Bag set 03, Captured on 16th Aug, 2017 -->
-    <arg name="bag_path" default="/media/mpkuse/Bulk_Data/other_seqs/pointgrey_color_seq/bag03/" />
+    <!-- <arg name="bag_path" default="/media/mpkuse/Bulk_Data/other_seqs/pointgrey_color_seq/bag03/" /> -->
     <!-- <arg name="bag_file" default="2017-08-16-14-54-01.bag" doc="start UG outside CYT, takes stairs down to enterprise center walk back" /> -->
-    <arg name="bag_file" default="2017-08-16-15-00-56.bag" doc="start from SENG towards BASE. Good results!"/>
+    <!-- <arg name="bag_file" default="2017-08-16-15-00-56.bag" doc="start from SENG towards BASE. Good results!"/> -->
     <!-- <arg name="bag_file" default="2017-08-16-15-06-12.bag" doc="Walking in BASE. Alright! but a little short the seq. 1 wrong"/> -->
-    <!-- <arg name="bag_file" default="2017-08-16-15-09-15.bag" doc="!!Perfect seq for testing" /> -->
+    <!-- <arg name="bag_file" default="2017-08-16-15-09-15.bag" nick="coffee-shop" doc="!!Perfect seq for testing" /> -->
 
 
     <!-- Bag set 05, 4 seq in Tai Po Tsai. Captured on 12th Dec, cloudy weather -->
@@ -56,10 +56,21 @@
     <!-- <arg name="bag_file" default="2017-12-12-10-46-42.bag" doc="around 7/11 in tpt. Not good for testing too many silloutes due to pointing camera to the sky"/> -->
     <!-- <arg name="bag_file" default="2017-12-12-10-51-52.bag" doc="useless. No loop" /> -->
     <!-- <arg name="bag_file" default="2017-12-12-10-53-04.bag" doc="building near the garbage dump in tpt" /> -->
-    <!-- <arg name="bag_file" default="2017-12-12-11-04-45.bag" doc="!!tpt childrens garden, Another nice seq to test" /> -->
-    <!-- <arg name="bag_file" default="2017-12-13-11-12-35.bag" doc="!!indoors of LSK building G/F. Usable" /> -->
+    <!-- <arg name="bag_file" default="2017-12-12-11-04-45.bag" nick="tpt-park" doc="!!tpt childrens garden, Another nice seq to test" /> -->
+    <!-- <arg name="bag_file" default="2017-12-13-11-12-35.bag" nick="lsk-1" doc="!!indoors of LSK building G/F. Usable" /> -->
 
 
+    <!-- Nicks -->
+    <arg name="bag_path" default="/media/mpkuse/Bulk_Data/other_seqs/pointgrey_color_seq/bag05" />
+    <arg name="bag_file" default="2017-12-12-11-04-45.bag" nick="tpt-park" doc="!!tpt childrens garden, Another nice seq to test" />
+
+    <!-- <arg name="bag_path" default="/media/mpkuse/Bulk_Data/other_seqs/pointgrey_color_seq/bag05" /> -->
+    <!-- <arg name="bag_file" default="2017-12-13-11-12-35.bag" nick="lsk-1" doc="!!indoors of LSK building G/F. Usable" /> -->
+
+    <!-- <arg name="bag_path" default="/media/mpkuse/Bulk_Data/other_seqs/pointgrey_color_seq/bag03/" /> -->
+    <!-- <arg name="bag_file" default="2017-08-16-15-09-15.bag" nick="coffee-shop" doc="!!Perfect seq for testing" /> -->
+
+    <!-- End of Nicks -->
 
     <node pkg="rosbag" type="play" name="rosbag" args="-d 10  $(arg bag_path)/$(arg bag_file)" output="log"/>
     <!--<node name="recorder" pkg="rosbag" type="record" args="-O $(arg bag_path)/cooked_$(arg bag_file) /camera/image_raw /imu/imu /vins_estimator/odometry"/>-->
@@ -106,10 +117,10 @@
       <!--NAP Node -->
       <!-- <node name="nap" pkg="nap" type="nap_graph_modelling.py" output="screen" > -->
       <!-- <node name="nap" pkg="nap" type="nap_daisy_bf.py" output="screen" > -->
-      <node name="nap" pkg="nap" type="nap_robustdaisy_bf.py" output="screen" >
+      <!-- <node name="nap" pkg="nap" type="nap_robustdaisy_bf.py" output="screen" >
         <remap to="$(arg bag_color_im_topic)" from="/semi_keyframes"/>
         <param name="config_file" type="string" value="$(arg config_path)" />
-      </node>
+      </node> -->
 
 
       <!-- DBOW node -->
@@ -134,7 +145,7 @@
      ##### Geometry Node / Custom Pose Graph Optimization #####
      ##########################################################
             subscribes to `vins/camera_pose`, `3d_point_cloud`, `napMsg`  -->
-    <node name="pgraph_opt" pkg="nap" type="pose_graph_opt_node" output="log">
+    <node name="pgraph_opt" pkg="nap" type="pose_graph_opt_node" output="screen">
         <param name="config_file" type="string" value="$(arg config_path)" />
         <!-- Commentout next line to remove the places-feedback-->
         <!-- <remap from="/colocation_chatter" to="/colocation" /> -->
