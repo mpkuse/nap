@@ -62,6 +62,7 @@ using namespace std;
 #include "Edge.h"
 #include "PinholeCamera.h"
 #include "DataManager.h"
+#include "MeshObject.h"
 
 namespace Color {
     enum Code {
@@ -185,7 +186,13 @@ int main(int argc, char ** argv )
 
 
   //--- END Subscribes ---//
-  std::cout<< Color::green <<  "Pose Graph Optimization Node by mpkuse!" << Color::def << endl;
+  std::cout<< Color::green <<  "Visualization Node by mpkuse!" << Color::def << endl;
+
+#if defined _DEBUG_AR
+  std::cout<< Color::green <<  "Loading OBJ Meshes" << Color::def << endl;
+  string obj_name = string( "1.obj" ); // assuming objects are kept in
+  MeshObject * obj = new MeshObject(obj_name);
+#endif
 
 
   // Setup ceres thread

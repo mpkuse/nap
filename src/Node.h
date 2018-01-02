@@ -116,9 +116,23 @@ public:
   // Write to file XML
   void write_debug_xml( char *fname  );
 
+
+  // Pose info from path msg. id=0 for path after pose-graph-optimization.
+  // id=1 for path from vio.
+  void getPathPose( Matrix4d& w_T_c, int id );
+  void setPathPose( const geometry_msgs::Pose& pose, int id );
+
+
 private:
   cv::Mat image;
 
   cv::Mat nap_clusters;
+
+
+  // Poses from Path
+  Vector3d path_pose_p; //position
+  Quaterniond path_pose_q; //quaternion
+  Vector3d path_pose_corrected_p;
+  Quaterniond path_pose_corrected_q;
 
 };

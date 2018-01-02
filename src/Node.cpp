@@ -195,3 +195,46 @@ void Node::write_debug_xml( char * fname )
     cv::imwrite( newf, this->nap_clusters );
   }
 }
+
+
+
+
+void Node::setPathPose( const geometry_msgs::Pose& pose, int id )
+{
+  // from VIO
+  if( id == 1 ) {
+    this->path_pose_p = Vector3d(pose.position.x, pose.position.y,pose.position.z );
+    this->path_pose_q = Quaterniond( pose.orientation.w, pose.orientation.x,pose.orientation.y,pose.orientation.z );
+    return;
+  }
+
+  // after pose-graph-optimization
+  if( id == 0 ) {
+    this->path_pose_corrected_p = Vector3d(pose.position.x, pose.position.y,pose.position.z );
+    this->path_pose_corrected_q = Quaterniond( pose.orientation.w, pose.orientation.x,pose.orientation.y,pose.orientation.z );
+    return;
+  }
+
+  ROS_ERROR( "Invalid id in Node::setPathPose()");
+}
+
+// returns pose of node in world co-ord
+void Node::getPathPose( Matrix4d& w_T_c, int id )
+{
+    // from vio
+    if( id == 1 ) {
+      w_T_c = Matrix4d::Zero();
+      w_T_c.col(3) << path_pose_p, 1.0;
+      // Matrix3d R = e_q.toRotationMatrix();
+      w_T_c.topLeftCorner<3,3>() = path_pose_q.toRotationMatrix();
+    }
+
+    // after pose-graph-optimization
+    if( id == 0 ) {
+      w_T_c = Matrix4d::Zero();
+      w_T_c.col(3) << path_pose_corrected_p, 1.0;
+      // Matrix3d R = e_q.toRotationMatrix();
+      w_T_c.topLeftCorner<3,3>() = path_pose_corrected_q.toRotationMatrix();
+    }
+
+}

@@ -79,6 +79,8 @@ add_executable( pose_graph_opt_node
                     src/DataManager_rviz_visualization.cpp
                     src/DataManager_looppose_computation.cpp
                     src/DataManager_ceres.cpp
+                    src/DataManager_AR.cpp
+                    src/MeshObject.cpp
                     src/cnpy.cpp
               )
 

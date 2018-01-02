@@ -187,6 +187,7 @@ private:
   vector<Edge*> odometryEdges; //list of odometry edges
   vector<Edge*> loopClosureEdges; //List of closure edges
 
+  
   //
   // Buffer Utilities
   //
