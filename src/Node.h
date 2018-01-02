@@ -119,7 +119,7 @@ public:
 
   // Pose info from path msg. id=0 for path after pose-graph-optimization.
   // id=1 for path from vio.
-  void getPathPose( Matrix4d& w_T_c, int id );
+  bool getPathPose( Matrix4d& w_T_c, int id );
   void setPathPose( const geometry_msgs::Pose& pose, int id );
 
 
@@ -132,7 +132,9 @@ private:
   // Poses from Path
   Vector3d path_pose_p; //position
   Quaterniond path_pose_q; //quaternion
+  bool m_path_pose;
   Vector3d path_pose_corrected_p;
   Quaterniond path_pose_corrected_q;
+  bool m_path_pose_corrected;
 
 };

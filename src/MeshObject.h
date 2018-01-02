@@ -14,7 +14,7 @@ Functionality provided include
 #include <fstream>
 #include <queue>
 #include <ostream>
-
+#include <stdlib.h>
 
 #include <thread>
 #include <mutex>
@@ -60,4 +60,56 @@ class MeshObject
 public:
   MeshObject( string obj_name );
 
+  const string& getMeshObjectName() { return this->obj_name; }
+
+  void setObjectWorldPose( Matrix4d w_T_ob );
+  bool getObjectWorldPose( Matrix4d& w_T_ob );
+
+  bool isMeshLoaded( ) { return m_loaded; }
+  bool isWorldPoseAvailable() { return m_world_pose_available; }
+
+  // Writes the pose to nap/resources/`obj_name`.worldpose
+  bool writeMeshWorldPose();
+
+private:
+  string obj_name;
+  bool m_loaded; ///< true when object mesh was successfully loaded
+  bool m_world_pose_available; ///< true when the object has w_T_{object}.
+
+  Matrix4d w_T_ob;
+
+
+
+  bool load_obj( string fname );
+  vector<Vector3d> vertices;
+  MatrixXd o_X; //vertices in object frame-of-ref
+  vector<Vector3i> faces;
+
+
+  void split(const std::string &s, char delim, vector<string>& vec_of_items);
+
+
+};
+
+
+class MeshVertex
+{
+public:
+  MeshVertex(double x, double y, double z) { v << x,y,z; }
+  Vector3d getVertex( ) { return v; }
+  Vector4d getVertexHomogeneous( ) { Vector4d v_h; v_h << v, 1.0; return v_h; }
+
+private:
+  Vector3d v;
+};
+
+
+class MeshTriangulatedFace
+{
+public:
+  MeshTriangulatedFace(double f1, double f2, double f3) { f << f1,f2,f3; }
+  Vector3i getVertex( ) { return f; }
+
+private:
+  Vector3i f;
 };

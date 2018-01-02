@@ -281,6 +281,8 @@ int main(int argc, char** argv)
 
   resource_fname = objs[i]; //"chair.obj"; //this should exist in nap/resources/
   ROS_INFO_STREAM( "Load Mesh: " << resource_fname );
+
+  // TODO Read init pose file if available. Else put default poses.
   position = tf::Vector3( -3,3, 0 );
   ROS_INFO_STREAM( "Set Initial Pose: "<< position.getX() <<", " << position.getY() << ", " << position.getZ() );
   make6DofMarker( position,  resource_fname);

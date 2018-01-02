@@ -77,7 +77,7 @@ using namespace std;
 #include "Node.h"
 #include "Edge.h"
 #include "PinholeCamera.h"
-
+#include "MeshObject.h"
 
 // Debug enable/disable flags
 #define _DEBUG_3WAY
@@ -132,10 +132,6 @@ public:
   void place_recog_callback( const nap::NapMsg::ConstPtr& msg  );
 
 
-  /// Subscribers to Path. 2 paths, 1 path from VIO, and 1 path from pose-graph (after opt)
-  void path_vio_callback( const nav_msgs::Path::ConstPtr& msg ); //path from VIO (before incorporation of loopclosure)
-  void path_posegraph_callback( const nav_msgs::Path::ConstPtr& msg ); //path after incorporation of loopclosure
-  void mesh_pose_callback( const geometry_msgs::PoseStamped& msg ); // receives w_T_{o_i}. name of the object is in msg->header.frame_id
 
 
   // ////////////////   //
@@ -170,6 +166,17 @@ public:
   mutex lock_enable_ceres;
 
 
+  // //////////////////////////
+  //      AR Related        //
+  ///////////////////////////
+  /// Subscribers to Path. 2 paths, 1 path from VIO, and 1 path from pose-graph (after opt)
+  void path_vio_callback( const nav_msgs::Path::ConstPtr& msg ); ///< path from VIO (before incorporation of loopclosure)
+  void path_posegraph_callback( const nav_msgs::Path::ConstPtr& msg ); ///< path after incorporation of loopclosure
+  void mesh_pose_callback( const geometry_msgs::PoseStamped& msg ); ///< receives w_T_{o_i}. name of the object is in msg->header.frame_id
+
+  void add_new_meshobject( string objname );
+
+
 
 private:
 
@@ -186,8 +193,9 @@ private:
   vector<Node*> nNodes; //list of notes
   vector<Edge*> odometryEdges; //list of odometry edges
   vector<Edge*> loopClosureEdges; //List of closure edges
+  vector<MeshObject*> nMeshes;
 
-  
+
   //
   // Buffer Utilities
   //

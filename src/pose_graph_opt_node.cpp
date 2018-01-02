@@ -88,6 +88,7 @@ namespace Color {
     Modifier red(FG_RED);
     Modifier green(FG_GREEN);
     Modifier def(FG_DEFAULT);
+    Modifier blue(FG_BLUE);
 }
 
 
@@ -96,6 +97,18 @@ void print_matrix( string msg, const Eigen::Ref<const MatrixXd>& M, const Eigen:
 {
   cout << msg<< M.rows() << "_" << M.cols() << "=\n" << M.format(fmt) << endl;
 
+}
+
+void split(const std::string &s, char delim, vector<string>& vec_of_items)
+{
+    std::stringstream ss(s);
+    std::string item;
+    // vector<string> vec_of_items;
+    vec_of_items.clear();
+    while (std::getline(ss, item, delim)) {
+        // *(result++) = item;
+        vec_of_items.push_back( item );
+    }
 }
 
 int main(int argc, char ** argv )
@@ -189,9 +202,20 @@ int main(int argc, char ** argv )
   std::cout<< Color::green <<  "Visualization Node by mpkuse!" << Color::def << endl;
 
 #if defined _DEBUG_AR
-  std::cout<< Color::green <<  "Loading OBJ Meshes" << Color::def << endl;
-  string obj_name = string( "1.obj" ); // assuming objects are kept in
-  MeshObject * obj = new MeshObject(obj_name);
+  std::cout<< Color::blue <<  "Loading OBJ Meshes" << Color::def << endl;
+  vector<string> splitted_;
+  split( "1.obj;chair.obj",';',splitted_ );
+
+  // string obj_name = string( "1.obj" ); // assuming objects are kept in
+  // dataManager.add_new_meshobject( obj_name );
+  // dataManager.add_new_meshobject( "chair.obj" );
+
+  for( int q=0 ; q<splitted_.size() ; q++ )
+  {
+    dataManager.add_new_meshobject( splitted_[q] );
+  }
+  std::cout<< Color::blue <<  "Done...loading meshes" << Color::def << endl;
+  // return 0;
 #endif
 
 

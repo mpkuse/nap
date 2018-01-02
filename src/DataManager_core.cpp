@@ -55,6 +55,8 @@ DataManager::~DataManager()
   {
     Node * n = nNodes[i];
 
+    // A
+
     fp_nodes <<  i << ", " << n->time_stamp  << endl;
               // << e_p[0] << ", " << e_p[1] << ", "<< e_p[2] << ", "
               // << e_q.x() << ", "<< e_q.y() << ", "<< e_q.z() << ", "<< e_q.w() << endl;
@@ -94,6 +96,66 @@ DataManager::~DataManager()
                       << ", "<< e->b_id << ", "<< e->b_timestamp << endl;
   }
   fp_loop_edge.close();
+
+#endif
+
+  // TODO: #if defined _DEBUG_POSEGRAPH_2_FILE and _DEBUG_AR
+#if defined _DEBUG_AR &&  defined _DEBUG_POSEGRAPH_2_FILE
+  // Write to disk all nNodes[i].getPathPose() \forall i
+  cout << "Write to disk all nNodes[i].getPathPose() \\forall i\n";
+
+  string fname_correc = string( base_path+"/path_pose_corrected.csv" );
+  ofstream fp_correc;
+  cout << "Write File: " << fname_correc << endl;
+  fp_correc.open(  fname_correc );
+
+  string fname_nominal = string( base_path+"/path_pose_nominal.csv" );
+  ofstream fp_nominal;
+  cout << "Write File: " << fname_nominal << endl;
+  fp_nominal.open( fname_nominal );
+  for( int i=0 ; i<nNodes.size() ; i++ )
+  {
+    Matrix4d w_T_c;
+    Matrix4d w_T_tilde_c; ///< Corrected
+    bool status_1 = nNodes[i]->getPathPose( w_T_c, 1 );
+    bool status_2 = nNodes[i]->getPathPose( w_T_tilde_c, 0 );
+
+    fp_correc << i << " " << status_2 << "," << w_T_tilde_c(0,3) << "," <<  w_T_tilde_c(1,3) << "," <<  w_T_tilde_c(2,3) << "\n";
+    fp_nominal << i << " " << status_1 << ","<< w_T_c(0,3) << "," <<  w_T_c(1,3) << "," <<  w_T_c(2,3) << "\n";
+
+
+    // Write Image
+    if( nNodes[i]->valid_image() )
+    {
+      string xkeyname = string(_DEBUG_SAVE_BASE_PATH)+string("/keyframe_")+to_string(i)+string(".jpg");
+      imwrite( xkeyname, nNodes[i]->getImageRef() );
+    }
+    else
+    {
+      cout << "In descructor, attempting to write image which is not available for node=" << i << endl;
+    }
+  }
+  fp_correc.close();
+  fp_nominal.close();
+
+
+  // TODO:
+  // Write info on mesh
+  cout << "Total Meshes: "<< nMeshes.size() << endl;
+  for( int i=0 ; i<nMeshes.size() ; i++ )
+  {
+    cout << i << ":" << nMeshes[i]->getMeshObjectName() << endl;
+  }
+
+  for( int i=0 ; i<nMeshes.size() ; i++ )
+  {
+    Matrix4d T;
+    bool status = nMeshes[i]->getObjectWorldPose(T);
+     nMeshes[i]->writeMeshWorldPose();
+    cout << i << ":pose-available-status:" <<  status << endl;
+    if ( status )
+      cout << T << endl;
+  }
 #endif
 
 }
