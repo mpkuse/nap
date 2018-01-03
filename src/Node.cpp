@@ -1,5 +1,15 @@
 #include "Node.h"
 
+Node::Node()
+{
+  m_e_ = false;
+  m_org_ = false;
+  m_3dpts = false;
+  m_2dfeats = false;
+  m_path_pose = false;
+  m_path_pose_corrected = false;
+}
+
 Node::Node( ros::Time time_stamp, geometry_msgs::Pose pose )
 {
   this->time_stamp = ros::Time(time_stamp);
@@ -17,6 +27,7 @@ Node::Node( ros::Time time_stamp, geometry_msgs::Pose pose )
   // e_p << pose.pose.position.x, pose.pose.position.y,pose.pose.position.z;
   e_p = Vector3d(pose.position.x, pose.position.y,pose.position.z );
   org_p = Vector3d(pose.position.x, pose.position.y,pose.position.z );
+  m_e_ = true;
 
   // opt_quat = new double[4];
   // opt_quat[0] = pose.pose.orientation.x;
@@ -25,6 +36,7 @@ Node::Node( ros::Time time_stamp, geometry_msgs::Pose pose )
   // opt_quat[3] = pose.pose.orientation.w;
   e_q = Quaterniond( pose.orientation.w, pose.orientation.x,pose.orientation.y,pose.orientation.z );
   org_q = Quaterniond( pose.orientation.w, pose.orientation.x,pose.orientation.y,pose.orientation.z );
+  m_org_ = true;
   // TODO extract covariance
 
   m_3dpts = false;
@@ -46,6 +58,7 @@ void Node::getCurrTransform(Matrix4d& M)
   M.col(3) << e_p, 1.0;
   // Matrix3d R = e_q.toRotationMatrix();
   M.topLeftCorner<3,3>() = e_q.toRotationMatrix();
+
 
   // cout << "e_p\n" << e_p << endl;
   // cout << "e_q [w,x,y,z]\n" << e_q.w() << " " << e_q.x() << " " << e_q.y() << " " << e_q.z() << " " << endl;
@@ -169,43 +182,137 @@ void Node::write_debug_xml( char * fname )
 {
   cv::FileStorage fs( fname, cv::FileStorage::WRITE );
 
-  // 3d pts
-  MatrixXd c_M; //4xN
-  getPointCloudHomogeneous(c_M);
+  if( valid_3dpts() ) {
+    // 3d pts
+    MatrixXd c_M; //4xN
+    getPointCloudHomogeneous(c_M);
 
-  cv::Mat c_M_mat;
-  cv::eigen2cv( c_M, c_M_mat );
+    cv::Mat c_M_mat;
+    cv::eigen2cv( c_M, c_M_mat );
 
-  fs << "c_3dpts" << c_M_mat;
+    fs << "c_3dpts" << c_M_mat;
+    fs << "c_3dpts_timestamp" << time_pcl.toSec();
+  }
 
   // feat2d
-  MatrixXd c_feat2d;
-  getFeatures2dHomogeneous( c_feat2d );
+  if( valid_2dfeats() ) {
+    MatrixXd c_feat2d;
+    getFeatures2dHomogeneous( c_feat2d );
 
-  cv::Mat c_feat2d_mat;
-  cv::eigen2cv( c_feat2d, c_feat2d_mat);
-  fs << "c_feat2d" << c_feat2d_mat;
+    cv::Mat c_feat2d_mat;
+    cv::eigen2cv( c_feat2d, c_feat2d_mat);
+    fs << "c_feat2d" << c_feat2d_mat;
+    fs << "c_feat2d_timestamp" << time_feat2d.toSec();
+  }
 
   // Transform
-  Matrix4d w_T_c;
-  getCurrTransform( w_T_c );
+  if( valid_currTransform() ) {
+    Matrix4d w_T_c;
+    getCurrTransform( w_T_c );
 
-  cv::Mat w_T_c_mat;
-  cv::eigen2cv( w_T_c, w_T_c_mat );
-  fs <<  "w_T_c" << w_T_c_mat;
+    cv::Mat w_T_c_mat;
+    cv::eigen2cv( w_T_c, w_T_c_mat );
+    fs <<  "w_T_c" << w_T_c_mat; //this is from camera pose msg
+    fs << "w_T_c_timestamp" << time_pose.toSec();
+  }
 
 
   // Save npy file of cluster map
   if( this->valid_clustermap() )
   {
     char newf[200];
-    sprintf( newf, "%s.png", fname );
+    sprintf( newf, "%s_clustermap.png", fname );
     // cnpy::npy_save( newf,  )
     cv::imwrite( newf, this->nap_clusters );
+    fs << "clustermap_timestamp" << time_nap_clustermap.toSec();
   }
+
+  if( valid_image() )
+  {
+    char newf[200];
+    sprintf( newf, "%s_image.png", fname );
+    cv::imwrite( newf, this->image );
+    fs << "image_timestamp" << time_image.toSec();
+  }
+
+  // write path pose
+  if( valid_pathpose( 1 ) ) //vio
+  {
+    Matrix4d pathpose__w_T_c;
+    getPathPose( pathpose__w_T_c, 1 );
+
+    cv::Mat pathpose__w_T_c_mat;
+    cv::eigen2cv( pathpose__w_T_c, pathpose__w_T_c_mat );
+    fs <<  "pathpose_nominal__w_T_c_mat" << pathpose__w_T_c_mat;
+    fs <<  "pathpose_nominal__timestamp" << path_pose_timestamp.toSec();
+
+  }
+
+  if( valid_pathpose( 0 ) ) //after pose-graph-optimization
+  {
+    Matrix4d pathpose__w_T_c;
+    getPathPose( pathpose__w_T_c, 0 );
+
+    cv::Mat pathpose__w_T_c_mat;
+    cv::eigen2cv( pathpose__w_T_c, pathpose__w_T_c_mat );
+    fs <<  "pathpose_corrected__w_T_c_mat" << pathpose__w_T_c_mat;
+    fs <<  "pathpose_corrected__timestamp" << path_pose_corrected_timestamp.toSec();
+  }
+
+  fs.release();
 }
 
+bool Node::load_debug_xml( const string& fname  )
+{
+  cout << "-----Open file : " << fname << "------" << endl;
+  cv::FileStorage fs( fname, cv::FileStorage::READ );
+  if( fs.isOpened() == false )
+  {
+    ROS_ERROR_STREAM( "in Node::load_debug_xml, Cannot open file " << fname );
+    return false;
+  }
 
+  ros::Time timestamp;
+  double t;
+
+  //
+  // 3dpts + timestamp
+
+
+
+  // 2dfeat + timestamp
+
+
+  // transform (of camera) + timestamp
+
+
+  // nap clusters. ignore for now
+
+
+  // image + timestamp
+  fs["image_timestamp"] >> t;
+  cout << timestamp << endl;
+  timestamp.fromSec(t);
+  cout << timestamp << endl;
+  char newf[200];
+  sprintf( newf, "%s_image.png", fname.c_str() );
+  cv::Mat image = cv::imread( newf );
+  if( image.empty() ) {
+    cout << "Cannot read image";
+  }
+  else {
+    setImage( timestamp, image );
+  }
+
+
+
+
+  // transform (of camera from vio-path) + timestamp
+
+  // transform (of camera from after pose-graph-optimization-path) + timestamp
+
+  fs.release();
+}
 
 
 void Node::setPathPose( const geometry_msgs::Pose& pose, int id )
@@ -222,6 +329,29 @@ void Node::setPathPose( const geometry_msgs::Pose& pose, int id )
   if( id == 0 ) {
     this->path_pose_corrected_p = Vector3d(pose.position.x, pose.position.y,pose.position.z );
     this->path_pose_corrected_q = Quaterniond( pose.orientation.w, pose.orientation.x,pose.orientation.y,pose.orientation.z );
+    m_path_pose_corrected = true;
+    return;
+  }
+
+  ROS_ERROR( "Invalid id in Node::setPathPose()");
+}
+
+void Node::setPathPose( const geometry_msgs::Pose& pose, int id, ros::Time timestamp )
+{
+  // from VIO
+  if( id == 1 ) {
+    this->path_pose_p = Vector3d(pose.position.x, pose.position.y,pose.position.z );
+    this->path_pose_q = Quaterniond( pose.orientation.w, pose.orientation.x,pose.orientation.y,pose.orientation.z );
+    path_pose_timestamp = timestamp;
+    m_path_pose = true;
+    return;
+  }
+
+  // after pose-graph-optimization
+  if( id == 0 ) {
+    this->path_pose_corrected_p = Vector3d(pose.position.x, pose.position.y,pose.position.z );
+    this->path_pose_corrected_q = Quaterniond( pose.orientation.w, pose.orientation.x,pose.orientation.y,pose.orientation.z );
+    path_pose_corrected_timestamp = timestamp;
     m_path_pose_corrected = true;
     return;
   }
@@ -250,4 +380,16 @@ bool Node::getPathPose( Matrix4d& w_T_c, int id )
       return m_path_pose_corrected;
     }
 
+}
+
+
+bool Node::valid_pathpose( int id )
+{
+  //from vio
+  if( id == 1 )
+    return m_path_pose;
+
+  // after pose-graph-optimization
+  if( id == 0 )
+    return m_path_pose_corrected;
 }

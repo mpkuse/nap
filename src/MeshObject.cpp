@@ -1,5 +1,11 @@
 #include "MeshObject.h"
 
+MeshObject::MeshObject()
+{
+  m_loaded = false;
+  m_world_pose_available = false;
+  obj_name = string( "N/A" );
+}
 
 MeshObject::MeshObject(const string obj_name )
 {
@@ -91,7 +97,12 @@ bool MeshObject::load_obj( string fname )
   {
     o_X.col(i) << vertices[i], 1.0 ;
   }
-  // cout << o_X << endl;
+
+  eigen_faces = MatrixXi( 3, nfaces );
+  for( int i=0 ; i<nfaces ; i++ )
+  {
+    eigen_faces.col(i) = faces[i];
+  }
 
   cout << "end MeshObject::load_obj()\n";
 
@@ -138,5 +149,82 @@ bool MeshObject::writeMeshWorldPose()
   myfile << t.x() << "," << t.y() << "," << t.z() << "\n";
   myfile << qt.w() << "," << qt.x() << "," << qt.y() << "," << qt.z() ;//<< "\n";
   return true;
+
+}
+
+bool MeshObject::load_debug_xml( const  string& fname )
+{
+  cout << "-----Open file : " << fname << "------" << endl;
+  cv::FileStorage fs( fname, cv::FileStorage::READ );
+  if( fs.isOpened() == false )
+  {
+    ROS_ERROR_STREAM( "in Node::load_debug_xml, Cannot open file " << fname );
+    return false;
+  }
+
+  fs["obj_name"] >> this->obj_name;
+  cout << "obj_name: " << this->obj_name;
+
+  cv::Mat o_X_mat;
+  fs["o_X"] >> o_X_mat;
+  if( o_X_mat.empty() ) {
+    cout << "`o_X` is empty\n";
+  }
+  else {
+    cv::cv2eigen( o_X_mat, o_X );
+    m_loaded = true;
+  }
+
+  cv::Mat faces_mat;
+  fs["faces"] >> faces_mat;
+  if( faces_mat.empty() ) {
+    cout << "`faces` is empty\n";
+    m_loaded = m_loaded && false;
+  }
+  else {
+    cv::cv2eigen( faces_mat, eigen_faces );
+    m_loaded = m_loaded && true;
+  }
+
+  cv::Mat w_T_ob_mat;
+  fs["w_T_ob"] >>  w_T_ob_mat;
+  if( w_T_ob_mat.empty() ) {
+    cout << "`w_T_ob` is empty\n";
+  }
+  else {
+    cv::cv2eigen( w_T_ob_mat, w_T_ob );
+    m_world_pose_available = true;
+  }
+  cout << "End loading Mesh\n";
+  fs.release();
+
+}
+
+void MeshObject::write_debug_xml( char * fname )
+{
+  cv::FileStorage fs( fname, cv::FileStorage::WRITE );
+
+  fs << "obj_name" << obj_name ;
+  if( isWorldPoseAvailable() )
+  {
+    cv::Mat w_T_ob_mat;
+    cv::eigen2cv( w_T_ob, w_T_ob_mat );
+    fs << "w_T_ob" <<w_T_ob_mat;
+  }
+
+  if( isMeshLoaded() )
+  {
+    // Write Vertices
+    cv::Mat o_X_mat;
+    cv::eigen2cv( o_X, o_X_mat );
+    fs << "o_X" <<o_X_mat;
+
+    // Write Faces
+    cv::Mat eigen_faces_mat;
+    cv::eigen2cv( eigen_faces, eigen_faces_mat );
+    fs << "faces" << eigen_faces_mat;
+  }
+
+  fs.release();
 
 }

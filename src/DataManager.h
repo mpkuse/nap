@@ -175,6 +175,8 @@ public:
   void mesh_pose_callback( const geometry_msgs::PoseStamped& msg ); ///< receives w_T_{o_i}. name of the object is in msg->header.frame_id
 
   void add_new_meshobject( string objname );
+  void threaded_keyboard_listener();
+  void make_movie();
 
 
 

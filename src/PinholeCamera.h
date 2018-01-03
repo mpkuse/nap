@@ -79,6 +79,7 @@ public:
   // TODO: Extend this function to include extrinsics (given as arguments)
   void perspectiveProject3DPoints( cv::Mat& _3dpts, cv::Mat& out_pts );
   void perspectiveProject3DPoints( const MatrixXd& _3dpts, MatrixXd& out_pts );
+  void perspectiveProject3DPoints( const MatrixXd& _3dpts, const Matrix4d& T, MatrixXd& out_pts );
   void perspectiveProject3DPoints( cv::Mat& _3dpts, Matrix4f& T, cv::Mat& out_pts ); //< T * _3dpts
 
   // Given an input pointset 2xN 1-channel matrix, returns a 2xN 1-channel matrix
@@ -115,6 +116,9 @@ public:
    // by scaling with camera intrinsic to give point these points in distorted_image_cords
    void normalizedImCords_2_imageCords( const MatrixXd& in_, MatrixXd& out_ );
 
+   bool valid() { return mValid; }
+   void write_debug_xml( string fname );
+
 
 private:
   string config_model_type, config_camera_name;
@@ -123,6 +127,7 @@ private:
 
   double _fx, _fy, _cx, _cy;
   double _k1, _k2, _p1, _p2;
+  double x_scale, y_scale;
 
   bool mValid;
 

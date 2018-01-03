@@ -27,8 +27,8 @@ PinholeCamera::PinholeCamera( string config_file )
   fs["projection_parameters"]["cy"] >> _cy;
   // Scaling to adjust for keyframe image resize. TODO: the scaling factors need to be infered from config_image_width and config_image_height compared to (320,240)
   cout << "Scaling camera intrinsics to adjust for image resizing\n";
-  double x_scale = config_image_width / 320.0; //3.0
-  double y_scale = config_image_height / 240.0; //2.5
+  x_scale = config_image_width / 320.0; //3.0 //if you happen to change this scaling, make sure to confirm also the write_debug_xml()
+  y_scale = config_image_height / 240.0; //2.5
   _fx /= x_scale;
   _cx /= x_scale;
   _fy /= y_scale;
@@ -152,6 +152,38 @@ void PinholeCamera::perspectiveProject3DPoints( const MatrixXd& c_X,
 
     out_pts = e_K * Xdd;
 
+
+}
+
+
+// Same as the function `void PinholeCamera::perspectiveProject3DPoints( const MatrixXd& c_X, MatrixXd& out_pts )`
+void PinholeCamera::perspectiveProject3DPoints( const MatrixXd& c_X, const Matrix4d& w_T_c, MatrixXd& out_pts )
+{
+      // K [ I | 0 ]
+      // MatrixXd I_0;
+      // I_0 = w_T_c;// Matrix4d::Identity().topLeftCorner<3,4>();
+      // MatrixXf P1;
+      // P1 = cam_intrin * I_0; //3x4
+
+      // Project and Perspective Divide
+      MatrixXd im_pts;
+      im_pts = w_T_c * c_X; //in normalized image co-ordinate. Beware that distortion need to be applied in normalized co-ordinates
+      im_pts.row(0).array() /= im_pts.row(2).array();
+      im_pts.row(1).array() /= im_pts.row(2).array();
+      im_pts.row(2).array() /= im_pts.row(2).array();
+
+      // Apply Distortion
+      MatrixXd Xdd = MatrixXd( im_pts.rows(), im_pts.cols() );
+      for( int i=0 ; i<im_pts.cols() ; i++)
+      {
+        double r2 = im_pts(0,i)*im_pts(0,i) + im_pts(1,i)*im_pts(1,i);
+        double c = 1.0f + (double)k1()*r2 + (double)k2()*r2*r2;
+        Xdd(0,i) = im_pts(0,i) * c + 2.0f*(double)p1()*im_pts(0,i)*im_pts(1,i) + (double)p2()*(r2 + 2.0*im_pts(0,i)*im_pts(0,i));
+        Xdd(1,i) = im_pts(1,i) * c + 2.0f*(double)p2()*im_pts(0,i)*im_pts(1,i) + (double)p1()*(r2 + 2.0*im_pts(1,i)*im_pts(1,i));
+        Xdd(2,i) = 1.0f;
+      }
+
+      out_pts = e_K * Xdd;
 
 }
 
@@ -468,5 +500,39 @@ void PinholeCamera::grad_and_hessian( const Matrix<double,5,1>& S,
     HESS(4,2) = HESS(2,4);
     HESS(4,3) = HESS(3,4);
     HESS(4,4) = 0;
+
+}
+
+
+
+void PinholeCamera::write_debug_xml( string fname )
+{
+  if( valid() )
+  {
+    cv::FileStorage fs( fname, cv::FileStorage::WRITE );
+
+    fs << "model_type"   << config_model_type;
+    fs << "camera_name"  << config_camera_name;
+    fs << "image_width"  << config_image_width;
+    fs << "image_height" << config_image_height;
+    fs << "distortion_parameters";
+    fs << "{" << "k1" << _k1;
+    fs << "k2" << _k2;
+    fs << "p1" << _p1;
+    fs << "p2" << _p2 << "}";
+
+    fs << "projection_parameters";
+    fs << "{" << "fx" << _fx * x_scale;
+    fs << "fy" << _fy * y_scale;
+    fs << "cx" << _cx * x_scale;
+    fs << "cy" << _cy * y_scale << "}";
+
+    fs.release();
+
+
+
+
+
+  }
 
 }

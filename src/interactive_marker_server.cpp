@@ -107,7 +107,10 @@ void processFeedback(
          ROS_INFO_STREAM( s.str() << ": mouse up" << mouse_point_ss.str() << "." );
 
          // publish updated pose
-         publish_marker_pose( feedback->marker_name, feedback->pose );
+         if( (feedback->marker_name.c_str())[0] != 'X' )
+           publish_marker_pose( feedback->marker_name, feedback->pose );
+          else
+            publish_marker_pose( "control_marker", feedback->pose );
 
 
          break;
@@ -124,8 +127,8 @@ Marker makeBox( InteractiveMarker &msg )
   marker.scale.y = msg.scale * 0.45;
   marker.scale.z = msg.scale * 0.45;
   marker.color.r = 0.5;
-  marker.color.g = 0.5;
-  marker.color.b = 0.5;
+  marker.color.g = 0.0;
+  marker.color.b = 0.0;
   marker.color.a = .5;
 
 
@@ -158,18 +161,22 @@ Marker makeMeshBox( InteractiveMarker &msg, string mesh_fname )
   return marker;
 }
 
-InteractiveMarkerControl& makeBoxControl( InteractiveMarker &msg )
+InteractiveMarkerControl& makeBoxControl( InteractiveMarker &msg, bool useMesh )
 {
   InteractiveMarkerControl control;
   control.always_visible = true;
-  // control.markers.push_back( makeBox(msg) );
-  control.markers.push_back( makeMeshBox(msg, msg.name) );
+  if( useMesh ) {
+    control.markers.push_back( makeMeshBox(msg, msg.name) );
+  }
+  else {
+    control.markers.push_back( makeBox(msg) );
+  }
   msg.controls.push_back( control );
 
   return msg.controls.back();
 }
 
-void make6DofMarker( const tf::Vector3& position, string name )
+void make6DofMarker( const tf::Vector3& position, string name, bool useMesh )
 {
   bool fixed = true;
   unsigned int interaction_mode = visualization_msgs::InteractiveMarkerControl::NONE;
@@ -184,7 +191,7 @@ void make6DofMarker( const tf::Vector3& position, string name )
   int_marker.description = name.c_str();//"Simple 6-DOF Control";
 
   // insert a box
-  makeBoxControl(int_marker);
+  makeBoxControl(int_marker, useMesh );
   int_marker.controls[0].interaction_mode = interaction_mode;
 
   InteractiveMarkerControl control;
@@ -285,10 +292,14 @@ int main(int argc, char** argv)
   // TODO Read init pose file if available. Else put default poses.
   position = tf::Vector3( -3,3, 0 );
   ROS_INFO_STREAM( "Set Initial Pose: "<< position.getX() <<", " << position.getY() << ", " << position.getZ() );
-  make6DofMarker( position,  resource_fname);
+  make6DofMarker( position,  resource_fname, true );
 
   //TODO: Only make marker if that resouce exists.
   }
+
+
+  position = tf::Vector3( -10,3, 0 );
+  make6DofMarker( position,  "X", false );
 
 
   server->applyChanges();

@@ -111,6 +111,8 @@ void split(const std::string &s, char delim, vector<string>& vec_of_items)
     }
 }
 
+
+
 int main(int argc, char ** argv )
 {
   //--- ROS INIT ---//
@@ -216,6 +218,11 @@ int main(int argc, char ** argv )
   }
   std::cout<< Color::blue <<  "Done...loading meshes" << Color::def << endl;
   // return 0;
+
+  // std::cout << "Listen to Keyboard thread\n";
+  // std::thread keyboard_command_process{dataManager.make_AR_movie};
+  // std::thread keyboard_command_process( &DataManager::threaded_keyboard_listener, &dataManager );
+
 #endif
 
 

@@ -85,6 +85,19 @@ add_executable( pose_graph_opt_node
               )
 
 add_executable( interactive_marker_server src/interactive_marker_server.cpp )
+add_executable( test_load_AR_debug_info
+                    src/test_load_AR_debug_info.cpp
+                    src/Node.cpp
+                    src/Edge.cpp
+                    src/PinholeCamera.cpp
+                    src/DataManager_core.cpp
+                    src/DataManager_rviz_visualization.cpp
+                    src/DataManager_looppose_computation.cpp
+                    src/DataManager_ceres.cpp
+                    src/DataManager_AR.cpp
+                    src/MeshObject.cpp
+                    src/cnpy.cpp
+              )
 
 target_link_libraries( ls_pose_graph_opt ${CERES_LIBRARIES}  ${catkin_LIBRARIES} )
 target_link_libraries( toy_vertigo ${CERES_LIBRARIES}  ${catkin_LIBRARIES} )
@@ -96,3 +109,4 @@ target_link_libraries( pose_graph_opt_node  ${OpenCV_LIBRARIES} ${DBoW3_LIBRARIE
 
 # Interactive Markers
 target_link_libraries( interactive_marker_server  ${OpenCV_LIBRARIES} ${catkin_LIBRARIES} )
+target_link_libraries( test_load_AR_debug_info   ${OpenCV_LIBRARIES} ${catkin_LIBRARIES} ${CERES_LIBRARIES} )

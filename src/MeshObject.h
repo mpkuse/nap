@@ -58,6 +58,7 @@ using namespace std;
 class MeshObject
 {
 public:
+  MeshObject();
   MeshObject( string obj_name );
 
   const string& getMeshObjectName() { return this->obj_name; }
@@ -70,6 +71,15 @@ public:
 
   // Writes the pose to nap/resources/`obj_name`.worldpose
   bool writeMeshWorldPose();
+
+  const MatrixXd& getVertices() { return (const MatrixXd) o_X; }
+  const vector<Vector3i>& getFaces() { return (const vector<Vector3i>) faces; }
+
+  void write_debug_xml( char * fname );
+  // bool load_debug_xml( char * fname );
+  bool load_debug_xml( const string& fname );
+
+
 
 private:
   string obj_name;
@@ -84,6 +94,7 @@ private:
   vector<Vector3d> vertices;
   MatrixXd o_X; //vertices in object frame-of-ref
   vector<Vector3i> faces;
+  MatrixXi eigen_faces;
 
 
   void split(const std::string &s, char delim, vector<string>& vec_of_items);

@@ -50,16 +50,16 @@ DataManager::~DataManager()
   cout << "Write file (" <<  file_name << ") with " << nNodes.size() << " entries\n";
 
 
-  fp_nodes << "#i, t, x, y, z, q.x, q.y, q.z, q.w\n";
+  fp_nodes << "#i, t, x, y, z, q.w, q.x, q.y, q.z\n";
   for( int i=0 ; i<nNodes.size() ; i++ )
   {
     Node * n = nNodes[i];
 
     // A
 
-    fp_nodes <<  i << ", " << n->time_stamp  << endl;
-              // << e_p[0] << ", " << e_p[1] << ", "<< e_p[2] << ", "
-              // << e_q.x() << ", "<< e_q.y() << ", "<< e_q.z() << ", "<< e_q.w() << endl;
+    fp_nodes <<  i << ", " << n->time_stamp
+              << n->e_p[0] << ", " << n->e_p[1] << ", "<< n->e_p[2] << ", "
+              << n->e_q.w() << ", "<< n->e_q.x() << ", " << n->e_q.y() << ", "<< n->e_q.z() << endl;
   }
   fp_nodes.close();
 
@@ -101,6 +101,9 @@ DataManager::~DataManager()
 
   // TODO: #if defined _DEBUG_POSEGRAPH_2_FILE and _DEBUG_AR
 #if defined _DEBUG_AR &&  defined _DEBUG_POSEGRAPH_2_FILE
+
+
+  /*
   // Write to disk all nNodes[i].getPathPose() \forall i
   cout << "Write to disk all nNodes[i].getPathPose() \\forall i\n";
 
@@ -120,8 +123,16 @@ DataManager::~DataManager()
     bool status_1 = nNodes[i]->getPathPose( w_T_c, 1 );
     bool status_2 = nNodes[i]->getPathPose( w_T_tilde_c, 0 );
 
-    fp_correc << i << " " << status_2 << "," << w_T_tilde_c(0,3) << "," <<  w_T_tilde_c(1,3) << "," <<  w_T_tilde_c(2,3) << "\n";
-    fp_nominal << i << " " << status_1 << ","<< w_T_c(0,3) << "," <<  w_T_c(1,3) << "," <<  w_T_c(2,3) << "\n";
+    Quaterniond w_q_c;
+    Quaterniond w_q_tilde_c;
+    w_q_c = Quaterniond( w_T_c.topLeftCorner<3,3>() );
+    w_q_tilde_c = Quaterniond( w_T_tilde_c.topLeftCorner<3,3>() );
+
+    fp_correc << i << "," << status_2 << "," << w_T_tilde_c(0,3) << "," <<  w_T_tilde_c(1,3) << "," <<  w_T_tilde_c(2,3) << ",";
+    fp_correc << w_q_tilde_c.w() << ","<< w_q_tilde_c.x() << ","<< w_q_tilde_c.y() << ","<< w_q_tilde_c.z() << "\n";
+
+    fp_nominal << i << "," << status_1 << ","<< w_T_c(0,3) << "," <<  w_T_c(1,3) << "," <<  w_T_c(2,3) << ",";
+    fp_nominal << w_q_c.w() << ","<< w_q_c.x() << ","<< w_q_c.y() << ","<< w_q_c.z() << "\n";
 
 
     // Write Image
@@ -137,6 +148,18 @@ DataManager::~DataManager()
   }
   fp_correc.close();
   fp_nominal.close();
+  */
+
+
+  char cfile_name[1000];
+
+  // Write Info on nodes
+  for( int i=0 ; i<nNodes.size() ; i++ )
+  {
+    sprintf( cfile_name, "%s/node_%06d", base_path.c_str(), i );
+    cout << "Writing " << cfile_name << endl;
+    nNodes[i]->write_debug_xml(cfile_name);
+  }
 
 
   // TODO:
@@ -145,17 +168,30 @@ DataManager::~DataManager()
   for( int i=0 ; i<nMeshes.size() ; i++ )
   {
     cout << i << ":" << nMeshes[i]->getMeshObjectName() << endl;
+
+    sprintf( cfile_name, "%s/mesh_%06d", base_path.c_str(), i );
+    cout << "Writing "<< cfile_name << endl;
+    nMeshes[i]->write_debug_xml( cfile_name );
+
   }
 
   for( int i=0 ; i<nMeshes.size() ; i++ )
   {
     Matrix4d T;
     bool status = nMeshes[i]->getObjectWorldPose(T);
-     nMeshes[i]->writeMeshWorldPose();
+     nMeshes[i]->writeMeshWorldPose(); //writes in `nap/resources/`
     cout << i << ":pose-available-status:" <<  status << endl;
     if ( status )
       cout << T << endl;
   }
+
+  // TODO:
+  // Write Camera Info
+  sprintf( cfile_name, "%s/pinhole_camera.yaml", base_path.c_str() );
+  cout << "Writing PinholeCamera.write_debug_xml()" << cfile_name << endl;
+  camera.write_debug_xml( cfile_name );
+
+
 #endif
 
 }

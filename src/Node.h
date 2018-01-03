@@ -56,6 +56,7 @@ using namespace std;
 class Node {
 
 public:
+  Node();
   Node( ros::Time time_stamp, geometry_msgs::Pose pose );
 
   ros::Time time_stamp; //this is timestamp of the pose
@@ -69,12 +70,16 @@ public:
 
   Vector3d e_p;
   Quaterniond e_q;
+  bool m_e_;
 
   Vector3d org_p;
   Quaterniond org_q;
+  bool m_org_;
 
   void getCurrTransform(Matrix4d& M);
   void getOriginalTransform(Matrix4d& M);
+  bool valid_currTransform() { return m_e_; }
+  bool valid_originalTransform() { return m_org_; }
 
   // 3d point cloud
   Matrix<double,3,Dynamic> ptCld; //TODO: Consider making this private
@@ -115,13 +120,15 @@ public:
 
   // Write to file XML
   void write_debug_xml( char *fname  );
+  bool load_debug_xml(  const string& fname  );
 
 
   // Pose info from path msg. id=0 for path after pose-graph-optimization.
   // id=1 for path from vio.
   bool getPathPose( Matrix4d& w_T_c, int id );
   void setPathPose( const geometry_msgs::Pose& pose, int id );
-
+  void setPathPose( const geometry_msgs::Pose& pose, int id, ros::Time timestamp_ );
+  bool valid_pathpose( int id );
 
 private:
   cv::Mat image;
@@ -130,9 +137,12 @@ private:
 
 
   // Poses from Path
+  ros::Time path_pose_timestamp;
   Vector3d path_pose_p; //position
   Quaterniond path_pose_q; //quaternion
   bool m_path_pose;
+
+  ros::Time path_pose_corrected_timestamp;
   Vector3d path_pose_corrected_p;
   Quaterniond path_pose_corrected_q;
   bool m_path_pose_corrected;
