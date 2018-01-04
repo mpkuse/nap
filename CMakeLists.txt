@@ -97,6 +97,7 @@ add_executable( test_load_AR_debug_info
                     src/DataManager_AR.cpp
                     src/MeshObject.cpp
                     src/cnpy.cpp
+                    src/SceneRenderer.cpp
               )
 
 target_link_libraries( ls_pose_graph_opt ${CERES_LIBRARIES}  ${catkin_LIBRARIES} )

@@ -65,6 +65,7 @@ public:
 
   void setObjectWorldPose( Matrix4d w_T_ob );
   bool getObjectWorldPose( Matrix4d& w_T_ob );
+  const Matrix4d& getObjectWorldPose() { return w_T_ob; }
 
   bool isMeshLoaded( ) { return m_loaded; }
   bool isWorldPoseAvailable() { return m_world_pose_available; }
@@ -72,10 +73,10 @@ public:
   // Writes the pose to nap/resources/`obj_name`.worldpose
   bool writeMeshWorldPose();
 
-  const MatrixXd& getVertices() { return (const MatrixXd) o_X; }
-  const vector<Vector3i>& getFaces() { return (const vector<Vector3i>) faces; }
+  const MatrixXd& getVertices() { return  o_X; }
+  const MatrixXi& getFaces() { return  eigen_faces; }
 
-  void write_debug_xml( char * fname );
+  void write_debug_xml( const char * fname );
   // bool load_debug_xml( char * fname );
   bool load_debug_xml( const string& fname );
 
@@ -102,7 +103,7 @@ private:
 
 };
 
-
+// CUrrently not in use
 class MeshVertex
 {
 public:
@@ -114,7 +115,7 @@ private:
   Vector3d v;
 };
 
-
+// CUrrently not in use
 class MeshTriangulatedFace
 {
 public:

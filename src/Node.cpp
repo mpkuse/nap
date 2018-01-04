@@ -10,7 +10,35 @@ Node::Node()
   m_path_pose_corrected = false;
 }
 
+
+
 Node::Node( ros::Time time_stamp, geometry_msgs::Pose pose )
+{
+  setInitTransform( time_stamp, pose );
+}
+
+void Node::setInitTransform( ros::Time time_stamp, const Matrix4d& M )
+{
+  // Matrix4d to geometry_msgs::Pose
+  geometry_msgs::Pose xmsg;
+  xmsg.position.x = M(0,3);
+  xmsg.position.y = M(1,3);
+  xmsg.position.z = M(2,3);
+
+  Matrix3d R;
+  R = M.topLeftCorner<3,3>();
+  Quaterniond xquat( R );
+  xmsg.orientation.w = xquat.w();
+  xmsg.orientation.x = xquat.x();
+  xmsg.orientation.y = xquat.y();
+  xmsg.orientation.z = xquat.z();
+
+
+  //
+  setInitTransform( time_stamp, xmsg );
+}
+
+void Node::setInitTransform( ros::Time time_stamp, geometry_msgs::Pose pose )
 {
   this->time_stamp = ros::Time(time_stamp);
   this->time_pose = ros::Time(time_stamp);
@@ -177,11 +205,10 @@ const cv::Mat& Node::getNapClusterMap()
 
 
 
-
-void Node::write_debug_xml( char * fname )
+#define _write_debug_msg( msg ) ;
+void Node::write_debug_xml( const char * fname )
 {
   cv::FileStorage fs( fname, cv::FileStorage::WRITE );
-
   if( valid_3dpts() ) {
     // 3d pts
     MatrixXd c_M; //4xN
@@ -189,7 +216,7 @@ void Node::write_debug_xml( char * fname )
 
     cv::Mat c_M_mat;
     cv::eigen2cv( c_M, c_M_mat );
-
+    _write_debug_msg( cout << "+c_3dpts " );
     fs << "c_3dpts" << c_M_mat;
     fs << "c_3dpts_timestamp" << time_pcl.toSec();
   }
@@ -201,6 +228,7 @@ void Node::write_debug_xml( char * fname )
 
     cv::Mat c_feat2d_mat;
     cv::eigen2cv( c_feat2d, c_feat2d_mat);
+    _write_debug_msg( cout << "+c_feat2d " );
     fs << "c_feat2d" << c_feat2d_mat;
     fs << "c_feat2d_timestamp" << time_feat2d.toSec();
   }
@@ -212,6 +240,7 @@ void Node::write_debug_xml( char * fname )
 
     cv::Mat w_T_c_mat;
     cv::eigen2cv( w_T_c, w_T_c_mat );
+    _write_debug_msg( cout << "+w_T_c " );
     fs <<  "w_T_c" << w_T_c_mat; //this is from camera pose msg
     fs << "w_T_c_timestamp" << time_pose.toSec();
   }
@@ -223,6 +252,7 @@ void Node::write_debug_xml( char * fname )
     char newf[200];
     sprintf( newf, "%s_clustermap.png", fname );
     // cnpy::npy_save( newf,  )
+    _write_debug_msg( cout << "+clustermap " );
     cv::imwrite( newf, this->nap_clusters );
     fs << "clustermap_timestamp" << time_nap_clustermap.toSec();
   }
@@ -231,6 +261,7 @@ void Node::write_debug_xml( char * fname )
   {
     char newf[200];
     sprintf( newf, "%s_image.png", fname );
+    _write_debug_msg( cout << "+image " );
     cv::imwrite( newf, this->image );
     fs << "image_timestamp" << time_image.toSec();
   }
@@ -243,6 +274,7 @@ void Node::write_debug_xml( char * fname )
 
     cv::Mat pathpose__w_T_c_mat;
     cv::eigen2cv( pathpose__w_T_c, pathpose__w_T_c_mat );
+    _write_debug_msg( cout << "+pathpose_nominal__w_T_c " );
     fs <<  "pathpose_nominal__w_T_c_mat" << pathpose__w_T_c_mat;
     fs <<  "pathpose_nominal__timestamp" << path_pose_timestamp.toSec();
 
@@ -255,6 +287,7 @@ void Node::write_debug_xml( char * fname )
 
     cv::Mat pathpose__w_T_c_mat;
     cv::eigen2cv( pathpose__w_T_c, pathpose__w_T_c_mat );
+    _write_debug_msg( cout << "+pathpose_corrected__w_T_c " );
     fs <<  "pathpose_corrected__w_T_c_mat" << pathpose__w_T_c_mat;
     fs <<  "pathpose_corrected__timestamp" << path_pose_corrected_timestamp.toSec();
   }
@@ -264,7 +297,7 @@ void Node::write_debug_xml( char * fname )
 
 bool Node::load_debug_xml( const string& fname  )
 {
-  cout << "-----Open file : " << fname << "------" << endl;
+  _write_debug_msg( cout << "-----Open file : " << fname << "------" << endl );
   cv::FileStorage fs( fname, cv::FileStorage::READ );
   if( fs.isOpened() == false )
   {
@@ -273,46 +306,106 @@ bool Node::load_debug_xml( const string& fname  )
   }
 
   ros::Time timestamp;
-  double t;
+  double t=0;
 
   //
-  // 3dpts + timestamp
+  // 3dpts + timestamp, TODO: Do this whenever there is need
 
 
+  //
+  // 2dfeat + timestamp, TODO: Implement this whenever there is a need.
 
-  // 2dfeat + timestamp
 
-
+  //
   // transform (of camera) + timestamp
+  t=0;
+  fs["w_T_c_timestamp"] >> t;
+  timestamp.fromSec(t);
+  cv::Mat w_T_c_mat;
+  fs["w_T_c"] >> w_T_c_mat;
+  if( !w_T_c_mat.empty() ) {
+    Matrix4d w_T_c;
+    cv::cv2eigen( w_T_c_mat, w_T_c);
+    _write_debug_msg( cout << "+ w_T_c (t=" << timestamp << ")\n" << w_T_c << endl );
+    setInitTransform( timestamp, w_T_c );
+  }
+  else {
+    _write_debug_msg( cout << "- Cannot Read `w_T_c`" );
+  }
 
 
+  //
   // nap clusters. ignore for now
 
 
+  //
   // image + timestamp
+  t=0;
   fs["image_timestamp"] >> t;
-  cout << timestamp << endl;
   timestamp.fromSec(t);
-  cout << timestamp << endl;
   char newf[200];
   sprintf( newf, "%s_image.png", fname.c_str() );
   cv::Mat image = cv::imread( newf );
   if( image.empty() ) {
-    cout << "Cannot read image";
+    _write_debug_msg( cout << "- Cannot read image: " << newf );
   }
   else {
+    _write_debug_msg( cout << "+ Image(t=" << timestamp << ",file=" << newf << ") has rows:" << image.rows << " cols:" << image.cols << endl );
     setImage( timestamp, image );
   }
 
 
 
-
+  //
   // transform (of camera from vio-path) + timestamp
+  t=0;
+  fs["pathpose_nominal__timestamp"] >> t;
+  timestamp.fromSec(t);
+  cv::Mat pathpose_nominal__w_T_c_mat;
+  fs["pathpose_nominal__w_T_c_mat"] >> pathpose_nominal__w_T_c_mat;
+  if( !pathpose_nominal__w_T_c_mat.empty() ) {
+    Matrix4d pathpose_nominal__w_T_c;
+    cv::cv2eigen( pathpose_nominal__w_T_c_mat, pathpose_nominal__w_T_c);
+    _write_debug_msg( cout << "+ pathpose_nominal__w_T_c (t=" << timestamp << ")\n" << pathpose_nominal__w_T_c << endl );
+    setPathPose( pathpose_nominal__w_T_c, 1, timestamp );
+  }
+  else {
+    _write_debug_msg( cout << "- Cannot read `pathpose_nominal__w_T_c_mat`\n" );
+  }
 
+
+  //
   // transform (of camera from after pose-graph-optimization-path) + timestamp
+  t=0;
+  fs["pathpose_corrected__timestamp"] >> t;
+  timestamp.fromSec(t);
+  // cout << "pathpose-nominal Timestamp: " << timestamp << endl;
+  cv::Mat pathpose_corrected__w_T_c_mat;
+  fs["pathpose_corrected__w_T_c_mat"] >> pathpose_corrected__w_T_c_mat;
+  if( !pathpose_corrected__w_T_c_mat.empty() ) {
+    Matrix4d pathpose_corrected__w_T_c;
+    cv::cv2eigen( pathpose_corrected__w_T_c_mat, pathpose_corrected__w_T_c);
+    _write_debug_msg( cout << "+ pathpose_corrected__w_T_c (t=" << timestamp << ")\n" << pathpose_corrected__w_T_c << endl );
+    setPathPose( pathpose_corrected__w_T_c, 0, timestamp );
+  }
+  else {
+    _write_debug_msg( cout << "- Cannot read `pathpose_corrected__w_T_c_mat`\n" );
+  }
+
+
+  _write_debug_msg( cout << "valid_currTransform  " << this->valid_currTransform() << endl );
+  _write_debug_msg( cout << "valid_originalTransform  " << this->valid_originalTransform() << endl );
+  _write_debug_msg( cout << "valid_3dpts  " << this->valid_3dpts() << endl );
+  _write_debug_msg( cout << "valid_2dfeats  " << this->valid_2dfeats() << endl );
+  _write_debug_msg( cout << "valid_image  " << this->valid_image() << endl );
+  _write_debug_msg( cout << "valid_clustermap  " << this->valid_clustermap() << endl );
+  _write_debug_msg( cout << "valid_pathpose(0)  " << this->valid_pathpose(0) << endl );
+  _write_debug_msg( cout << "valid_pathpose(1)  " << this->valid_pathpose(1) << endl );
+  _write_debug_msg( cout << "--- END node.load_debug_xml() ---\n" );
 
   fs.release();
 }
+
 
 
 void Node::setPathPose( const geometry_msgs::Pose& pose, int id )
@@ -358,6 +451,29 @@ void Node::setPathPose( const geometry_msgs::Pose& pose, int id, ros::Time times
 
   ROS_ERROR( "Invalid id in Node::setPathPose()");
 }
+
+
+void Node::setPathPose( const Matrix4d& M, int id, ros::Time timestamp )
+{
+  // Matrix4d to geometry_msgs::Pose
+  geometry_msgs::Pose xmsg;
+  xmsg.position.x = M(0,3);
+  xmsg.position.y = M(1,3);
+  xmsg.position.z = M(2,3);
+
+  Matrix3d R;
+  R = M.topLeftCorner<3,3>();
+  Quaterniond xquat( R );
+  xmsg.orientation.w = xquat.w();
+  xmsg.orientation.x = xquat.x();
+  xmsg.orientation.y = xquat.y();
+  xmsg.orientation.z = xquat.z();
+
+
+  //
+  setPathPose( xmsg, id, timestamp );
+}
+
 
 // returns pose of node in world co-ord
 bool Node::getPathPose( Matrix4d& w_T_c, int id )

@@ -76,6 +76,8 @@ public:
   Quaterniond org_q;
   bool m_org_;
 
+  void setInitTransform( ros::Time time_stamp, geometry_msgs::Pose pose );
+  void setInitTransform( ros::Time time_stamp, const Matrix4d& M );
   void getCurrTransform(Matrix4d& M);
   void getOriginalTransform(Matrix4d& M);
   bool valid_currTransform() { return m_e_; }
@@ -118,8 +120,10 @@ public:
   bool valid_clustermap()   { return (nap_clusters.data!=NULL); }
 
 
+
   // Write to file XML
-  void write_debug_xml( char *fname  );
+  void write_debug_xml( string fname  ) { write_debug_xml( fname.c_str() ); }
+  void write_debug_xml( const char *fname  );
   bool load_debug_xml(  const string& fname  );
 
 
@@ -128,6 +132,8 @@ public:
   bool getPathPose( Matrix4d& w_T_c, int id );
   void setPathPose( const geometry_msgs::Pose& pose, int id );
   void setPathPose( const geometry_msgs::Pose& pose, int id, ros::Time timestamp_ );
+  void setPathPose( const Matrix4d& M, int id, ros::Time timestamp );
+
   bool valid_pathpose( int id );
 
 private:

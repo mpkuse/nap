@@ -163,7 +163,7 @@ bool MeshObject::load_debug_xml( const  string& fname )
   }
 
   fs["obj_name"] >> this->obj_name;
-  cout << "obj_name: " << this->obj_name;
+  cout << "obj_name: " << this->obj_name << endl;
 
   cv::Mat o_X_mat;
   fs["o_X"] >> o_X_mat;
@@ -171,7 +171,11 @@ bool MeshObject::load_debug_xml( const  string& fname )
     cout << "`o_X` is empty\n";
   }
   else {
-    cv::cv2eigen( o_X_mat, o_X );
+    cout << "Mesh vertices loaded: " << o_X_mat.rows << ", " << o_X_mat.cols << endl;
+    MatrixXd tmp_o_X;
+    cv::cv2eigen( o_X_mat, tmp_o_X );
+    o_X = MatrixXd( tmp_o_X );
+    // TODO: Also fill the corresponding vector for redundancy, or else completely get rid of the vectors. Just keep a vertex matrix and a face matrix
     m_loaded = true;
   }
 
@@ -182,7 +186,10 @@ bool MeshObject::load_debug_xml( const  string& fname )
     m_loaded = m_loaded && false;
   }
   else {
-    cv::cv2eigen( faces_mat, eigen_faces );
+    cout << "Mesh faces loaded" << faces_mat.rows << ", " << faces_mat.cols << endl;
+    MatrixXi tmp_faces;
+    cv::cv2eigen( faces_mat, tmp_faces );
+    eigen_faces = MatrixXi( tmp_faces );
     m_loaded = m_loaded && true;
   }
 
@@ -192,17 +199,24 @@ bool MeshObject::load_debug_xml( const  string& fname )
     cout << "`w_T_ob` is empty\n";
   }
   else {
-    cv::cv2eigen( w_T_ob_mat, w_T_ob );
-    m_world_pose_available = true;
+    cout << "Mesh w_T_{ob} loaded\n";
+    MatrixXd tmp_w_T_ob;
+    cv::cv2eigen( w_T_ob_mat, tmp_w_T_ob );
+    setObjectWorldPose( tmp_w_T_ob );
   }
   cout << "End loading Mesh\n";
   fs.release();
 
 }
 
-void MeshObject::write_debug_xml( char * fname )
+void MeshObject::write_debug_xml( const char * fname )
 {
   cv::FileStorage fs( fname, cv::FileStorage::WRITE );
+  if( fs.isOpened() == false )
+  {
+    ROS_ERROR_STREAM( "in MeshObject::write_debug_xml, Cannot open file " << fname );
+    return false;
+  }
 
   fs << "obj_name" << obj_name ;
   if( isWorldPoseAvailable() )

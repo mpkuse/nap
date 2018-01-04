@@ -509,7 +509,13 @@ void PinholeCamera::write_debug_xml( string fname )
 {
   if( valid() )
   {
+    cout << "-----Open file : " << fname << "------" << endl;
     cv::FileStorage fs( fname, cv::FileStorage::WRITE );
+    if( fs.isOpened() == false )
+    {
+      ROS_ERROR_STREAM( "in PinholeCamera::write_debug_xml, Cannot open file " << fname );
+      return false;
+    }
 
     fs << "model_type"   << config_model_type;
     fs << "camera_name"  << config_camera_name;

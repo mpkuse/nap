@@ -186,11 +186,13 @@ int main(int argc, char ** argv )
 #if defined _DEBUG_AR
   //
   //  Subscribers for path (2 paths)
-  string path_vio_topic = string( "/vins_estimator/path");
+  // string path_vio_topic = string( "/vins_estimator/path"); //imu path
+  string path_vio_topic = string( "/vins_estimator/camera_path"); //camera path
   ROS_INFO( "Subscribe to %s", path_vio_topic.c_str() );
   ros::Subscriber sub_path_vio = nh.subscribe( path_vio_topic, 1000, &DataManager::path_vio_callback, &dataManager );
 
-  string path_posegraph_topic = string( "/pose_graph/pose_graph_path" );
+  // string path_posegraph_topic = string( "/pose_graph/pose_graph_path" ); //imu path (after loop closure)
+  string path_posegraph_topic = string( "/pose_graph/pose_graph_camera_path" );
   ROS_INFO( "Subscribe to %s", path_vio_topic.c_str() );
   ros::Subscriber sub_path_posegraph = nh.subscribe( path_posegraph_topic, 1000, &DataManager::path_posegraph_callback, &dataManager );
 
