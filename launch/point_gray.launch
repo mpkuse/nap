@@ -183,8 +183,8 @@
 
               publishes topic /object_mesh_pose. Which is subscribed by my visualization node, ie. pose_graph_opt_node
      -->
-      <node name="interactive_marker_server" pkg="nap" type="interactive_marker_server" output="log">
-      </node>
+      <!-- <node name="interactive_marker_server" pkg="nap" type="interactive_marker_server" output="log"> -->
+      <!-- </node> -->
 
 <!-- ##### End Visualization ##### -->
 

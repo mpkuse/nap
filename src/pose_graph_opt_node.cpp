@@ -196,15 +196,16 @@ int main(int argc, char ** argv )
   ROS_INFO( "Subscribe to %s", path_vio_topic.c_str() );
   ros::Subscriber sub_path_posegraph = nh.subscribe( path_posegraph_topic, 1000, &DataManager::path_posegraph_callback, &dataManager );
 
-  string mesh_pose_topic = string( "/object_mesh_pose");
-  ROS_INFO( "Subscribe to %s", mesh_pose_topic.c_str() );
-  ros::Subscriber sub_mesh_pose = nh.subscribe( mesh_pose_topic, 1000, &DataManager::mesh_pose_callback, &dataManager );
+  // string mesh_pose_topic = string( "/object_mesh_pose");
+  // ROS_INFO( "Subscribe to %s", mesh_pose_topic.c_str() );
+  // ros::Subscriber sub_mesh_pose = nh.subscribe( mesh_pose_topic, 1000, &DataManager::mesh_pose_callback, &dataManager );
 #endif
 
 
   //--- END Subscribes ---//
   std::cout<< Color::green <<  "Visualization Node by mpkuse!" << Color::def << endl;
 
+/*
 #if defined _DEBUG_AR
   std::cout<< Color::blue <<  "Loading OBJ Meshes" << Color::def << endl;
   vector<string> splitted_;
@@ -226,7 +227,7 @@ int main(int argc, char ** argv )
   // std::thread keyboard_command_process( &DataManager::threaded_keyboard_listener, &dataManager );
 
 #endif
-
+*/
 
   // Setup ceres thread
   // std::thread ceres_th( &DataManager::ceres_main, &dataManager );

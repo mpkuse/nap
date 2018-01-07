@@ -172,11 +172,11 @@ public:
   /// Subscribers to Path. 2 paths, 1 path from VIO, and 1 path from pose-graph (after opt)
   void path_vio_callback( const nav_msgs::Path::ConstPtr& msg ); ///< path from VIO (before incorporation of loopclosure)
   void path_posegraph_callback( const nav_msgs::Path::ConstPtr& msg ); ///< path after incorporation of loopclosure
-  void mesh_pose_callback( const geometry_msgs::PoseStamped& msg ); ///< receives w_T_{o_i}. name of the object is in msg->header.frame_id
+  // void mesh_pose_callback( const geometry_msgs::PoseStamped& msg ); ///< receives w_T_{o_i}. name of the object is in msg->header.frame_id
 
-  void add_new_meshobject( string objname );
-  void threaded_keyboard_listener();
-  void make_movie();
+  // void add_new_meshobject( string objname );
+  // void threaded_keyboard_listener();
+  // void make_movie();
 
 
 
@@ -195,7 +195,7 @@ private:
   vector<Node*> nNodes; //list of notes
   vector<Edge*> odometryEdges; //list of odometry edges
   vector<Edge*> loopClosureEdges; //List of closure edges
-  vector<MeshObject*> nMeshes;
+  // vector<MeshObject*> nMeshes;
 
 
   //

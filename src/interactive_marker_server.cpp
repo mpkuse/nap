@@ -273,7 +273,7 @@ int main(int argc, char** argv)
 
 
 
-  string all_obj = string( "1.obj;chair.obj");
+  string all_obj = string( "1.obj;chair.obj;simple_car.obj");
   vector<string> objs = split( all_obj, ';' );
   cout << "size: " << objs.size() << endl;
   for( int i=0 ; i<objs.size() ; i++ )

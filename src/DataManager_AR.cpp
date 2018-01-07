@@ -50,7 +50,7 @@ void DataManager::path_posegraph_callback( const nav_msgs::Path::ConstPtr& msg )
   }
 }
 
-
+/*
 void DataManager::mesh_pose_callback( const geometry_msgs::PoseStamped& msg )
 {
   ROS_INFO_STREAM( "+        XXXXX mesh_pose_callback() for mesh "<< msg.header.frame_id  );
@@ -94,9 +94,10 @@ void DataManager::mesh_pose_callback( const geometry_msgs::PoseStamped& msg )
 
 
 }
+*/
 ///////////////////////////// END AR Callbacks //////////////////////////////////
 
-
+/*
 void DataManager::add_new_meshobject( string obj_name )
 {
   MeshObject * obj = new MeshObject(obj_name);
@@ -166,3 +167,4 @@ void DataManager::make_movie()
 
   }
 }
+*/

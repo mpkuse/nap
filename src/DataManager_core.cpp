@@ -162,7 +162,8 @@ DataManager::~DataManager()
   }
 
 
-  // TODO:
+
+  /*
   // Write info on mesh
   cout << "Total Meshes: "<< nMeshes.size() << endl;
   for( int i=0 ; i<nMeshes.size() ; i++ )
@@ -175,6 +176,7 @@ DataManager::~DataManager()
 
   }
 
+
   for( int i=0 ; i<nMeshes.size() ; i++ )
   {
     Matrix4d T;
@@ -184,8 +186,8 @@ DataManager::~DataManager()
     if ( status )
       cout << T << endl;
   }
+  */
 
-  // TODO:
   // Write Camera Info
   sprintf( cfile_name, "%s/pinhole_camera.yaml", base_path.c_str() );
   cout << "Writing PinholeCamera.write_debug_xml()" << cfile_name << endl;

@@ -1,0 +1,11 @@
+<launch>
+
+<!-- Used for AR testing from debug data. -->
+
+<node name="interactive_marker_server" pkg="nap" type="interactive_marker_server" output="log">
+</node>
+
+<node name="test_load_AR_debug_info" pkg="nap" type="test_load_AR_debug_info" output="screen">
+</node>
+
+</launch>

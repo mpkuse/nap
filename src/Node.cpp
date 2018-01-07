@@ -301,7 +301,7 @@ bool Node::load_debug_xml( const string& fname  )
   cv::FileStorage fs( fname, cv::FileStorage::READ );
   if( fs.isOpened() == false )
   {
-    ROS_ERROR_STREAM( "in Node::load_debug_xml, Cannot open file " << fname );
+    ROS_ERROR_STREAM( "in Node::load_debug_xml, Cannot open file for reading" << fname );
     return false;
   }
 
@@ -404,6 +404,7 @@ bool Node::load_debug_xml( const string& fname  )
   _write_debug_msg( cout << "--- END node.load_debug_xml() ---\n" );
 
   fs.release();
+  return true;
 }
 
 
@@ -474,6 +475,18 @@ void Node::setPathPose( const Matrix4d& M, int id, ros::Time timestamp )
   setPathPose( xmsg, id, timestamp );
 }
 
+ros::Time Node::getPathPoseTimeStamp(int id)
+{
+  // vio
+  if( id==1 ) {
+    return path_pose_timestamp;
+  }
+
+  // corrected
+  if( id==0 ) {
+    return path_pose_corrected_timestamp;
+  }
+}
 
 // returns pose of node in world co-ord
 bool Node::getPathPose( Matrix4d& w_T_c, int id )

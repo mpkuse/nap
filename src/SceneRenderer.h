@@ -52,6 +52,9 @@ public:
 
   void setCamera(  PinholeCamera* cam );
   void addMesh(  MeshObject* mesh );
+  int getMeshCount();
+  const string& getMeshName( int i );
+  MeshObject* getMeshObject( int i );
 
   void render( const cv::Mat& canvas, const Matrix4d& w_T_c );
 

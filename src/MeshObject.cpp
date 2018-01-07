@@ -204,7 +204,7 @@ bool MeshObject::load_debug_xml( const  string& fname )
     cv::cv2eigen( w_T_ob_mat, tmp_w_T_ob );
     setObjectWorldPose( tmp_w_T_ob );
   }
-  cout << "End loading Mesh\n";
+  cout << "--- End loading Mesh ---\n";
   fs.release();
 
 }

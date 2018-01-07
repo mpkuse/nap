@@ -130,6 +130,7 @@ public:
   // Pose info from path msg. id=0 for path after pose-graph-optimization.
   // id=1 for path from vio.
   bool getPathPose( Matrix4d& w_T_c, int id );
+  ros::Time getPathPoseTimeStamp(int id);
   void setPathPose( const geometry_msgs::Pose& pose, int id );
   void setPathPose( const geometry_msgs::Pose& pose, int id, ros::Time timestamp_ );
   void setPathPose( const Matrix4d& M, int id, ros::Time timestamp );
