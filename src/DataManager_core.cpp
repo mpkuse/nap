@@ -88,12 +88,12 @@ DataManager::~DataManager()
   fp_loop_edge.open( file_name );
   cout << "Write file (" <<  file_name << ") with " << loopClosureEdges.size() << " entries\n";
 
-  fp_loop_edge << "#i, i_c, i_p, t_c, t_p\n";
+  fp_loop_edge << "#i, i_c, i_p, t_c, t_p, EdgeSubType\n";
   for( int i=0 ; i<loopClosureEdges.size() ; i++ )
   {
     Edge * e = loopClosureEdges[i];
     fp_loop_edge << i << ", "<< e->a_id << ", "<< e->a_timestamp
-                      << ", "<< e->b_id << ", "<< e->b_timestamp << endl;
+                      << ", "<< e->b_id << ", "<< e->b_timestamp << ", " << e->getEdgeSubType() << endl;
   }
   fp_loop_edge.close();
 
@@ -156,37 +156,15 @@ DataManager::~DataManager()
   // Write Info on nodes
   for( int i=0 ; i<nNodes.size() ; i++ )
   {
-    sprintf( cfile_name, "%s/node_%06d", base_path.c_str(), i );
     cout << "Writing " << cfile_name << endl;
+    sprintf( cfile_name, "%s/node_%06d", base_path.c_str(), i );
     nNodes[i]->write_debug_xml(cfile_name);
   }
+  cout << "Writing " << cfile_name << endl;
 
 
 
-  /*
-  // Write info on mesh
-  cout << "Total Meshes: "<< nMeshes.size() << endl;
-  for( int i=0 ; i<nMeshes.size() ; i++ )
-  {
-    cout << i << ":" << nMeshes[i]->getMeshObjectName() << endl;
 
-    sprintf( cfile_name, "%s/mesh_%06d", base_path.c_str(), i );
-    cout << "Writing "<< cfile_name << endl;
-    nMeshes[i]->write_debug_xml( cfile_name );
-
-  }
-
-
-  for( int i=0 ; i<nMeshes.size() ; i++ )
-  {
-    Matrix4d T;
-    bool status = nMeshes[i]->getObjectWorldPose(T);
-     nMeshes[i]->writeMeshWorldPose(); //writes in `nap/resources/`
-    cout << i << ":pose-available-status:" <<  status << endl;
-    if ( status )
-      cout << T << endl;
-  }
-  */
 
   // Write Camera Info
   sprintf( cfile_name, "%s/pinhole_camera.yaml", base_path.c_str() );
@@ -220,8 +198,6 @@ void DataManager::raw_nap_cluster_assgn_callback( const sensor_msgs::ImageConstP
     unclaimed_napmap_time.push( ros::Time(msg->header.stamp) );
     flush_unclaimed_napmap();
 
-    //TODO: Code up the buffering part of nap clusters. For now, you don't need to as
-    // this is garunteed to be a bit delayed due to needed computation time
   }
   else //if found than associated the node with this image
   {
@@ -237,6 +213,7 @@ void DataManager::image_callback( const sensor_msgs::ImageConstPtr& msg )
   // Search for the timestamp in pose-graph
   int i_ = find_indexof_node(msg->header.stamp);
   ROS_DEBUG( "Received - Image - %d", i_ );
+  cout << "Received - Image - " << i_ << ", t=" << msg->header.stamp <<  endl;
 
   cv::Mat image, image_resized;
   try{
@@ -270,8 +247,8 @@ void DataManager::tracked_features_callback( const sensor_msgs::PointCloudConstP
   // ROS_INFO( 'Received2d:: Features: %d', (int)msg->points.size() );
   // ROS_INFO( "Received2d");
   int i_ = find_indexof_node(msg->header.stamp);
-  cout << "stamp2d : " << msg->header.stamp << endl;
-  cout << "Received2d:: Node:"<< i_ <<  " size=" << msg->points.size() << endl;
+  // cout << "stamp2d : " << msg->header.stamp << endl;
+  // cout << "tracked_features_callback:: Node:"<< i_ << "(" << msg->header.stamp <<  ") size=" << msg->points.size() << endl;
 
   // if i_ < 0 : Node not found for this timestamp. Buffer points
   if( i_ < 0 )
@@ -302,8 +279,8 @@ void DataManager::tracked_features_callback( const sensor_msgs::PointCloudConstP
 void DataManager::point_cloud_callback( const sensor_msgs::PointCloudConstPtr& msg )
 {
   int i_ = find_indexof_node(msg->header.stamp);
-  cout << "stamp3d : " << msg->header.stamp << endl;
-  ROS_INFO( "Received3d:: PointCloud: %d. nUnclaimed: %d", i_, (int)unclaimed_pt_cld.size() );
+  // cout << "stamp3d : " << msg->header.stamp << endl;
+  // ROS_INFO( "Received3d:: PointCloud: %d. nUnclaimed: %d", i_, (int)unclaimed_pt_cld.size() );
 
   if( i_ < 0 )
   {
@@ -337,7 +314,7 @@ void DataManager::camera_pose_callback( const nav_msgs::Odometry::ConstPtr msg )
   Node * n = new Node(msg->header.stamp, msg->pose.pose);
   nNodes.push_back( n );
   ROS_DEBUG( "Recvd msg - camera_pose_callback");
-  cout << "add-node : " << msg->header.stamp << endl;
+  cout << "add-node : n=" << nNodes.size() - 1 << "  t=" << msg->header.stamp  << endl;
 
 
   // ALSO add odometry edges to 1 previous.
@@ -406,6 +383,9 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
   // Look it up in nodes list (iterate over nodelist)
   int i_curr = find_indexof_node(msg->c_timestamp);
   int i_prev = find_indexof_node(msg->prev_timestamp);
+
+  //TODO: Possible bug. If i_curr and i_prev come out to be -1 ==> the node has not yet been added.
+  // need to handle this case with flush
 
   cout << i_curr << "<-->" << i_prev << endl;
   cout <<  msg->c_timestamp-nNodes[0]->time_stamp << "<-->" << msg->prev_timestamp-nNodes[0]->time_stamp << endl;
@@ -572,7 +552,8 @@ int DataManager::find_indexof_node( ros::Time stamp )
 
     // if( abs(diff.sec) <= int32_t(0) && abs(diff.nsec) < int32_t(1000000) ) {
     // if( abs(diff.sec) <= int32_t(0) && abs(diff.nsec) == int32_t(0) ) {
-    if( diff < ros::Duration(0.0001) && diff > ros::Duration(-0.0001) ){
+    // if( diff < ros::Duration(0.0001) && diff > ros::Duration(-0.0001) ){
+    if( diff < ros::Duration(0.001) && diff > ros::Duration(-0.001) ){
       return i;
     }
   }//TODO: the duration can be a fixed param. Basically it is used to compare node timestamps.
@@ -583,7 +564,7 @@ int DataManager::find_indexof_node( ros::Time stamp )
 
 void DataManager::flush_unclaimed_napmap()
 {
-  ROS_WARN( "flush_unclaimed_napmapIM:%d, T:%d", (int)unclaimed_napmap.size(), (int)unclaimed_napmap_time.size() );
+  ROS_WARN( "flush_unclaimed_napmap IM:%d, T:%d", (int)unclaimed_napmap.size(), (int)unclaimed_napmap_time.size() );
 
 
   // int N = max(20,(int)unclaimed_im.size() );
@@ -610,12 +591,13 @@ void DataManager::flush_unclaimed_napmap()
 
 void DataManager::flush_unclaimed_im()
 {
-  ROS_WARN( "IM:%d, T:%d", (int)unclaimed_im.size(), (int)unclaimed_im_time.size() );
+  ROS_WARN( "flush_unclaimed_im IM:%d, T:%d", (int)unclaimed_im.size(), (int)unclaimed_im_time.size() );
 
   // std::queue<cv::Mat> X_im;
   // std::queue<ros::Time> X_tm;
 
-  int N = max(20,(int)unclaimed_im.size() );
+  // int N = max(20,(int)unclaimed_im.size() );
+  int N = (int) unclaimed_im.size();
   // while( !unclaimed_im.empty() )
   for( int i=0 ; i<N ; i++)
   {
@@ -631,6 +613,7 @@ void DataManager::flush_unclaimed_im()
     }
     else
     {
+      cout << "flush_unclaimed_im, Found! n="<< i_ << ", t=" << stamp << endl;
       nNodes[i_]->setImage( stamp, image );
     }
   }

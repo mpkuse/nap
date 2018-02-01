@@ -142,7 +142,8 @@ int main(int argc, char ** argv )
   //
   // TODO To compare my pose-graph-optimization with qin-tong's might be useful.
   // string camera_pose_topic = string("/vins_estimator/camera_pose_no_loop");
-  string camera_pose_topic = string("/vins_estimator/camera_pose");
+  // string camera_pose_topic = string("/vins_estimator/camera_pose");
+  string camera_pose_topic = string("/vins_estimator/keyframe_camera_pose");
   ROS_INFO( "Subscribe to %s", camera_pose_topic.c_str() );
   ros::Subscriber sub_odometry = nh.subscribe( camera_pose_topic, 1000, &DataManager::camera_pose_callback, &dataManager );
 

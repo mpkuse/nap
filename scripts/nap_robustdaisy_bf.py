@@ -108,11 +108,13 @@ PARAM_FPS = 25 #used in ros.spin() loop
 # Feature-matching
 # True : Enable the Robust Daisy Matching ie, mode_20 and mode_30
 # False: Disable robust daisy. Will publish all found loops as mode_10. It will later be matched with SIFT-like descriptors in VINS-pose-graph-opt (pose_graph_node.cpp) code
-ROBUST_DAISY_MATCHING = False
+ROBUST_DAISY_MATCHING = True
+PUBLISH_2WAY = True
+PUBLISH_3WAY = True
 
 BASE__DUMP = '/home/mpkuse/Desktop/a/drag_nap'  #set this to None, to disable data-writing
-DEBUG_IMAGE_PUBLISH = True
-DEBUG_PLOTTER = False
+DEBUG_IMAGE_PUBLISH = True #TODO
+DEBUG_PLOTTER = False #TODO
 # End of Feature-matching
 
 # VINS-CONFIG-YAML

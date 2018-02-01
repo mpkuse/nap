@@ -57,6 +57,8 @@ public:
   MeshObject* getMeshObject( int i );
 
   void render( const cv::Mat& canvas, const Matrix4d& w_T_c );
+  void renderIn( const cv::Mat& canvas, const Matrix4d& w_T_c, cv::Mat& buf );
+
 
 private:
   vector<MeshObject*> objGraph;

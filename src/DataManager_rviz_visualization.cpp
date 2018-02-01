@@ -27,7 +27,7 @@ void DataManager::publish_pose_graph_nodes()
 
   int nSze = nNodes.size();
   // for( int i=0; i<nNodes.size() ; i+=1 )
-  for( int i=max(0,nSze-10); i<nNodes.size() ; i++ ) //optimization trick: only publish last 10. assuming others are already on rviz
+  for( int i=max(0,nSze-30); i<nNodes.size() ; i++ ) //optimization trick: only publish last 10. assuming others are already on rviz
   {
     marker.color.r = 0.0;marker.color.g = 0.0;marker.color.b = 0.0; //default color of node
 
@@ -214,7 +214,7 @@ void DataManager::publish_pose_graph_edges( const std::vector<Edge*>& x_edges )
   marker.id = 0;
   marker.type = visualization_msgs::Marker::ARROW;
   marker.action = visualization_msgs::Marker::ADD;
-  marker.scale.x = 0.018; //0.02
+  marker.scale.x = 0.18; //0.02
   marker.scale.y = 0.05;
   marker.scale.z = 0.06;
   marker.color.a = .6; // Don't forget to set the alpha!
@@ -247,22 +247,27 @@ void DataManager::publish_pose_graph_edges( const std::vector<Edge*>& x_edges )
     marker.points.push_back(end);
 
     if( e->type == EDGE_TYPE_ODOMETRY ) //green - odometry edge
-    {    marker.color.r = 0.0; marker.color.g = 1.0; marker.color.b = 0.0;    marker.ns = "odom_edges";}
+    {    marker.color.r = 0.0; marker.color.g = 1.0; marker.color.b = 0.0;
+          marker.ns = "odom_edges";
+    }
     else if( e->type == EDGE_TYPE_LOOP_CLOSURE )
     {
       switch(e->sub_type)
       {
-        case EDGE_TYPE_LOOP_SUBTYPE_BASIC: // basic loop-edge in cyan
-          marker.color.r = 1.0; marker.color.g = 1.0; marker.color.b = 1.0; marker.ns = "loop_edges_basic";
+        case EDGE_TYPE_LOOP_SUBTYPE_BASIC: // basic loop-edge (red)
+          marker.color.r = 1.0; marker.color.g = 0.0; marker.color.b = 0.0;
+          marker.ns = "loop_edges_basic";
           break;
 
-        case EDGE_TYPE_LOOP_SUBTYPE_3WAY: // 3way matched loop-edge in red
-          marker.color.r = 1.0; marker.color.g = 0.0; marker.color.b = 0.0; marker.ns = "loop_edges_3way";
+        case EDGE_TYPE_LOOP_SUBTYPE_3WAY: // 3way matched loop-edge (yellow)
+          marker.color.r = 1.0; marker.color.g = 1.0; marker.color.b = 0.0;
+          marker.ns = "loop_edges_3way";
           marker.scale.y = 0.1; //fat arrow for 3way
           break;
 
-        case EDGE_TYPE_LOOP_SUBTYPE_GUIDED: // Dark blue
-          marker.color.r = .2; marker.color.g = 0.0; marker.color.b = 0.8; marker.ns = "loop_edges_2way_guided";
+        case EDGE_TYPE_LOOP_SUBTYPE_GUIDED: // (pink)
+          marker.color.r = 1.0; marker.color.g = 0.0; marker.color.b = 1.0;
+          marker.ns = "loop_edges_2way_guided";
           break;
 
         default:
@@ -270,19 +275,6 @@ void DataManager::publish_pose_graph_edges( const std::vector<Edge*>& x_edges )
           break;
 
       }
-
-      /*
-      if( e->sub_type == EDGE_TYPE_LOOP_SUBTYPE_BASIC ) // basic loop-edge in red
-      { marker.color.r = 1.0; marker.color.g = 0.0; marker.color.b = 0.0; marker.ns = "loop_edges"; }
-      else {
-        if( e->sub_type == EDGE_TYPE_LOOP_SUBTYPE_3WAY ) // 3way matched loop-edge in pink
-        { marker.color.r = 1.0; marker.color.g = 0.0; marker.color.b = 1.0; marker.ns = "loop_edges"; }
-        else //other edge subtype in white
-        { marker.color.r = 1.0; marker.color.g = 1.0; marker.color.b = 1.0; marker.ns = "loop_edges"; }
-      }
-      */
-
-
     }
     else
     {    marker.color.r = 1.0; marker.color.g = 1.0; marker.color.b = 1.0; marker.ns = "x_edges";}

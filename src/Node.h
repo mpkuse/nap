@@ -112,6 +112,7 @@ public:
   //image
   void setImage( ros::Time time, const cv::Mat& im );
   const cv::Mat& getImageRef();
+  ros::Time getImageTimeStamp() { return time_image; }
   bool valid_image()   { return (image.data!=NULL); }
 
   // nap clusters

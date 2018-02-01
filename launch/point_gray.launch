@@ -44,9 +44,9 @@
 
 
     <!-- Bag set 03, Captured on 16th Aug, 2017 -->
-    <!-- <arg name="bag_path" default="/media/mpkuse/Bulk_Data/other_seqs/pointgrey_color_seq/bag03/" /> -->
+    <arg name="bag_path" default="/media/mpkuse/Bulk_Data/other_seqs/pointgrey_color_seq/bag03/" />
     <!-- <arg name="bag_file" default="2017-08-16-14-54-01.bag" doc="start UG outside CYT, takes stairs down to enterprise center walk back" /> -->
-    <!-- <arg name="bag_file" default="2017-08-16-15-00-56.bag" doc="start from SENG towards BASE. Good results!"/> -->
+    <arg name="bag_file" default="2017-08-16-15-00-56.bag" doc="start from SENG towards BASE. Good results!"/>
     <!-- <arg name="bag_file" default="2017-08-16-15-06-12.bag" doc="Walking in BASE. Alright! but a little short the seq. 1 wrong"/> -->
     <!-- <arg name="bag_file" default="2017-08-16-15-09-15.bag" nick="coffee-shop" doc="!!Perfect seq for testing" /> -->
 
@@ -61,8 +61,8 @@
 
 
     <!-- Nicks -->
-    <arg name="bag_path" default="/media/mpkuse/Bulk_Data/other_seqs/pointgrey_color_seq/bag05" />
-    <arg name="bag_file" default="2017-12-12-11-04-45.bag" nick="tpt-park" doc="!!tpt childrens garden, Another nice seq to test" />
+    <!-- <arg name="bag_path" default="/media/mpkuse/Bulk_Data/other_seqs/pointgrey_color_seq/bag05" /> -->
+    <!-- <arg name="bag_file" default="2017-12-12-11-04-45.bag" nick="tpt-park" doc="!!tpt childrens garden, Another nice seq to test" /> -->
 
     <!-- <arg name="bag_path" default="/media/mpkuse/Bulk_Data/other_seqs/pointgrey_color_seq/bag05" /> -->
     <!-- <arg name="bag_file" default="2017-12-13-11-12-35.bag" nick="lsk-1" doc="!!indoors of LSK building G/F. Usable" /> -->
@@ -72,7 +72,7 @@
 
     <!-- End of Nicks -->
 
-    <node pkg="rosbag" type="play" name="rosbag" args="-d 10  $(arg bag_path)/$(arg bag_file)" output="log"/>
+    <node pkg="rosbag" type="play" name="rosbag" args="--delay 15 -s 75  $(arg bag_path)/$(arg bag_file)" output="log"/>
     <!--<node name="recorder" pkg="rosbag" type="record" args="-O $(arg bag_path)/cooked_$(arg bag_file) /camera/image_raw /imu/imu /vins_estimator/odometry"/>-->
     <!--<node name="recorder" pkg="rosbag" type="record" args="-O $(arg bag_path)/all_cooked_$(arg bag_file) -a "/>-->
 
@@ -114,17 +114,19 @@
       <arg name="bag_color_im_topic" default="/vins_estimator/keyframe_image" /> <!-- Key frames only -->
       <!--<arg name="bag_color_im_topic" default="/camera/image_raw" />--><!-- All input color images -->
 
+
       <!--NAP Node -->
       <!-- <node name="nap" pkg="nap" type="nap_graph_modelling.py" output="screen" > -->
       <!-- <node name="nap" pkg="nap" type="nap_daisy_bf.py" output="screen" > -->
-      <!-- <node name="nap" pkg="nap" type="nap_robustdaisy_bf.py" output="screen" >
+      <node name="nap" pkg="nap" type="nap_robustdaisy_bf.py" output="screen" >
         <remap to="$(arg bag_color_im_topic)" from="/semi_keyframes"/>
         <param name="config_file" type="string" value="$(arg config_path)" />
-      </node> -->
+      </node>
+
 
 
       <!-- DBOW node -->
-       <!-- <node name="dbow_node" pkg="nap" type="dbow3_naive" output="screen">
+       <!-- <node name="dbow_node" pkg="nap" type="dbow3_naive" output="log">
         <remap to="$(arg bag_color_im_topic)" from="/color_image_inp" />
         <remap from="/colocation_dbow" to="/colocation" />
       </node> -->
@@ -141,9 +143,9 @@
 
 
 
-<!-- ##########################################################
-     ##### Geometry Node / Custom Pose Graph Optimization #####
-     ##########################################################
+<!-- ##########################################################################
+     ##### Geometry Node / Custom Pose Graph Optimization / Visualization #####
+     ##########################################################################
             subscribes to `vins/camera_pose`, `3d_point_cloud`, `napMsg`  -->
     <node name="pgraph_opt" pkg="nap" type="pose_graph_opt_node" output="screen">
         <param name="config_file" type="string" value="$(arg config_path)" />
@@ -172,20 +174,5 @@
 <!-- ##### End Visualization ##### -->
 
 
-
-<!--  #########################
-      #####   Pseudo AR   #####
-      ######################### -->
-
-      <!-- rosrun nap interactive_marker_server
-              puts several mesh on rviz and publishes a geometry_msgs::PoseStamped whenever there
-              is a change in the object's pose.
-
-              publishes topic /object_mesh_pose. Which is subscribed by my visualization node, ie. pose_graph_opt_node
-     -->
-      <!-- <node name="interactive_marker_server" pkg="nap" type="interactive_marker_server" output="log"> -->
-      <!-- </node> -->
-
-<!-- ##### End Visualization ##### -->
 
 </launch>

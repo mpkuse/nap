@@ -8,4 +8,7 @@
 <node name="test_load_AR_debug_info" pkg="nap" type="test_load_AR_debug_info" output="screen">
 </node>
 
+<!--<node name="rvizvisualisation" pkg="rviz" type="rviz" output="log" args="-d $(find nap)/rviz/my_ar.rviz" />-->
+
+
 </launch>
