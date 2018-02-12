@@ -68,7 +68,7 @@ using namespace Eigen;
 #include <opencv2/core/eigen.hpp>
 
 
-#include <ceres/ceres.h>
+// #include <ceres/ceres.h>
 
 using namespace std;
 
@@ -154,8 +154,8 @@ public:
   //  - Indented to be called by new thread.      //
   //  - This function wont return                 //
   // //////////////////////////////////////////// //
-  void ceres_main();
-  void doOptimization();
+  // void ceres_main();
+  // void doOptimization();
 
 
   bool enable_ceres;
@@ -269,8 +269,8 @@ private:
   // Own implementation of PnP with ceres. Basically Setting up the pnp problem as non-linear least squares
   // c_3dpts_4N - 4xN. 3d points in homogeneous co-ordinates
   // pts2d - 2xN. Image points in undistorted-normalized-image co-ordinates.
-  void estimatePnPPose_ceres( const cv::Mat& c_3dpts_4N, const cv::Mat& pts2d,
-                        Matrix4d& im_T_c  );
+  // void estimatePnPPose_ceres( const cv::Mat& c_3dpts_4N, const cv::Mat& pts2d,
+                        // Matrix4d& im_T_c  );
 
 
   void _to_homogeneous( const cv::Mat& in, cv::Mat& out );
@@ -306,7 +306,7 @@ private:
 };
 
 
-
+/*
 
 #include "Node.h"
 #include "Edge.h"
@@ -443,3 +443,4 @@ private:
   Vector3d X;
   Vector2d x;
 };
+*/

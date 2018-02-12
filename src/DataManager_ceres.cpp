@@ -3,9 +3,10 @@
 
 // FUnctions for pose graph optimization with ceres
 #define print_ceres( msg ) cout << "[CERES]"; msg ;
-
+/*
 void DataManager::ceres_main()
 {
+
   ros::Rate loop_rate(1);
   while( ros::ok() )
   {
@@ -26,12 +27,14 @@ void DataManager::ceres_main()
   }
 
   print_ceres( cout << "Terminating Ceres Thread\n" );
+
 }
 
 
 
 void DataManager::doOptimization()
 {
+
   print_ceres( cout << "START OPTIMIZATION")
 
   //
@@ -97,4 +100,7 @@ void DataManager::doOptimization()
 
   print_ceres( cout << "END_OPT")
 
+
 }
+
+*/

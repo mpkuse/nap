@@ -668,7 +668,7 @@ void DataManager::estimatePnPPose_withguess( const cv::Mat& c_3dpts, const cv::M
 
 }
 
-
+/*
 
 // c_3dpts_4N - 4xN. 3d points in homogeneous co-ordinates
 // pts2d - 2xN. Image points in undistorted-normalized-image co-ordinates.
@@ -725,6 +725,7 @@ void DataManager::estimatePnPPose_ceres( const cv::Mat& c_3dpts_4N, const cv::Ma
   // cout << "Ceres PnP p_T_c:\n" << im_T_c << endl;
 
 }
+*/
 
 void DataManager::quaternion_to_T( double * opt_q, double * opt_t, Matrix4d& Tr )
 {
