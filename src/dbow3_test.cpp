@@ -4,7 +4,7 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/features2d/features2d.hpp>
-#include <DBoW3/DBoW3.h>
+#include "DBoW3/DBoW3.h"
 
 using namespace DBoW3;
 using namespace std;
@@ -41,7 +41,7 @@ int main()
 {
 
   std::vector<string> images_path;
-  string BASE_PATH = "/home/mpkuse/catkin_ws/src/nap/slam_data/dbow3_vocab/Images/lip6kennedy_bigdoubleloop_";
+  string BASE_PATH = "/home/nvidia/catkin_ws/src/nap/slam_data/Images/lip6kennedy_bigdoubleloop_";
   // images_path.push_back("/home/mpkuse/catkin_ws/src/nap/slam_data/dbow3_vocab/Images/lip6kennedy_bigdoubleloop_000000.ppm");
   // images_path.push_back("/home/mpkuse/catkin_ws/src/nap/slam_data/dbow3_vocab/Images/lip6kennedy_bigdoubleloop_000001.ppm");
   // images_path.push_back("/home/mpkuse/catkin_ws/src/nap/slam_data/dbow3_vocab/Images/lip6kennedy_bigdoubleloop_000002.ppm");
@@ -63,7 +63,8 @@ int main()
   BowVector bow_vec;
 
 
-  Vocabulary voc("/home/mpkuse/catkin_ws/src/nap/slam_data/dbow3_vocab/orbvoc.dbow3");
+  // Vocabulary voc("/home/mpkuse/catkin_ws/src/nap/slam_data/dbow3_vocab/orbvoc.dbow3");
+  Vocabulary voc("/home/nvidia/catkin_ws/src/nap/slam_data/orbvoc.dbow3");
   Database db(voc, false, 0);
 
   // add images to the database
@@ -74,7 +75,7 @@ int main()
  }
 
   cout << "Database information: " << endl << db << endl;
-  return 0;
+  // return 0;
 
 
   QueryResults ret;
@@ -88,7 +89,7 @@ int main()
   //     cout << "Searching for Image " << i << ". " << ret << endl;
   // }
 
-  db.query(features[71], ret, 20);
-  cout << "Searching for Image " << 71 << ". " << ret << endl;
+  db.query(features[8], ret, 2);
+  cout << "Searching for Image " << 0 << ". " << ret << endl;
 
 }

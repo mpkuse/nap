@@ -24,8 +24,8 @@ find_package(ZLIB REQUIRED) #for cnpy.cpp
 
 set( CMAKE_CXX_FLAGS "-fpermissive -std=c++11" )
 
-
-
+#set( "DBOW_CPP_FILES" "src/DBoW3/BowVector.cpp src/DBoW3/Database.cpp src/DBoW3/DescManip.cpp src/DBoW3/FeatureVector.cpp src/DBoW3/QueryResults.cpp src/DBoW3/ScoringObject.cpp src/DBOW3/Vocabulary.cpp src/DBOW3/BowVector.cpp src/DBoW3/Database.cpp src/DBoW3/DescManip.cpp src/DBoW3/FeatureVector.cpp src/DBoW3/QueryResults.cpp src/DBoW3/ScoringObject.cpp src/DBoW3/Vocabulary.cpp ")
+#set( "DBOW_H_FILES" "BowVector.h DBoW3.h Database.h DescManip.h FeatureVector.h QueryResults.h ScoringObject.h Vocabulary.h exports.h quicklz.h timers.h" )
 
 
 
@@ -66,7 +66,22 @@ include_directories(
 #add_executable( toy_vertigo src/ceres_vertigo.cpp )
 #add_executable( toy_vertigo_dcs src/ceres_vertigo_dyn_cov_scl.cpp )
 #
-#add_executable( dbow3_test src/dbow3_test.cpp )
+add_executable( dbow3_test
+                    src/dbow3_test.cpp
+                    src/DBoW3/BowVector.cpp
+                    src/DBoW3/Database.cpp
+                    src/DBoW3/DescManip.cpp
+                    src/DBoW3/FeatureVector.cpp
+                    src/DBoW3/QueryResults.cpp
+                    src/DBoW3/ScoringObject.cpp
+                    src/DBoW3/Vocabulary.cpp
+                    src/DBoW3/BowVector.cpp
+                    src/DBoW3/Database.cpp
+                    src/DBoW3/DescManip.cpp
+                    src/DBoW3/quicklz.c
+                )
+
+
 #add_executable( dbow3_naive src/dbow3_naive.cpp src/cnpy.cpp ) #cnpy is for writing npy. borrowed from
 #
 add_executable( pose_graph_opt_node
@@ -85,6 +100,6 @@ add_executable( pose_graph_opt_node
 #target_link_libraries( toy_vertigo ${CERES_LIBRARIES}  ${catkin_LIBRARIES} )
 #target_link_libraries( toy_vertigo_dcs ${CERES_LIBRARIES}  ${catkin_LIBRARIES} )
 #
-#target_link_libraries( dbow3_test ${DBoW3_LIBRARIES} ${OpenCV_LIBRARIES} )
+target_link_libraries( dbow3_test  ${OpenCV_LIBRARIES} )
 #target_link_libraries( dbow3_naive  ${OpenCV_LIBRARIES} ${DBoW3_LIBRARIES} ${catkin_LIBRARIES} )
-target_link_libraries( pose_graph_opt_node  ${OpenCV_LIBRARIES} ${DBoW3_LIBRARIES} ${catkin_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT}  )
+target_link_libraries( pose_graph_opt_node  ${OpenCV_LIBRARIES}  ${catkin_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT}  )
