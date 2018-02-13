@@ -82,7 +82,23 @@ add_executable( dbow3_test
                 )
 
 
-#add_executable( dbow3_naive src/dbow3_naive.cpp src/cnpy.cpp ) #cnpy is for writing npy. borrowed from
+add_executable( dbow3_naive
+                    src/dbow3_naive.cpp
+                    src/cnpy.cpp
+
+                    src/DBoW3/BowVector.cpp
+                    src/DBoW3/Database.cpp
+                    src/DBoW3/DescManip.cpp
+                    src/DBoW3/FeatureVector.cpp
+                    src/DBoW3/QueryResults.cpp
+                    src/DBoW3/ScoringObject.cpp
+                    src/DBoW3/Vocabulary.cpp
+                    src/DBoW3/BowVector.cpp
+                    src/DBoW3/Database.cpp
+                    src/DBoW3/DescManip.cpp
+                    src/DBoW3/quicklz.c
+
+                    ) #cnpy is for writing npy. borrowed from
 #
 add_executable( pose_graph_opt_node
                     src/pose_graph_opt_node.cpp
@@ -101,5 +117,5 @@ add_executable( pose_graph_opt_node
 #target_link_libraries( toy_vertigo_dcs ${CERES_LIBRARIES}  ${catkin_LIBRARIES} )
 #
 target_link_libraries( dbow3_test  ${OpenCV_LIBRARIES} )
-#target_link_libraries( dbow3_naive  ${OpenCV_LIBRARIES} ${DBoW3_LIBRARIES} ${catkin_LIBRARIES} )
+target_link_libraries( dbow3_naive  ${OpenCV_LIBRARIES} ${catkin_LIBRARIES} )
 target_link_libraries( pose_graph_opt_node  ${OpenCV_LIBRARIES}  ${catkin_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT}  )

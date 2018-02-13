@@ -88,7 +88,7 @@ PARAM_MODEL = PKG_PATH+'/tf.logs/netvlad_k64_b20_resnet/model-3750' # trained si
 # PARAM_MODEL = PKG_PATH+'/tf2.logs/attempt_resnet6_K64_P8_N8/model-5000' # new resnet6_64
 # PARAM_MODEL = PKG_PATH+'/tf2.logs/attempt_vgg6_K64_P8_N8/model-9500' #new vgg
 
-PARAM_MODEL = PKG_PATH+'/tf2.logs/attempt_resnet6_K16_P8_N8/model-9250' #K=16
+PARAM_MODEL = PKG_PATH+'/slam_data/tf.logs/attempt_resnet6_K16_P8_N8/model-9250' #K=16
 # PARAM_MODEL = PKG_PATH+'/tf2.logs/attempt_resnet6_K32_P8_N8/model-2250' #K=32
 
 

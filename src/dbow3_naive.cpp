@@ -7,30 +7,40 @@
 #include <ros/package.h>
 #include <std_msgs/String.h>
 #include <std_msgs/Float32.h>
+#include <sensor_msgs/Image.h>
+
 #include <nap/NapMsg.h>
 #include <nap/NapNodeMsg.h>
-#include <nap/NapVisualEdgeMsg.h>
+// #include <nap/NapVisualEdgeMsg.h>
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/features2d/features2d.hpp>
+#include <opencv2/calib3d/calib3d.hpp>
+
 
 #include <image_transport/image_transport.h>
 #include <cv_bridge/cv_bridge.h>
 
-#include <DBoW3/DBoW3.h>
+#include "DBoW3/DBoW3.h"
 
 #include "cnpy.h"
 
 using namespace DBoW3;
 using namespace std;
 
+// comment it if you do not wish to write debug output
+// #define DEBUG_BASE "/home/mpkuse/Desktop/a/drag_mpkuse_dbow/"
+
+#define THRESH__DBOW_SCORE 0.055 //delete this and rewrite this if logic changes for selection of BOWs
+#define THRESH__N_MATCHES 25 // atleast this many number of matches need to accept the candidate as match
 
 class BOWPlaces
 {
 public:
   ~BOWPlaces()
   {
+    #ifdef DEBUG_BASE
     json_bow << ",\"total_images\": "<< current_image_index+1 << "\n}";
     json_bow.close();
 
@@ -48,9 +58,13 @@ public:
     {
       memcpy( &data_raw[i*shape[1]*shape[2]*shape[3]], S_thumbnails[i].data, shape[1]*shape[2]*shape[3]*sizeof(char) );
     }
-    std::string npy_file_name = ros::package::getPath( "nap" )+std::string("/DUMP/S_thumbnail_dbow.npy");
+
+
+    // std::string npy_file_name = ros::package::getPath( "nap" )+std::string("/DUMP/S_thumbnail_dbow.npy");
+    std::string npy_file_name = std::string( DEBUG_BASE )+std::string("/S_thumbnail_dbow.npy");
     cout << "Write FIle : " << npy_file_name << std::endl;
     cnpy::npy_save( npy_file_name, data_raw, (const unsigned int *)shape,4, "w" );
+    #endif
   }
   BOWPlaces( ros::NodeHandle& nh, string vocabulary_file )
   {
@@ -67,8 +81,8 @@ public:
     this->nh = nh;
     pub_colocations = nh.advertise<nap::NapMsg>( "/colocation_dbow", 1000 );
     pub_raw_edge = nh.advertise<nap::NapMsg>( "/raw_graph_edge", 1000 );
-    pub_raw_edge_visual = nh.advertise<nap::NapVisualEdgeMsg>( "/raw_graph_visual_edge", 1000 );
-    pub_raw_node = nh.advertise<nap::NapNodeMsg>( "/raw_graph_node", 1000 );
+    // pub_raw_edge_visual = nh.advertise<nap::NapVisualEdgeMsg>( "/raw_graph_visual_edge", 1000 );
+    pub_coloc_image = nh.advertise<sensor_msgs::Image>( "/debug/featues2d_matching", 100 );
 
     // time publishers
     pub_time_desc_computation = nh.advertise<std_msgs::Float32>( "/time_dbow/pub_time_desc_computation", 1000 );
@@ -76,14 +90,18 @@ public:
     pub_total_time = nh.advertise<std_msgs::Float32>( "/time_dbow/pub_time_total", 1000 );
 
     // json file - BOW vector at every image (sparse)
-    string json_file_name = ros::package::getPath( "nap" ) + "/DUMP/dbow_per_image.json";
+    #ifdef DEBUG_BASE
+    // string json_file_name = ros::package::getPath( "nap" ) + std::string("/DUMP/dbow_per_image.json");
+    string json_file_name = std::string( DEBUG_BASE )+ std::string("/dbow_per_image.json");
     json_bow.open( json_file_name);
     cout << "Opening file : " << json_file_name << endl;
 
     // loop_candidates_dbow
-    string loop_candidates_fname = ros::package::getPath( "nap" ) + "/DUMP/loop_candidates_dbow.csv";
+    // string loop_candidates_fname = ros::package::getPath( "nap" ) + "/DUMP/loop_candidates_dbow.csv";
+    string loop_candidates_fname = std::string( DEBUG_BASE )+ std::string("/loop_candidates_dbow.csv");
     loop_candidates_dbow.open( loop_candidates_fname);
     cout << "Opening file : " << loop_candidates_fname << endl;
+    #endif
 
 
   }
@@ -111,15 +129,7 @@ public:
     // cv::imshow( "win", im );
     // cv::waitKey(30);
 
-    // Publish NapNodeMsg with timestamp, label
-    nap::NapNodeMsg node_msg;
-    node_msg.node_timestamp = msg->header.stamp;
-    node_msg.node_label = std::to_string(current_image_index);
-    node_msg.node_label_str = std::to_string(current_image_index);
-    node_msg.color_r = 210./255.;
-    node_msg.color_g = 180./255.;
-    node_msg.color_b = 140./255.;
-    pub_raw_node.publish( node_msg );
+
 
 
 
@@ -162,36 +172,58 @@ public:
     // Publish NapMsg
     for( int i=0 ; i < ret.size() ; i++ )
     {
-      if( ret[i].Score > 0.075 ) //0.055
+      if( ret[i].Score > THRESH__DBOW_SCORE /*0.055*/ ) //0.055
       {
         nap::NapMsg coloc_msg;
         coloc_msg.c_timestamp = msg->header.stamp;
         coloc_msg.prev_timestamp = time_vec[ ret[i].Id ];
         coloc_msg.goodness = ret[i].Score;
-        coloc_msg.color_r = 1.0;
-        coloc_msg.color_g = .0;
-        coloc_msg.color_b = .0;
+        // coloc_msg.color_r = 1.0;
+        // coloc_msg.color_g = .0;
+        // coloc_msg.color_b = .0;
+        coloc_msg.op_mode = 10;
 
         // Visual Message - Same as above but has 2 images
-        nap::NapVisualEdgeMsg visual_edge_msg;
-        visual_edge_msg.c_timestamp = msg->header.stamp;
-        visual_edge_msg.prev_timestamp = time_vec[ ret[i].Id ];
-        visual_edge_msg.goodness = ret[i].Score;
+        // nap::NapVisualEdgeMsg visual_edge_msg;
+        // visual_edge_msg.c_timestamp = msg->header.stamp;
+        // visual_edge_msg.prev_timestamp = time_vec[ ret[i].Id ];
+        // visual_edge_msg.goodness = ret[i].Score;
         cv::Mat im__1 = S_thumbnails[current_image_index]; //cv::Mat(240,320, CV_8UC3, cv::Scalar(10,100,150) );
         cv::Mat im__2 = S_thumbnails[ ret[i].Id ]; //cv::Mat(240,320, CV_8UC3, cv::Scalar(255,0,0) );
-        visual_edge_msg.curr_image = *cv_bridge::CvImage( std_msgs::Header(), "bgr8", im__1).toImageMsg();
-        visual_edge_msg.prev_image = *cv_bridge::CvImage( std_msgs::Header(), "bgr8", im__2).toImageMsg();
-        visual_edge_msg.curr_label = std::to_string(current_image_index);
-        visual_edge_msg.prev_label = std::to_string(ret[i].Id )+string( ";;" )+std::to_string(ret[i].Score);
+        // visual_edge_msg.curr_image = *cv_bridge::CvImage( std_msgs::Header(), "bgr8", im__1).toImageMsg();
+        // visual_edge_msg.prev_image = *cv_bridge::CvImage( std_msgs::Header(), "bgr8", im__2).toImageMsg();
+        // visual_edge_msg.curr_label = std::to_string(current_image_index);
+        // visual_edge_msg.prev_label = std::to_string(ret[i].Id )+string( ";;" )+std::to_string(ret[i].Score);
 
 
+        if( ( coloc_msg.c_timestamp - coloc_msg.prev_timestamp) > ros::Duration(10) )
+        {
 
-        if( ( coloc_msg.c_timestamp - coloc_msg.prev_timestamp) > ros::Duration(10) ) {
-          pub_raw_edge_visual.publish( visual_edge_msg );
-          pub_colocations.publish( coloc_msg );
-          pub_raw_edge.publish( coloc_msg );
-          cout << ret[i].Id << ":" << ret[i].Score << "(" << time_vec[ ret[i].Id ] << ")  " ;
-          loop_candidates_dbow << current_image_index << "," << ret[i].Id << "," << ret[i].Score << ",-1,-1\n";
+          // Simple Geometric Verification.
+          // n = geometric_verify_naive( S_thumbnails[current_image_index],  S_thumbnails[ ret[i].Id ] )
+          //     or
+          // n = geometric_verify_naive( im__1, im__2 )
+          cv::Mat debug_outImg;
+          int nnn = geometric_verify_naive( im__1, im__2, debug_outImg );
+          if( nnn > 20 ) // accept match if enough point-matches
+          {
+            coloc_msg.op_mode = 10;
+            // pub_raw_edge_visual.publish( visual_edge_msg );
+            pub_colocations.publish( coloc_msg );
+            pub_raw_edge.publish( coloc_msg );
+            cout << current_image_index << "," << ret[i].Id << "," << ret[i].Score << ",-1,-1\n";
+
+            // publish image : debug_outImg
+            sensor_msgs::ImagePtr debug_image_msg = cv_bridge::CvImage( std_msgs::Header(), "bgr8", debug_outImg).toImageMsg();
+            pub_coloc_image.publish( debug_image_msg);
+
+            #ifdef DEBUG_BASE
+            loop_candidates_dbow << current_image_index << "," << ret[i].Id << "," << ret[i].Score << ",-1,-1\n";
+
+            string outfname = DEBUG_BASE + string("/") + to_string( current_image_index ) + "_" + to_string( ret[i].Id ) + ".jpg";
+            cv::imwrite( outfname.c_str(), debug_outImg );
+            #endif
+          }
         }
       }
     }
@@ -212,9 +244,10 @@ private:
 
   ros::NodeHandle nh;
   ros::Publisher pub_colocations;
-  ros::Publisher pub_raw_node;
   ros::Publisher pub_raw_edge;
-  ros::Publisher pub_raw_edge_visual;
+  // ros::Publisher pub_raw_edge_visual;
+  ros::Publisher pub_coloc_image;
+
 
 
   ros::Publisher pub_time_desc_computation;
@@ -306,6 +339,136 @@ private:
   }
 
 
+
+  // Simple geometry verification. Given 2 images compute keypoints,
+  // compute descriptors, match descriptors with FLANN and
+  // return number of matched features
+  int geometric_verify_naive( const cv::Mat& im__1, const cv::Mat& im__2, cv::Mat& outImg_small )
+  {
+    cout << "---geometric_verify_naive---\n";
+
+    // detectAndCompute
+    std::vector<cv::KeyPoint> keypts_1, keypts_2;
+    cv::Mat desc_1, desc_2;
+    fdetector->detectAndCompute( im__1, cv::Mat(), keypts_1, desc_1 );
+    fdetector->detectAndCompute( im__2, cv::Mat(), keypts_2, desc_2 );
+    cout << "# of keypoints: "<< keypts_1.size() << "  " << keypts_2.size() << endl;
+    cout << "desc.shape    : ("<< desc_1.rows << "," << desc_1.cols << ")   (" << desc_2.rows << "," << desc_2.cols << ")\n" ;
+
+    // FLANN index create and match
+    if( desc_1.type() != CV_32F )
+    {
+      desc_1.convertTo( desc_1, CV_32F );
+      desc_2.convertTo( desc_2, CV_32F );
+    }
+    cv::FlannBasedMatcher matcher;
+    std::vector< std::vector< cv::DMatch > > matches_raw;
+    matcher.knnMatch( desc_1, desc_2, matches_raw, 2 );
+    cout << "# Matches : " << matches_raw.size() << endl;
+    cout << "# Matches[0] : " << matches_raw[0].size() << endl;
+
+
+
+    // ratio test
+    vector<cv::DMatch> matches;
+    vector<cv::Point2f> pts_1, pts_2;
+    for( int j=0 ; j<matches_raw.size() ; j++ )
+    {
+      if( matches_raw[j][0].distance < 0.8 * matches_raw[j][1].distance ) //good match
+      {
+        matches.push_back( matches_raw[j][0] );
+
+        // Get points
+        int t = matches_raw[j][0].trainIdx;
+        int q = matches_raw[j][0].queryIdx;
+        pts_1.push_back( keypts_1[q].pt );
+        pts_2.push_back( keypts_2[t].pt );
+      }
+    }
+    cout << "# Retained (after ratio test): "<< matches.size() << endl;
+
+
+
+
+    // f-test. You might need to undistort point sets. But if precision is not needed, probably skip it.
+    vector<uchar> status;
+    cv::findFundamentalMat(pts_1, pts_2, cv::FM_RANSAC, 5.0, 0.99, status);
+    int n_inliers = count_inliers( status );
+    cout << "# Retained (after fundamental-matrix-test): " << n_inliers << endl;
+
+    // try drawing the matches. Just need to verify.
+    // draw
+    cv::Mat outImg;
+    this->drawMatches( im__1, pts_1, im__2, pts_2, outImg, to_string( matches.size() )+  " :: "+ to_string( n_inliers ), status );
+    cv::resize( outImg, outImg_small, cv::Size(), 0.5, 0.5  );
+    // cv::imshow( "outImg", outImg_small );
+    // cv::waitKey(10);
+
+    cout << "----------\n";
+    return n_inliers;
+
+
+  }
+
+
+  // Given 2 images with their matches points. ie. pts_1[i] <---> pts_2[i].
+  // This function returns the plotted with/without lines numbers
+  void drawMatches( const cv::Mat& im1, const vector<cv::Point2f>& pts_1,
+                    const cv::Mat& im2, const vector<cv::Point2f>& pts_2,
+                    cv::Mat& outImage,
+                    const string msg,
+                    vector<uchar> status = vector<uchar>(),
+                    bool enable_lines=true, bool enable_points=true)
+  {
+    assert( pts_1.size() == pts_2.size() );
+    assert( im1.rows == im2.rows );
+    assert( im2.cols == im2.cols );
+    assert( im1.channels() == im2.channels() );
+
+    cv::Mat row_im;
+    cv::hconcat(im1, im2, row_im);
+
+    if( row_im.channels() == 3 )
+      outImage = row_im.clone();
+    else
+      cvtColor(row_im, outImage, CV_GRAY2RGB);
+
+
+      // loop  over points
+    for( int i=0 ; i<pts_1.size() ; i++ )
+    {
+      cv::Point2f p1 = pts_1[i];
+      cv::Point2f p2 = pts_2[i];
+
+      cv::circle( outImage, p1, 4, cv::Scalar(0,0,255), -1 );
+      cv::circle( outImage, p2+cv::Point2f(im1.cols,0), 4, cv::Scalar(0,0,255), -1 );
+
+      cv::line( outImage,  p1, p2+cv::Point2f(im1.cols,0), cv::Scalar(255,0,0) );
+
+      if( status.size() > 0 && status[i] > 0 )
+        cv::line( outImage,  p1, p2+cv::Point2f(im1.cols,0), cv::Scalar(0,255,0) );
+
+
+    }
+
+
+    if( msg.length() > 0 ) {
+      cv::putText( outImage, msg, cv::Point(5,50), cv::FONT_HERSHEY_COMPLEX_SMALL, 1.0, cv::Scalar(0,0,255) );
+    }
+
+  }
+
+
+  // counts number of positives in status. This status is from findFundamentalMat()
+  int count_inliers( const vector<uchar>& status )
+  {
+    int cc = 0;
+    for( int i=0 ; i<status.size() ; i++ )
+      if( status[i] > 0 )
+        cc++;
+
+    return cc;
+  }
 
 
 };

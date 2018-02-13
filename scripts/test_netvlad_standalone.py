@@ -10,8 +10,9 @@ import rospkg
 
 PKG_PATH = rospkg.RosPack().get_path('nap')
 
-PITS_STREETVIEW = PKG_PATH+'/tf.logs/streetview_samples/'
-PARAM_MODEL = PKG_PATH+'/tf.logs/org/model-3750' # trained similar to above but with a resnet neural net
+PITS_STREETVIEW = PKG_PATH+'/slam_data/Images/'
+
+PARAM_MODEL = PKG_PATH+'/slam_data/tf.logs/attempt_resnet6_K16_P8_N8/model-9250' #K=16
 
 #PARAM_MODEL = PKG_PATH+'/tf2.logs/attempt_resnet6_K16_P8_N8/model-2500'
 
@@ -32,16 +33,16 @@ from ColorLUT import ColorLUT
 place_mod = PlaceRecognitionNetvlad(\
                                     PARAM_MODEL,\
                                     PARAM_CALLBACK_SKIP=2,\
-                                    PARAM_K = 64
+                                    PARAM_K = 16
                                     )
-list_of_images = glob.glob( PITS_STREETVIEW+'*/*.jpg')
+list_of_images = glob.glob( PITS_STREETVIEW+'/*.ppm')
 list_of_netvlads = []
 
 colorLUT = ColorLUT()
 for i,file_name in enumerate(list_of_images[0:10]):
     print 'Read File : ', file_name
     im = cv2.imread( file_name )
-    cv2.imshow( 'im', im )
+    # cv2.imshow( 'im', im )
 
 
     #cv2.waitKey(0)
@@ -54,11 +55,11 @@ for i,file_name in enumerate(list_of_images[0:10]):
 
     #Assgn matrix
     lut = colorLUT.lut( place_mod.Assgn_matrix[0,:,:] )
-    cv2.imshow( 'lut', lut )
-    
+    # cv2.imshow( 'lut', lut )
+
 
     print '%d in %4.2fms : %s' %( i, 1000.0*(time.time()-s), file_name )
-    cv2.waitKey(0)
+    # cv2.waitKey(0)
 
 
 

@@ -64,7 +64,7 @@ int main()
 
 
   // Vocabulary voc("/home/mpkuse/catkin_ws/src/nap/slam_data/dbow3_vocab/orbvoc.dbow3");
-  Vocabulary voc("/home/nvidia/catkin_ws/src/nap/slam_data/orbvoc.dbow3");
+  Vocabulary voc("/home/nvidia/catkin_ws/src/nap/slam_data/dbow3_vocab/orbvoc.dbow3");
   Database db(voc, false, 0);
 
   // add images to the database

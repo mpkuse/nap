@@ -3,8 +3,9 @@
 <!-- ##################
      ###### VINS ######
      ################## -->
-    <arg name="config_path" default = "$(find feature_tracker)/../config/point_gray/point_gray_config.yaml" />
-    <arg name="vins_path" default = "$(find feature_tracker)/../config/../" />
+    <!-- <arg name="config_path" default="$(find feature_tracker)/../config/point_gray/point_gray_config.yaml" /> -->
+    <!-- <arg name="vins_path" default = "$(find feature_tracker)/../config/../" /> -->
+    <arg name="config_path" default="$(find nap)/slam_data/blackbox4.yaml" />
 
 
 
@@ -18,23 +19,18 @@
       <!--NAP Node -->
       <!-- <node name="nap" pkg="nap" type="nap_graph_modelling.py" output="screen" > -->
       <!-- <node name="nap" pkg="nap" type="nap_daisy_bf.py" output="screen" > -->
-      <!-- <node name="nap" pkg="nap" type="nap_robustdaisy_bf.py" output="screen" >
+      <node name="nap" pkg="nap" type="nap_robustdaisy_bf.py" output="screen" >
         <remap to="$(arg bag_color_im_topic)" from="/semi_keyframes"/>
         <param name="config_file" type="string" value="$(arg config_path)" />
-      </node> -->
+      </node>
 
 
       <!-- DBOW node -->
-       <node name="dbow_node" pkg="nap" type="dbow3_naive" output="screen">
+       <!-- <node name="dbow_node" pkg="nap" type="dbow3_naive" output="screen">
         <remap to="$(arg bag_color_im_topic)" from="/color_image_inp" />
         <remap from="/colocation_dbow" to="/colocation" />
-      </node>
+      </node> -->
 
-      <!-- DBOW node by Qin Tong -->
-      <!-- TODO: In tony's node add code to writes images to file and also writeout all loop_candidates. But essentially this is same as my DBOW node, difference is in the way comparison thresh is set -->
-      <!-- <node name="dbow_qintony_node" pkg="loop_detector" type="loop_detector" output="screen"> -->
-        <!-- <remap from="/raw_graph_edge" to="/colocation" /> -->
-    <!-- </node> -->
 
 
 
@@ -46,6 +42,7 @@
      ##### Geometry Node / Custom Pose Graph Optimization #####
      ##########################################################
             subscribes to `vins/camera_pose`, `3d_point_cloud`, `napMsg`  -->
+    <!-- Note: from config file only the camera intrunsics are read. Need to be consistent with the ones supplied to VINS -->
     <node name="pgraph_opt" pkg="nap" type="pose_graph_opt_node" output="log">
         <param name="config_file" type="string" value="$(arg config_path)" />
         <!-- Commentout next line to remove the places-feedback-->
@@ -54,23 +51,6 @@
 
 <!-- ##### END Pose Graph Optimization ##### -->
 
-
-
-<!--  #########################
-      ##### Visualization #####
-      ######################### -->
-
-    <!-- Qin Tong's Visualization -->
-    <!--<node name="rvizvisualisation" pkg="rviz" type="rviz" output="log" args="-d $(find vins_estimator)/../config/vins_rviz_config.rviz" />-->
-
-
-    <!-- <node name="rvizvisualisation" pkg="rviz" type="rviz" output="log" args="-d $(find nap)/rviz/my_pose_graph.rviz" /> -->
-
-    <!-- Display/Publish the colocation image. Subscribes to /raw_graph_visual_edge -->
-    <!-- <node name="colocation_viz_lite" pkg="nap" type="colocation_viz_lite.py" output="log" /> -->
-
-
-<!-- ##### End Visualization ##### -->
 
 
 
