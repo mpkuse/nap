@@ -50,7 +50,7 @@ import code
 import numpy as np
 import cv2
 cv2.ocl.setUseOpenCL(False)
-
+import Queue
 
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
@@ -333,10 +333,9 @@ rospy.loginfo( 'Publish to %s' %(OUTPUT_EDGES_TOPIC) )
 
 # Time - debug
 pub_time_queue_size = rospy.Publisher( '/time/queue_size', Float32, queue_size=1000)
+pub_time_daisy_queue_size = rospy.Publisher( '/time/daisy_queue_size', Float32, queue_size=1000)
 pub_time_desc_comp = rospy.Publisher( '/time/netvlad_comp', Float32, queue_size=1000)
 pub_time_dot_scoring = rospy.Publisher( '/time/dot_scoring', Float32, queue_size=1000)
-pub_time_seq_merging = rospy.Publisher( '/time/seq_merging', Float32, queue_size=1000)
-pub_time_geometric_verification = rospy.Publisher( '/time/geometric_verify', Float32, queue_size=1000)
 pub_time_publish = rospy.Publisher( '/time/publish', Float32, queue_size=1000)
 pub_time_total_loop = rospy.Publisher( '/time/total', Float32, queue_size=1000)
 
@@ -388,6 +387,13 @@ if BASE__DUMP is not None:
 else:
     geometric_verify_log_fp = None
 
+
+# Daisy Queue
+# Note: Since the daisy process takes long (on tx2) which stalls the
+#       descriptor computation, the daisy computation to be done in a separate thread.
+daisy_data_queue = Queue.Queue()
+
+
 while not rospy.is_shutdown():
     rate.sleep()
 
@@ -400,7 +406,8 @@ while not rospy.is_shutdown():
     if place_mod.im_queue.qsize() < 1 and place_mod.im_timestamp_queue.qsize() < 1:
         rospy.logdebug( 'Empty Queue...Waiting' )
         continue
-    publish_time( pub_time_queue_size, place_mod.im_queue.qsize() )
+    publish_time( pub_time_queue_size, place_mod.im_queue.qsize() ) # Image Queue
+    publish_time( pub_time_daisy_queue_size, daisy_data_queue.qsize() ) # Daisy Queue
 
 
     # Get Image & TimeStamp from the queue
@@ -527,8 +534,8 @@ while not rospy.is_shutdown():
         # note, do not use loop_candidates, it is for file-logging. Instead use `_now_edges`
         loop_candidates.append( [L-1, aT, sim_scores_logistic[aT], nMatches, nInliers] ) #here was L in original
 
-        if nInliers > 0:
-            _now_edges.append( (L-1, aT, sim_scores_logistic[aT], nMatches, nInliers) )
+        # if nInliers > 0:
+        _now_edges.append( (L-1, aT, sim_scores_logistic[aT], nMatches, nInliers) )
 
 
 
@@ -583,12 +590,12 @@ while not rospy.is_shutdown():
         #
         # Collect Image Data for processing
         #
+        curr_m_im = S_thumbnail[i_curr-1].astype('uint8')
         curr_im = S_thumbnail[i_curr].astype('uint8')
         prev_im = S_thumbnail[i_prev].astype('uint8')
-        curr_m_im = S_thumbnail[i_curr-1].astype('uint8')
+        t_curr_m = S_timestamp[i_curr-1]
         t_curr = S_timestamp[i_curr]
         t_prev = S_timestamp[i_prev]
-        t_curr_m = S_timestamp[i_curr-1]
 
         __lut_curr_im = S_lut_raw[i_curr]
         __lut_prev_im = S_lut_raw[i_prev]
@@ -613,7 +620,24 @@ while not rospy.is_shutdown():
         # feat2d_prev_global_idx = feature_factory.global_index[feat2d_prev_idx]
 
         # This call uses VV, and other variables (global)
-        _2way, _3way, _info_txt = robust_daisy()
+        # _2way, _3way, _info_txt = robust_daisy()
+        daisy_data = ( curr_m_im, curr_im, prev_im,\
+                        t_curr_m, t_curr, t_prev,\
+                         __lut_curr_im, __lut_prev_im,\
+                         feat2d_curr, feat2d_prev,\
+                         feat3d_curr )
+
+        daisy_data_queue.put( daisy_data )
+
+        if np.random.rand() > 0.5:
+            retrived_data_item = daisy_data_queue.get()
+
+        _2way = None
+        _3way = None
+        nap_msg.op_mode = 10
+        pub_edge_msg.publish( nap_msg )
+
+
         if geometric_verify_log_fp is not None:
             geometric_verify_log_fp.write( '\n---i_curr=%5d, i_prev=%5d---\n' %(i_curr, i_prev) )
             geometric_verify_log_fp.write( _info_txt )
