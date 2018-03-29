@@ -172,7 +172,7 @@ def make_nap_visual_msg( i_curr, i_prev, str_curr, str_prev ):
 
 #--- END Nap Msg ---#
 
-def robust_daisy():
+def robust_daisy(daisy_data):
     """ Wrapper for the robust scoring set of calls. Based on
         `test_daisy_improve_dec2017.py'
 
@@ -187,10 +187,23 @@ def robust_daisy():
     _info = ''
     ROBUST_DAISY_IMSHOW = False
 
-    VV.set_image( curr_im, 1 ) #set current image
-    VV.set_image( prev_im, 2 )# set previous image (at this stage dont need lut_raw to be set as it is not used by release_candidate_match2_guided_2way() )
+    startCore1 = time.time()
+    # VV.set_image( daisy_data['curr_im'], 1 ) #set current image
+    # VV.set_image( daisy_data['prev_im'], 2 )# set previous image (at this stage dont need lut_raw to be set as it is not used by release_candidate_match2_guided_2way() )
 
-    selected_curr_i, selected_prev_i, sieve_stat = VV.release_candidate_match2_guided_2way( feat2d_curr, feat2d_prev )
+    global S_thumbnail
+    VV.set_image( S_thumbnail[daisy_data['i_curr']].astype('uint8'), 1 ) #set current image
+    VV.set_image( S_thumbnail[daisy_data['i_prev']].astype('uint8'), 2 )# set previous image (at this stage dont need lut_raw to be set as it is not used by release_candidate_match2_guided_2way() )
+
+    publish_time( pub_time_daisy_core1, 1000.*(time.time() - startCore1) )
+
+
+    startCore2 = time.time()
+    selected_curr_i, selected_prev_i, sieve_stat = VV.release_candidate_match2_guided_2way( daisy_data['feat2d_curr'], daisy_data['feat2d_prev'] )
+    publish_time( pub_time_daisy_core2, 1000.*(time.time() - startCore2) )
+
+
+    startCore3 = time.time()
     #
     #
     # # # min/ max
@@ -205,7 +218,7 @@ def robust_daisy():
     _info += 'After 2way_matching, n=%d\n' %( len(selected_curr_i) )
 
     if ROBUST_DAISY_IMSHOW:
-        xcanvas_2way = VV.plot_2way_match( curr_im, np.int0(feat2d_curr[0:2,selected_curr_i]), prev_im, np.int0(feat2d_prev[0:2,selected_prev_i]),  enable_lines=True )
+        xcanvas_2way = VV.plot_2way_match( daisy_data['curr_im'], np.int0(daisy_data['feat2d_curr'][0:2,selected_curr_i]), daisy_data['prev_im'], np.int0(daisy_data['feat2d_prev'][0:2,selected_prev_i]),  enable_lines=True )
         cv2.imshow( 'xcanvas_2way', xcanvas_2way )
 
 
@@ -226,15 +239,15 @@ def robust_daisy():
         _2way = (selected_curr_i,selected_prev_i)
 
 
-    if match2_total_score >= 0.5 and match2_total_score <= 3:
+    if match2_total_score >= 0.5 and match2_total_score <= 3 and False:
         # Try 3way. But plot 2way and 3way.
         # Beware, 3way match function returns None when it has early-rejected the match
         print 'Attempt robust_3way_matching()'
 
         # set-data
-        VV.set_image( curr_m_im, 3 )  #set curr-1 image
-        VV.set_lut_raw( __lut_curr_im, 1 ) #set lut of curr and prev
-        VV.set_lut_raw( __lut_prev_im, 2 )
+        VV.set_image( daisy_data['curr_m_im'], 3 )  #set curr-1 image
+        VV.set_lut_raw( daisy_data['__lut_curr_im'], 1 ) #set lut of curr and prev
+        VV.set_lut_raw( daisy_data['__lut_prev_im'], 2 )
         # VV.set_lut( curr_lut, 1 ) #only needed for in debug mode of 3way match
         # VV.set_lut( prev_lut, 2 ) #only needed for in debug mode of 3way match
 
@@ -283,9 +296,133 @@ def robust_daisy():
 
     if ROBUST_DAISY_IMSHOW:
         cv2.waitKey(10)
+    publish_time( pub_time_daisy_core3, 1000.*(time.time() - startCore3) )
     return _2way, _3way, _info
 
 
+
+# Will consume the daisy_data_queue
+import threading
+def daisy_worker():
+    # while not rospy.is_shutdown():
+    # while True:
+    global S_thumbnail
+    # VV.set_image( S_thumbnail[daisy_data['i_curr']].astype('uint8'), 1 ) #set current image
+
+    while XFT:
+        print 'daisy_worker()'
+        daisy_queue_xsize = daisy_data_queue.qsize()
+        publish_time( pub_time_daisy_queue_size, daisy_queue_xsize ) # Daisy Queue
+
+        try:
+            #block only for 1 sec, if nothing is found this will throw an exception
+            # then again try for 1 sec. This is made mainly to check the XFT flag for
+            # termination.
+            retrived_data_item = daisy_data_queue.get(timeout=1)
+
+            # r = 1
+            # if daisy_queue_xsize > 10:
+            #     r = np.random.randint(2,15)
+            #
+            # for _r in range(r)
+            #     retrived_data_item = daisy_data_queue.get(timeout=1)
+        except:
+            continue
+
+        # continue
+        startCore = time.time()
+        _2way, _3way, _info_txt = robust_daisy(retrived_data_item)
+        publish_time( pub_time_daisy_core, 1000.*(time.time() - startCore) )
+
+
+        startRuling = time.time()
+        if geometric_verify_log_fp is not None:
+            geometric_verify_log_fp.write( '\n---i_curr=%5d, i_prev=%5d---\n' %(retrived_data_item['i_curr'], retrived_data_item['i_prev']) )
+            geometric_verify_log_fp.write( _info_txt )
+
+        if _2way is not None:
+            # Step-1a: Get indices of matches
+            selected_curr_i, selected_prev_i = _2way
+
+            # Step-1b: Save as image
+            if BASE__DUMP is not None or DEBUG_IMAGE_PUBLISH:
+
+                if selected_curr_i.shape[0] > 0:
+                    # xcanvas_2way = VV.plot_2way_match( retrived_data_item['curr_im'], np.int0(retrived_data_item['feat2d_curr'][0:2,selected_curr_i]), retrived_data_item['prev_im'], np.int0(retrived_data_item['feat2d_prev'][0:2,selected_prev_i]),  enable_lines=True )
+                    xcanvas_2way = VV.plot_2way_match( S_thumbnail[retrived_data_item['i_curr']], np.int0(retrived_data_item['feat2d_curr'][0:2,selected_curr_i]), S_thumbnail[retrived_data_item['i_prev']], np.int0(retrived_data_item['feat2d_prev'][0:2,selected_prev_i]),  enable_lines=True )
+                else:
+                    # xcanvas_2way = np.zeros( (100,100), dtype=np.uint8)
+                    # xcanvas_2way = VV.plot_2way_match( retrived_data_item['curr_im'], None, retrived_data_item['prev_im'], None,  enable_lines=True )
+                    xcanvas_2way = VV.plot_2way_match(  S_thumbnail[retrived_data_item['i_curr']], None,  S_thumbnail[retrived_data_item['prev_im']], None,  enable_lines=True )
+
+                if DEBUG_IMAGE_PUBLISH:
+                    publish_image( pub_feat2d_matching, xcanvas_2way,  t=im_raw_timestamp )
+
+                if BASE__DUMP is not None:
+                    _xfname = '%s/%d_%d_2way.png' %(BASE__DUMP, retrived_data_item['i_curr'], retrived_data_item['i_prev'] )
+                    print 'Writing ', _xfname
+                    cv2.imwrite( _xfname,  xcanvas_2way )
+
+            # Step-2: Fill up nap-msg
+            nap_msg = make_nap_msg( retrived_data_item['i_curr'], retrived_data_item['i_prev'], (0.6,1.0,0.6) )
+            nap_msg.op_mode = 20
+            nap_msg.t_curr = retrived_data_item['t_curr']
+            nap_msg.t_prev = retrived_data_item['t_prev']
+            # feat2d_curr_global_idx.shape : 96,
+            # feat2d_curr_normed.shape : 3x96
+            # selected_curr_i.shape: 21,
+            #    out of 96 tracked features 21 were selected
+            for h in range( len(selected_curr_i) ):
+                _u = retrived_data_item['feat2d_curr_normed'][ 0:2, selected_curr_i[h] ]
+                _U = retrived_data_item['feat3d_curr'][0:3, selected_curr_i[h] ]
+                _g_idx = -100#feat2d_curr_global_idx[ selected_curr_i[h] ]
+                # nap_msg.curr will be 2X length, where nap_msg.prev will be X length.
+                nap_msg.curr.append( Point32(_u[0], _u[1], _g_idx) )
+                nap_msg.curr.append( Point32(_U[0], _U[1], _U[2])  )
+
+                _u = retrived_data_item['feat2d_prev_normed'][ 0:2, selected_prev_i[h] ]
+                _g_idx = -100#feat2d_prev_global_idx[ selected_prev_i[h] ]
+                nap_msg.prev.append( Point32(_u[0], _u[1], _g_idx) )
+
+            # Step-3: Publish nap-msg
+            pub_edge_msg.publish( nap_msg )
+
+
+        if _3way is not None:
+            # Step-1a: Get co-ordinates of matches
+            xpts_curr, xpts_prev, xpts_currm = _3way
+
+            # Step-1b: Save image for debugging
+            if BASE__DUMP is not None or DEBUG_IMAGE_PUBLISH:
+                gridd = VV.plot_3way_match( retrived_data_item['curr_im'], xpts_curr, retrived_data_item['prev_im'], xpts_prev, retrived_data_item['curr_m_im'], xpts_currm, enable_lines=False, enable_text=True )
+                if DEBUG_IMAGE_PUBLISH:
+                    publish_image( pub_feat2d_matching, gridd,  t=im_raw_timestamp )
+
+
+                if BASE__DUMP is not None:
+                    _xfname = '%s/%d_%d_3way.png' %(BASE__DUMP, retrived_data_item['i_curr'], retrived_data_item['i_prev'] )
+                    print 'Writing ', _xfname
+                    cv2.imwrite( _xfname,  gridd )
+
+            # Step-2: Fill up nap msg
+            nap_msg = make_nap_msg( retrived_data_item['i_curr'], retrived_data_item['i_prev'], (0.6,1.0,0.6) )
+            nap_msg.op_mode = 29
+            nap_msg.t_curr = retrived_data_item['t_curr']
+            nap_msg.t_prev = retrived_data_item['t_prev']
+            nap_msg.t_curr_m = retrived_data_item['t_curr_m']
+            for ji in range( len(xpts_curr) ): #len(xpts_curr) is same as xpts_curr.shape[0]
+                pt_curr = xpts_curr[ji]
+                pt_prev = xpts_prev[ji]
+                pt_curr_m = xpts_currm[ji]
+
+                nap_msg.curr.append(   Point32(pt_curr[0], pt_curr[1],-1) )
+                nap_msg.prev.append(   Point32(pt_prev[0], pt_prev[1],-1) )
+                nap_msg.curr_m.append( Point32(pt_curr_m[0], pt_curr_m[1],-1) )
+
+            pub_edge_msg.publish( nap_msg )
+
+
+        publish_time( pub_time_daisy_ruling, 1000.*(time.time() - startRuling) )
 
 
 
@@ -322,7 +459,7 @@ rospy.loginfo( 'Subscribed to '+TRACKED_FEATURE_TOPIC )
 
 
 # raw edges
-pub_edge_msg = rospy.Publisher( OUTPUT_EDGES_TOPIC, NapMsg, queue_size=1000 )
+pub_edge_msg = rospy.Publisher( OUTPUT_EDGES_TOPIC, NapMsg, queue_size=100 )
 rospy.loginfo( 'Publish to %s' %(OUTPUT_EDGES_TOPIC) )
 
 # raw visual edges
@@ -332,12 +469,22 @@ rospy.loginfo( 'Publish to %s' %(OUTPUT_EDGES_TOPIC) )
 
 
 # Time - debug
-pub_time_queue_size = rospy.Publisher( '/time/queue_size', Float32, queue_size=1000)
-pub_time_daisy_queue_size = rospy.Publisher( '/time/daisy_queue_size', Float32, queue_size=1000)
-pub_time_desc_comp = rospy.Publisher( '/time/netvlad_comp', Float32, queue_size=1000)
-pub_time_dot_scoring = rospy.Publisher( '/time/dot_scoring', Float32, queue_size=1000)
-pub_time_publish = rospy.Publisher( '/time/publish', Float32, queue_size=1000)
-pub_time_total_loop = rospy.Publisher( '/time/total', Float32, queue_size=1000)
+pub_time_queue_size = rospy.Publisher( '/time/queue_size', Float32, queue_size=100)
+pub_time_desc_comp = rospy.Publisher( '/time/netvlad_comp', Float32, queue_size=100)
+pub_time_dot_scoring = rospy.Publisher( '/time/dot_scoring', Float32, queue_size=100)
+pub_time_publish = rospy.Publisher( '/time/publish', Float32, queue_size=100)
+pub_time_total_loop = rospy.Publisher( '/time/total', Float32, queue_size=100)
+
+pub_time_push_to_queue = rospy.Publisher( '/time/push_to_queue', Float32, queue_size=100)
+
+# Time - daisy thread
+pub_time_daisy_queue_size = rospy.Publisher( '/time/daisy/queue_size', Float32, queue_size=100)
+pub_time_daisy_ruling = rospy.Publisher( '/time/daisy/ruling', Float32, queue_size=1000)
+
+pub_time_daisy_core = rospy.Publisher( '/time/daisy/core', Float32, queue_size=100)
+pub_time_daisy_core1 = rospy.Publisher( '/time/daisy/core1', Float32, queue_size=100)
+pub_time_daisy_core2 = rospy.Publisher( '/time/daisy/core2', Float32, queue_size=100)
+pub_time_daisy_core3 = rospy.Publisher( '/time/daisy/core3', Float32, queue_size=100)
 
 # Cluster Assignment - raw and falsecolormap
 colorLUT = ColorLUT()
@@ -391,7 +538,12 @@ else:
 # Daisy Queue
 # Note: Since the daisy process takes long (on tx2) which stalls the
 #       descriptor computation, the daisy computation to be done in a separate thread.
+XFT = True
 daisy_data_queue = Queue.Queue()
+t = threading.Thread( target=daisy_worker )
+print 'Start Daisy Worker: daisy_worker()'
+t.start()
+
 
 
 while not rospy.is_shutdown():
@@ -512,8 +664,8 @@ while not rospy.is_shutdown():
     if len(argT ) < 1:
         continue
 
-    print '---'
-    print 'Found %d candidates above the thresh' %(len(argT[0]))
+    rospy.logdebug( '---' )
+    rospy.logdebug( 'Found %d candidates above the thresh' %(len(argT[0])) )
 
     _now_edges = []
     for aT in argT[0]: #Iterate through each match and collect candidates
@@ -590,15 +742,20 @@ while not rospy.is_shutdown():
         #
         # Collect Image Data for processing
         #
-        curr_m_im = S_thumbnail[i_curr-1].astype('uint8')
-        curr_im = S_thumbnail[i_curr].astype('uint8')
-        prev_im = S_thumbnail[i_prev].astype('uint8')
+        start_push_time = time.time()
+                #   To save more time, dont put the images in queue, instead just put i_curr and i_prev in queue.
+                #   This can be looked up by daisy thread from S_thumbnail
+
+        # curr_m_im = S_thumbnail[i_curr-1].astype('uint8')
+        # curr_im = S_thumbnail[i_curr].astype('uint8')
+        # prev_im = S_thumbnail[i_prev].astype('uint8')
+
         t_curr_m = S_timestamp[i_curr-1]
         t_curr = S_timestamp[i_curr]
         t_prev = S_timestamp[i_prev]
 
-        __lut_curr_im = S_lut_raw[i_curr]
-        __lut_prev_im = S_lut_raw[i_prev]
+        # __lut_curr_im = S_lut_raw[i_curr]
+        # __lut_prev_im = S_lut_raw[i_prev]
 
 
         #
@@ -621,110 +778,31 @@ while not rospy.is_shutdown():
 
         # This call uses VV, and other variables (global)
         # _2way, _3way, _info_txt = robust_daisy()
-        daisy_data = ( curr_m_im, curr_im, prev_im,\
-                        t_curr_m, t_curr, t_prev,\
-                         __lut_curr_im, __lut_prev_im,\
-                         feat2d_curr, feat2d_prev,\
-                         feat3d_curr )
-
+        daisy_data = {}
+        daisy_data['i_curr'] = i_curr
+        daisy_data['i_prev'] = i_prev
+        # daisy_data['curr_m_im'] = curr_m_im
+        # daisy_data['curr_im'] = curr_im
+        # daisy_data['prev_im'] = prev_im
+        daisy_data['t_curr_m'] = t_curr_m
+        daisy_data['t_curr'] = t_curr
+        daisy_data['t_prev'] = t_prev
+        daisy_data['feat2d_curr_normed'] = feat2d_curr_normed
+        daisy_data['feat2d_prev_normed'] = feat2d_prev_normed
+        daisy_data['feat2d_curr'] = feat2d_curr
+        daisy_data['feat2d_prev'] = feat2d_prev
+        daisy_data['feat3d_curr'] = feat3d_curr
+        # daisy_data['__lut_curr_im'] = __lut_curr_im
+        # daisy_data['__lut_prev_im'] = __lut_prev_im
+        # daisy_data = ( curr_m_im, curr_im, prev_im,\
+        #                 t_curr_m, t_curr, t_prev,\
+        #                  __lut_curr_im, __lut_prev_im,\
+        #                  feat2d_curr, feat2d_prev,\
+        #                  feat3d_curr )
         daisy_data_queue.put( daisy_data )
 
-        if np.random.rand() > 0.5:
-            retrived_data_item = daisy_data_queue.get()
+        publish_time( pub_time_push_to_queue, 1000.*(time.time() - start_push_time) )
 
-        _2way = None
-        _3way = None
-        nap_msg.op_mode = 10
-        pub_edge_msg.publish( nap_msg )
-
-
-        if geometric_verify_log_fp is not None:
-            geometric_verify_log_fp.write( '\n---i_curr=%5d, i_prev=%5d---\n' %(i_curr, i_prev) )
-            geometric_verify_log_fp.write( _info_txt )
-
-        if _2way is not None:
-            # Step-1a: Get indices of matches
-            selected_curr_i, selected_prev_i = _2way
-
-            # Step-1b: Save as image
-            if BASE__DUMP is not None or DEBUG_IMAGE_PUBLISH:
-
-                if selected_curr_i.shape[0] > 0:
-                    xcanvas_2way = VV.plot_2way_match( curr_im, np.int0(feat2d_curr[0:2,selected_curr_i]), prev_im, np.int0(feat2d_prev[0:2,selected_prev_i]),  enable_lines=True )
-                else:
-                    # xcanvas_2way = np.zeros( (100,100), dtype=np.uint8)
-                    xcanvas_2way = VV.plot_2way_match( curr_im, None, prev_im, None,  enable_lines=True )
-
-                if DEBUG_IMAGE_PUBLISH:
-                    publish_image( pub_feat2d_matching, xcanvas_2way,  t=im_raw_timestamp )
-
-                if BASE__DUMP is not None:
-                    _xfname = '%s/%d_%d_2way.png' %(BASE__DUMP, i_curr, i_prev )
-                    print 'Writing ', _xfname
-                    cv2.imwrite( _xfname,  xcanvas_2way )
-
-            # Step-2: Fill up nap-msg
-            nap_msg = make_nap_msg( i_curr, i_prev, (0.6,1.0,0.6) )
-            nap_msg.op_mode = 20
-            nap_msg.t_curr = t_curr
-            nap_msg.t_prev = t_prev
-            # feat2d_curr_global_idx.shape : 96,
-            # feat2d_curr_normed.shape : 3x96
-            # selected_curr_i.shape: 21,
-            #    out of 96 tracked features 21 were selected
-            for h in range( len(selected_curr_i) ):
-                _u = feat2d_curr_normed[ 0:2, selected_curr_i[h] ]
-                _U = feat3d_curr[0:3, selected_curr_i[h] ]
-                _g_idx = -100#feat2d_curr_global_idx[ selected_curr_i[h] ]
-                # nap_msg.curr will be 2X length, where nap_msg.prev will be X length.
-                nap_msg.curr.append( Point32(_u[0], _u[1], _g_idx) )
-                nap_msg.curr.append( Point32(_U[0], _U[1], _U[2])  )
-
-                _u = feat2d_prev_normed[ 0:2, selected_prev_i[h] ]
-                _g_idx = -100#feat2d_prev_global_idx[ selected_prev_i[h] ]
-                nap_msg.prev.append( Point32(_u[0], _u[1], _g_idx) )
-
-            # Step-3: Publish nap-msg
-            pub_edge_msg.publish( nap_msg )
-
-
-        if _3way is not None:
-            # Step-1a: Get co-ordinates of matches
-            xpts_curr, xpts_prev, xpts_currm = _3way
-
-            # Step-1b: Save image for debugging
-            if BASE__DUMP is not None or DEBUG_IMAGE_PUBLISH:
-                gridd = VV.plot_3way_match( curr_im, xpts_curr, prev_im, xpts_prev, curr_m_im, xpts_currm, enable_lines=False, enable_text=True )
-                if DEBUG_IMAGE_PUBLISH:
-                    publish_image( pub_feat2d_matching, gridd,  t=im_raw_timestamp )
-
-
-                if BASE__DUMP is not None:
-                    _xfname = '%s/%d_%d_3way.png' %(BASE__DUMP, i_curr, i_prev )
-                    print 'Writing ', _xfname
-                    cv2.imwrite( _xfname,  gridd )
-
-            # Step-2: Fill up nap msg
-            nap_msg = make_nap_msg( i_curr, i_prev, (0.6,1.0,0.6) )
-            nap_msg.op_mode = 29
-            nap_msg.t_curr = t_curr
-            nap_msg.t_prev = t_prev
-            nap_msg.t_curr_m = t_curr_m
-            for ji in range( len(xpts_curr) ): #len(xpts_curr) is same as xpts_curr.shape[0]
-                pt_curr = xpts_curr[ji]
-                pt_prev = xpts_prev[ji]
-                pt_curr_m = xpts_currm[ji]
-
-                nap_msg.curr.append(   Point32(pt_curr[0], pt_curr[1],-1) )
-                nap_msg.prev.append(   Point32(pt_prev[0], pt_prev[1],-1) )
-                nap_msg.curr_m.append( Point32(pt_curr_m[0], pt_curr_m[1],-1) )
-
-            pub_edge_msg.publish( nap_msg )
-
-        publish_time( pub_time_publish, 1000.*(time.time() - startPublish) )
-        #TODO: publish_image( pub_2way_matching, xcanvas_2way,  t=im_raw_timestamp )
-        # based on a flag for visualization
-        continue
 
 
     # Comment following 2 lines to not debug-publish loop-candidate
@@ -735,7 +813,9 @@ while not rospy.is_shutdown():
     # publish_time( pub_time_publish, 1000.*(time.time() - startPublish) )
     #-------------------------------- END  -----------------------------#
 
-
+XFT = False
+#TODO: Send signal to the thread to indicate quit.
+t.join()
 print 'Quit...!'
 if BASE__DUMP is None:
     print 'BASE__DUMP param is None, indicating, NO_DEBUG'
