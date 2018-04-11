@@ -208,11 +208,13 @@ def plot_feat2d( im, feat2d, color=(255,0,255) ):
     return xcanvas
 
 
-def robust_daisy_wrapper( VV, D  ):
+def robust_daisy_wrapper( VV, D, DAISY_flags  ):
     """ Wrapper for the robust scoring set of calls. Based on
         `test_daisy_improve_dec2017.py'
 
         Uses, VV, curr_im, prev_im, curr_m_im, __lut_curr_im, __lut_prev_im
+
+        DAISY_flags is a dict() which holds the flags
 
         Returns:
             a) _2way: selected_curr_i, selected_prev_i
@@ -262,15 +264,15 @@ def robust_daisy_wrapper( VV, D  ):
         _2way = (selected_curr_i,selected_prev_i)
 
 
-    if match2_total_score >= 0.5 and match2_total_score <= 3 and False: #currently 3 way is disabled. TODO
+    if match2_total_score >= 0.5 and match2_total_score <= 3 and DAISY_flags['ENABLE_3WAY']: #currently 3 way is disabled. TODO
         # Try 3way. But plot 2way and 3way.
         # Beware, 3way match function returns None when it has early-rejected the match
-        xprint( 'Attempt robust_3way_matching()', THREAD_NAME )
+        xprint( '@@@@@@@@@@@@@ Attempt robust_3way_matching()', THREAD_NAME )
 
         # set-data
-        VV.set_image( daisy_data['curr_m_im'], 3 )  #set curr-1 image
-        VV.set_lut_raw( daisy_data['__lut_curr_im'], 1 ) #set lut of curr and prev
-        VV.set_lut_raw( daisy_data['__lut_prev_im'], 2 )
+        VV.set_image( D['im_curr_m'], 3 )  #set curr-1 image
+        VV.set_lut_raw( D['__lut_curr_im'], 1 ) #set lut of curr and prev
+        VV.set_lut_raw( D['__lut_prev_im'], 2 )
         # VV.set_lut( curr_lut, 1 ) #only needed for in debug mode of 3way match
         # VV.set_lut( prev_lut, 2 ) #only needed for in debug mode of 3way match
 
@@ -297,12 +299,9 @@ def robust_daisy_wrapper( VV, D  ):
         else:
             xprint( 'nPts_3way_match     : '+ str(q1.shape) , THREAD_NAME )
             xprint( 'Accept 3way match', THREAD_NAME )
-            xprint( tcol.OKGREEN+ 'Accept'+ tcol.ENDC )
+            xprint( tcol.OKGREEN+ 'Accept'+ tcol.ENDC, THREAD_NAME )
             _info += 'n3way_matches: %s' %( str(q1.shape) ) + '\n'
             _info += tcol.OKGREEN+ 'c: Accept'+ tcol.ENDC + '\n'
-            if ROBUST_DAISY_IMSHOW:
-                gridd = VV.plot_3way_match( VV.im1, np.array(q1), VV.im2, np.array(q2), VV.im3, np.array(q3) )
-                cv2.imshow( '3way Matchi', gridd )
             #fill up _3way
             _3way = (q1,q2,q3)
 
@@ -347,7 +346,8 @@ def make_nap_msg( t_curr, t_prev, edge_color=None):
 
 
 
-def worker_gpu( process_flags, Qi, Qt, S_thumbnails, S_timestamp, S_netvlad,\
+def worker_gpu( process_flags, Qi, Qt, \
+                S_thumbnails, S_timestamp, S_netvlad, S_lut_raw,\
                 Q_time_netvlad, Q_cluster_assgn_falsecolormap ):
     """ Consumes the Queue Qi and Qt to produce Qd.
     Qi contains the received images, Qt contains the corresponding timestamps.
@@ -437,7 +437,14 @@ def worker_gpu( process_flags, Qi, Qt, S_thumbnails, S_timestamp, S_netvlad,\
         if Q_cluster_assgn_falsecolormap is not None:
             lut = colorLUT.lut( Assgn_matrix[0,:,:] )
             xprint( '(false colormap) lut.shape'+str( lut.shape ), THREAD_NAME )
-            Q_cluster_assgn_falsecolormap.put( lut )
+
+            # Write qsize in lut image
+            # Q_cluster_assgn_falsecolormap.put( lut )
+            debug_txt_image = np.zeros((30, lut.shape[1],lut.shape[2]), dtype=np.uint8)
+            toTxt = "gpu-q: %d" %(Qi.qsize())
+            cv2.putText(debug_txt_image,toTxt, (5,15), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (255,255,255) )
+            lut_debug = np.concatenate( (lut, debug_txt_image), axis=0 )
+            Q_cluster_assgn_falsecolormap.put( lut_debug )
 
 
 
@@ -446,6 +453,7 @@ def worker_gpu( process_flags, Qi, Qt, S_thumbnails, S_timestamp, S_netvlad,\
         S_thumbnails.append( im )
         S_timestamp.append( timestamp )
         S_netvlad.append( tff_vlad_word )
+        S_lut_raw.append( Assgn_matrix[0,:,:] )
         # TODO Perhaps also need S_lut_raw ie. Assgn_matrix
         #--------------------------- END-----------------------#
 
@@ -569,7 +577,8 @@ def worker_score_computation( process_flags, Qd, S_timestamp, S_netvlad, Q_time_
 
 
 
-def worker_cpu( process_flags, Qd, S_thumbnails, S_timestamp, FF, Q_2way_napmsg, Q_3way_napmsg, Q_time_cpu, Q_match_im_canvas ):
+def worker_cpu( process_flags, Qd, S_thumbnails, S_timestamp, S_lut_raw,\
+                            FF, Q_2way_napmsg, Q_3way_napmsg, Q_time_cpu, Q_match_im_canvas, Q_match_im3way_canvas ):
     """ Consumes the Queue Qd. Qd contains the candidate loop closure pair indices.
         cpu does the geometric verification using the pair indices and looking up those
         images from S_timestamp.
@@ -600,7 +609,7 @@ def worker_cpu( process_flags, Qd, S_thumbnails, S_timestamp, FF, Q_2way_napmsg,
                 for h in range( int(curr_qsize/10.)  ):
                     g = Qd.get_nowait()
         except:
-            xprint( 'Sleep for 0.2', THREAD_NAME )
+            # xprint( 'Sleep for 0.2', THREAD_NAME )
             time.sleep( 0.2 )
             continue
         # try:
@@ -622,13 +631,13 @@ def worker_cpu( process_flags, Qd, S_thumbnails, S_timestamp, FF, Q_2way_napmsg,
         i_prev = g[1]
         im_curr = S_thumbnails[ i_curr ]
         im_prev = S_thumbnails[ i_prev ]
-        # im_curr_m = S_thumbnails[ g[0]-1 ]
+        im_curr_m = S_thumbnails[ i_curr-1 ]
 
 
         # Timestamps
         t_curr   = S_timestamp[ i_curr ]
         t_prev   = S_timestamp[ i_prev ]
-        # t_curr_m = S_timestamp[ g[0]-1 ]
+        t_curr_m = S_timestamp[ i_curr-1 ]
 
 
         # Features (From FeatureFactor)
@@ -653,13 +662,20 @@ def worker_cpu( process_flags, Qd, S_thumbnails, S_timestamp, FF, Q_2way_napmsg,
         daisy_data['i_prev'] = i_prev
         daisy_data['im_curr'] = im_curr
         daisy_data['im_prev'] = im_prev
-        # daisy_data['im_curr_m'] = im_curr_m
+
         daisy_data['t_curr'] = t_curr
         daisy_data['t_prev'] = t_prev
-        # daisy_data['t_curr_m'] = t_curr_m
+
         daisy_data['feat2d_curr'] = feat2d_curr
         daisy_data['feat2d_prev'] = feat2d_prev
         daisy_data['feat3d_curr'] = feat3d_curr
+
+        # Data for 3way match
+        daisy_data['t_curr_m'] = t_curr_m
+        daisy_data['im_curr_m'] = im_curr_m
+        daisy_data['__lut_curr_im'] = S_lut_raw[ i_curr ]
+        daisy_data['__lut_prev_im'] = S_lut_raw[ i_prev ]
+        xprint( 'len of S_lut_raw %d' %( len(S_lut_raw) ), THREAD_NAME  )
 
 
         if False: # Timing info.
@@ -679,8 +695,9 @@ def worker_cpu( process_flags, Qd, S_thumbnails, S_timestamp, FF, Q_2way_napmsg,
         _2way = None
         _3way = None
         _info = ''
-        ROBUST_DAISY_IMSHOW = False
-        _2way, _3way, _info = robust_daisy_wrapper( VV, daisy_data )
+        DAISY_flags = {}
+        DAISY_flags['ENABLE_3WAY'] = True
+        _2way, _3way, _info = robust_daisy_wrapper( VV, daisy_data, DAISY_flags=DAISY_flags )
         xprint( _info, THREAD_NAME )
 
 
@@ -755,9 +772,23 @@ def worker_cpu( process_flags, Qd, S_thumbnails, S_timestamp, FF, Q_2way_napmsg,
                 # xprint( fname, THREAD_NAME )
                 # cv2.imwrite( fname, xcanvas_2way )
 
-                Q_match_im_canvas.put( xcanvas_2way )
+                # Q_match_im_canvas.put( xcanvas_2way )
+
+                debug_txt_image = np.zeros((int(xcanvas_2way.shape[0]/4), xcanvas_2way.shape[1],xcanvas_2way.shape[2]), dtype=np.uint8)
+                toTxt = "cpu-q: %d" %(Qd.qsize())
+                cv2.putText(debug_txt_image,toTxt, (5,15), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255) )
+                xcanvas_2way_debug = np.concatenate( (xcanvas_2way, debug_txt_image), axis=0 )
+                Q_match_im_canvas.put( xcanvas_2way_debug )
 
 
+            if _3way is not None:
+                q1, q2, q3 = _3way
+                gridd = VV.plot_3way_match( VV.im1, np.array(q1), VV.im2, np.array(q2), VV.im3, np.array(q3) )
+                # fname =  '/home/nvidia/Pictures/3way_%d_%d.jpg' %(g[0], g[1])
+                # xprint( fname, THREAD_NAME )
+                # cv2.imwrite( fname, gridd )
+
+                Q_match_im3way_canvas.put( gridd )
 
 
 
@@ -767,9 +798,12 @@ def worker_cpu( process_flags, Qd, S_thumbnails, S_timestamp, FF, Q_2way_napmsg,
     xprint( 'Loop Ended. Now close queues of cpu', THREAD_NAME )
     Qd.close()
     Q_2way_napmsg.close()
+    Q_3way_napmsg.close()
     Q_time_cpu.close()
     if Q_match_im_canvas is not None:
         Q_match_im_canvas.close()
+    if Q_match_im3way_canvas is not None:
+        Q_match_im3way_canvas.close()
     xprint( 'Terminate cpu_process', THREAD_NAME )
 
 
@@ -784,15 +818,18 @@ if __name__ == "__main__":
 
 
     PARAMS = {}
-    PARAMS['INPUT_IMAGE_TOPIC'] = '/semi_keyframes'
-    # PARAMS['INPUT_IMAGE_TOPIC'] = '/pg_17302081/image'
-    # PARAMS['INPUT_IMAGE_TOPIC'] = '/vins_estimator/keyframe_image'
+
     PARAMS['TRACKED_FEATURE_TOPIC'] = '/vins_estimator/keyframe_point'
     PARAMS['OUTPUT_EDGES_TOPIC'] = '/raw_graph_edge'
-    # PARAMS['VINS_CONFIG_YAML_FNAME'] = rospack.get_path( 'nap' )+'/slam_data/blackbox4.yaml' #TODO: read this paramter from the parameter server.See nap_daisy_bf.py
-    PARAMS['VINS_CONFIG_YAML_FNAME'] = VINS_CONFIG_YAML_FNAME = rospy.get_param( '/nap/config_file')
     PARAMS['PARAM_CALLBACK_SKIP'] = 4
-    PARAMS['N_CPU'] = 3
+    PARAMS['INPUT_IMAGE_TOPIC'] = '/semi_keyframes'
+    PARAMS['VINS_CONFIG_YAML_FNAME'] = VINS_CONFIG_YAML_FNAME = rospy.get_param( '/nap/config_file')
+    PARAMS['N_CPU'] = 4
+
+    # Local launch
+    # PARAMS['INPUT_IMAGE_TOPIC'] = '/vins_estimator/keyframe_image'
+    # PARAMS['VINS_CONFIG_YAML_FNAME'] = rospack.get_path( 'nap' )+'/slam_data/blackbox4.yaml' #TODO: read this paramter from the parameter server.See nap_daisy_bf.py
+    # PARAMS['N_CPU'] = 4
 
     #TWEAK NetVLAD param in worker_gpu
 
@@ -809,6 +846,7 @@ if __name__ == "__main__":
     S_thumbnails = manager.list()
     S_timestamp = manager.list()
     S_netvlad = manager.list()
+    S_lut_raw = manager.list() # The cluster-assignment map from NetVLAD's layer.
 
     # These flags will determine ending the loops in threads
     process_flags = manager.dict()
@@ -880,6 +918,8 @@ if __name__ == "__main__":
     # Matched images Queue and Publisher.
     Q_match_im_canvas = Queue()
     pub_match_im_canvas = rospy.Publisher( '/debug/featues2d_matching', Image, queue_size=10 )
+    Q_match_im3way_canvas = Queue() # 3way matching
+    pub_match_im3way_canvas = rospy.Publisher( '/debug/featues_matching_3way', Image, queue_size=10 )
 
 
     # False colormap from Neural Network
@@ -894,7 +934,7 @@ if __name__ == "__main__":
                 (process_flags, \
                  image_receiver.im_queue,\
                  image_receiver.im_timestamp_queue,\
-                 S_thumbnails, S_timestamp, S_netvlad,\
+                 S_thumbnails, S_timestamp, S_netvlad, S_lut_raw,\
                  Q_time_netvlad, Q_cluster_assgn_falsecolormap\
                 )\
                  )
@@ -908,9 +948,10 @@ if __name__ == "__main__":
                             Qd,\
                             S_thumbnails,\
                             S_timestamp,\
+                            S_lut_raw,\
                             FEAT_FACT_SEMAPHORES,\
                             Q_2way_napmsg, Q_3way_napmsg,\
-                            Q_time_cpu, Q_match_im_canvas\
+                            Q_time_cpu, Q_match_im_canvas, Q_match_im3way_canvas\
                         )\
                     )
         cpu_jobs.append( p_cpu )
@@ -973,6 +1014,11 @@ if __name__ == "__main__":
             pass
 
         try:
+            publish_image( pub_match_im3way_canvas, Q_match_im3way_canvas.get_nowait() )
+        except:
+            pass
+
+        try:
             publish_image( pub_cluster_assgn_falsecolormap, Q_cluster_assgn_falsecolormap.get_nowait() )
         except:
             pass
@@ -999,8 +1045,12 @@ if __name__ == "__main__":
     Q_2way_napmsg.close()
     Q_3way_napmsg.close()
     Q_scores_plot.close()
-    Q_match_im_canvas.close()
-    Q_cluster_assgn_falsecolormap.close()
+    if Q_match_im_canvas is not None:
+        Q_match_im_canvas.close()
+    if Q_match_im3way_canvas is not None:
+        Q_match_im3way_canvas.close()
+    if Q_cluster_assgn_falsecolormap is not None:
+        Q_cluster_assgn_falsecolormap.close()
 
 
 
