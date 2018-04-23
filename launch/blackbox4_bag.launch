@@ -108,7 +108,7 @@
        <param name="vins_folder" type="string" value="$(arg vins_path)" />
     </node>
 
-    <node name="pose_graph" pkg="pose_graph" type="pose_graph" output="screen">
+    <node name="pose_graph" pkg="pose_graph" type="pose_graph" output="log">
       <param name="config_file" type="string" value="$(arg config_path)" />
       <param name="visualization_shift_x" type="int" value="0" />
       <param name="visualization_shift_y" type="int" value="0" />
@@ -135,7 +135,7 @@
       </node> -->
 
       <!-- Multiprocess and minimal nap node -->
-      <node name="nap" pkg="nap" type="nap_multiproc.py" output="log" >
+      <node name="nap" pkg="nap" type="nap_multiproc.py" output="screen" >
         <remap to="$(arg bag_color_im_topic)" from="/semi_keyframes"/>
         <param name="config_file" type="string" value="$(arg config_path)" />
       </node>

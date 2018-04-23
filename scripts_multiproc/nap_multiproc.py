@@ -138,10 +138,10 @@ def xprint( msg, threadId ):
     threadId = str(threadId)
     # if threadId.find( 'worker_score_computation') > 0 :
         # return
-    # if threadId.find( 'worker_cpu') > 0 :
-        # return
-    # if threadId.find( 'worker_gpu') > 0 :
-        # return
+    if threadId.find( 'worker_cpu') > 0 :
+        return
+    if threadId.find( 'worker_gpu') > 0 :
+        return
 
 
     print '[%s]' %( str(threadId) ), msg
@@ -487,7 +487,7 @@ def worker_score_computation( process_flags, Qd, S_timestamp, S_netvlad, Q_time_
         except:
             # Manager has closed connection
             break
-        xprint( "curr_item_idx=%d" %(curr_item_idx), THREAD_NAME )
+        # xprint( "curr_item_idx=%d" %(curr_item_idx), THREAD_NAME )
         if (curr_item_idx+1) >= curr_len:
             # Nothing new added by GPU so do nothing.
             # xprint( "nothing new. len(S_netvlad)=%d" %(len(S_netvlad)) ,  THREAD_NAME  )
@@ -530,7 +530,10 @@ def worker_score_computation( process_flags, Qd, S_timestamp, S_netvlad, Q_time_
             from Plot2Mat import Plot2Mat
             xprint( 'DIY plotting', THREAD_NAME )
             r = Plot2Mat( )
-            Qp = r.plot( sim_scores_logistic ).astype( 'uint8')
+            r.plot( sim_scores_logistic, line_color=(0,255,0) )
+
+
+
 
             # Opencv Plot need opencv 3.3
             # r = cv2.plot.Plot2d_create( np.array( range(len(sim_scores_logistic)) ).astype('float64'), sim_scores_logistic.astype('float64') )
@@ -539,19 +542,23 @@ def worker_score_computation( process_flags, Qd, S_timestamp, S_netvlad, Q_time_
             # r.setInvertOrientation( True )
             # Qp = r.render()
 
-            Q_scores_plot.put( Qp )
-            # cv2.imwrite( '/home/mpkuse/Pictures/zzz12_%d.png' %(curr_item_idx), Qp )
 
 
         # Top-5 from (0 to N-25), followed by thresholding Thresh.
-        keep_top_n = 2
+        keep_top_n = 20
         skip_last_n = 25
         score_thresh = 0.5
+        max_enqueue = 4
+        if Qd.qsize() > 20:
+            max_enqueue = 1
+        if Qd.qsize() > 15:
+            max_enqueue = 2
 
         _QQW = [(i,sim_scores_logistic[i]) for i in np.argsort(sim_scores_logistic[0:-skip_last_n])[-keep_top_n:]]
         __QQW = [sim_scores_logistic[i] for i in np.argsort(sim_scores_logistic[0:-skip_last_n])[-keep_top_n:]]
         n_found = (np.array(__QQW) > score_thresh).sum()
         n_items_enqueued = 0
+        _items_enqueued = []
         for idx, scr in _QQW:
             if scr < score_thresh:
                 continue
@@ -561,16 +568,36 @@ def worker_score_computation( process_flags, Qd, S_timestamp, S_netvlad, Q_time_
             if (latestTimeStamp -  S_timestamp[idx].to_sec()) <10.  or idx < 5:
                 continue
 
+            if n_items_enqueued > max_enqueue: #if already enough put into the queue, den quit
+                break
+
             i_curr = curr_item_idx
             i_prev = idx
+
+            hj = np.array( _items_enqueued )
+            if len( hj ) > 0:
+                __l = abs(np.array(_items_enqueued ) - i_prev)
+                # if min(__l) < 5  :
+                if (__l < 10).sum() > 2: #dont let more than 2 nearby
+                    continue # dont enqueue if something very near to i_prev is already enqueued
+
             xprint( 'Enqueue(%d,%d)' %(i_curr, i_prev), THREAD_NAME )
+
+
 
             Qd.put( (i_curr, i_prev) )
             n_items_enqueued = n_items_enqueued + 1
+            _items_enqueued.append( i_prev )
 
 
         # xprint( 'Found %d candidates above the thresh' %(len(argT) ), THREAD_NAME  )
         xprint( 'Found=%d, Enqueued=%d' %(n_found, n_items_enqueued), THREAD_NAME )
+        Qp = r.mark(  np.array( _items_enqueued )  )
+
+        if Q_scores_plot is not None:
+            Q_scores_plot.put( Qp.astype('uint8') )
+        # cv2.imwrite( '/home/mpkuse/Pictures/zzz12_%d.png' %(curr_item_idx), Qp )
+
 
 
         # Increment, log and continue
