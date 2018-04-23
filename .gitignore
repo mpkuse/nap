@@ -10,3 +10,4 @@ tf2.logs*
 *.npz
 *.g2o
 slam_data/*
+./scripts/*
