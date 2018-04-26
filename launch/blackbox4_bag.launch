@@ -68,7 +68,9 @@
     <!-- <arg name="bag_file" default="2018-03-20-10-40-43.bag" doc="multiple loops in lab"/> -->
     <!-- <arg name="bag_file" default="2018-04-13-17-59-15.bag" doc="loopy in drone flying area of lab"/> -->
     <!-- <arg name="bag_file" default="2018-04-13-18-28-56.bag" doc=""/> -->
-    <arg name="bag_file" default="2018-04-16-12-03-50.bag" doc="long trajectory in lab"/>
+    <!-- <arg name="bag_file" default="2018-04-16-12-03-50.bag" doc="long trajectory in lab"/> -->
+    <arg name="bag_file" default="2018-04-25-11-15-10.bag" doc="ground plane"/>
+
 
 
     <!-- Bag set 07. captured with blackbox4 around coffee shop -->
@@ -202,6 +204,14 @@
 
       <param name="use_undistored_img" type="bool" value="false"/>
   </node>
+
+
+  <!-- Subscribes to keyframe pointcloud (from vins_estimator node) and publishes marker message to show 1st 50 frames point cloud and ground plane --> 
+  <node name="plane_detect" pkg="plane_detect" type="plane_detect_node.py"  output="log">
+  </node>
+
+
+
 
 <!-- ##### End Visualization ##### -->
 
