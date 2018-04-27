@@ -71,9 +71,9 @@
 
     <!-- Bag set 07, Sequences having good circle init, to enable estimating ground plane -->
     <arg name="bag_path" default="/media/mpkuse/Bulk_Data/other_seqs/blackbox4_bags/" />
-    <!-- <arg name="bag_file" default="2018-04-25-11-15-10.bag" doc="ground plane"/> -->
+    <arg name="bag_file" default="2018-04-25-11-15-10.bag" doc="ground plane"/>
     <!-- <arg name="bag_file" default="2018-04-26-15-03-27.bag" doc="ground plane + long in lab"/> -->
-    <arg name="bag_file" default="2018-04-26-15-28-15.bag" doc="ground plane + long in lab. inside and outside 2ndflr cyt"/>
+    <!-- <arg name="bag_file" default="2018-04-26-15-28-15.bag" doc="ground plane + long in lab. inside and outside 2ndflr cyt"/> -->
 
 
     <!-- Bag set 07. captured with blackbox4 around coffee shop -->
@@ -192,8 +192,8 @@
     <!-- <node name="colocation_viz_lite" pkg="nap" type="colocation_viz_lite.py" output="log" /> -->
 
 
-    <!-- AR -->
-    <node pkg="ar_demo" type="ar_demo_node" name="ar_demo_node" output="log">
+    <!-- Old AR (node) has static markers -->
+    <!-- <node pkg="ar_demo" type="ar_demo_node" name="ar_demo_node" output="log">
       <remap from="~image_raw" to="/pg_17302081/image" doc="input image"/>
       <remap from="~camera_path" to="/pose_graph/pose_graph_camera_path"/>
 
@@ -207,21 +207,48 @@
 
       <param name="use_undistored_img" type="bool" value="false"/>
   </node>
+  -->
+
+    <!-- AR Node with interactive markers. Multiple obj can be specified as ';' separated value -->
+    <arg name="ar_obj_list" default="cube.obj" />
+    <arg name="ar_mesh_scaling_list" default=".5" />
+    <arg name="ar_controls_scaling_list" default="1.5" />
+    <arg name="ar_mesh_initial_positions_list" default="-8,-1,-0.5" />
+
+    <node pkg="ar_demo" type="ar_demo_node2" name="ar_demo_node" output="screen">
+      <remap from="~image_raw" to="/pg_17302081/image" doc="input image"/>
+      <remap from="~camera_path" to="/pose_graph/pose_graph_camera_path"/>
+      <remap from="~object_mesh_pose" to="/interactive_marker_server/object_mesh_pose"/>
+
+      <param name="calib_file" type="string" value="$(arg config_path)"/>
+
+      <param name="obj_list" type="string" value="$(arg ar_obj_list)"/>
+      <param name="mesh_scaling_list" type="string" value="$(arg ar_mesh_scaling_list)"/>
+      <param name="mesh_initial_positions_list" type="string" value="$(arg ar_mesh_initial_positions_list)" />
+
+  </node>
+
+  <node pkg="ar_demo" type="interactive_marker_server" name="interactive_marker_server" output="log" >
+      <param name="obj_list" type="string" value="$(arg ar_obj_list)"/>
+      <param name="mesh_scaling_list" type="string" value="$(arg ar_mesh_scaling_list)"/>
+      <param name="controls_scaling_list" type="string" value="$(arg ar_controls_scaling_list)"/>
+      <param name="mesh_initial_positions_list" type="string" value="$(arg ar_mesh_initial_positions_list)" />
+  </node>
 
 
   <!-- Subscribes to keyframe pointcloud (from vins_estimator node) and publishes marker message to show 1st 50 frames point cloud and ground plane -->
-  <node name="plane_detect" pkg="plane_detect" type="plane_detect_node.py"  output="screen">
+  <node name="plane_detect" pkg="plane_detect" type="plane_detect_node.py"  output="log">
     <param name="RANSAC_n_iterations" type="int" value="2000"/>
-    <param name="RANSAC_sigma" type="double" value="0.01"/>
+    <param name="RANSAC_sigma" type="double" value="0.02"/>
     <param name="RANSAC_q" type="int" value="100"/>
-    <param name="WAIT_N_FRAMES" type="int" value="60"/>
+    <param name="WAIT_N_FRAMES" type="int" value="65"/>
 
     <param name="PLANE_r_color" type="double" value="0.0"/>
     <param name="PLANE_g_color" type="double" value="1.0"/>
     <param name="PLANE_b_color" type="double" value="1.0"/>
     <param name="PLANE_a_color" type="double" value=".8"/>
-    <param name="PLANE_xspan" type="double" value="50"/>
-    <param name="PLANE_yspan" type="double" value="10"/>
+    <param name="PLANE_xspan" type="double" value="5"/>
+    <param name="PLANE_yspan" type="double" value="5"/>
   </node>
 
 
