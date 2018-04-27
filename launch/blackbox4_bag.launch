@@ -62,15 +62,18 @@
 
 
     <!-- Bag set 06, Sequences captured with blackbox4, softtry-sequences -->
-
-    <arg name="bag_path" default="/media/mpkuse/Bulk_Data/other_seqs/blackbox4_bags/" />
+    <!-- <arg name="bag_path" default="/media/mpkuse/Bulk_Data/other_seqs/blackbox4_bags/" /> -->
     <!-- <arg name="bag_file" default="2018-02-19-17-52-36.bag" doc="single loop in lab"/> -->
     <!-- <arg name="bag_file" default="2018-03-20-10-40-43.bag" doc="multiple loops in lab"/> -->
     <!-- <arg name="bag_file" default="2018-04-13-17-59-15.bag" doc="loopy in drone flying area of lab"/> -->
     <!-- <arg name="bag_file" default="2018-04-13-18-28-56.bag" doc=""/> -->
     <!-- <arg name="bag_file" default="2018-04-16-12-03-50.bag" doc="long trajectory in lab"/> -->
-    <arg name="bag_file" default="2018-04-25-11-15-10.bag" doc="ground plane"/>
 
+    <!-- Bag set 07, Sequences having good circle init, to enable estimating ground plane -->
+    <arg name="bag_path" default="/media/mpkuse/Bulk_Data/other_seqs/blackbox4_bags/" />
+    <!-- <arg name="bag_file" default="2018-04-25-11-15-10.bag" doc="ground plane"/> -->
+    <!-- <arg name="bag_file" default="2018-04-26-15-03-27.bag" doc="ground plane + long in lab"/> -->
+    <arg name="bag_file" default="2018-04-26-15-28-15.bag" doc="ground plane + long in lab. inside and outside 2ndflr cyt"/>
 
 
     <!-- Bag set 07. captured with blackbox4 around coffee shop -->
@@ -86,7 +89,7 @@
 
 
 
-    <node pkg="rosbag" type="play" name="rosbag" args="-d 10  $(arg bag_path)/$(arg bag_file)" output="log"/>
+    <node pkg="rosbag" type="play" name="rosbag" args="$(arg bag_path)/$(arg bag_file)" output="log"/>
     <!--<node name="recorder" pkg="rosbag" type="record" args="-O $(arg bag_path)/cooked_$(arg bag_file) /camera/image_raw /imu/imu /vins_estimator/odometry"/>-->
     <!--<node name="recorder" pkg="rosbag" type="record" args="-O $(arg bag_path)/all_cooked_$(arg bag_file) -a "/>-->
 
@@ -137,7 +140,7 @@
       </node> -->
 
       <!-- Multiprocess and minimal nap node -->
-      <node name="nap" pkg="nap" type="nap_multiproc.py" output="screen" >
+      <node name="nap" pkg="nap" type="nap_multiproc.py" output="log" >
         <remap to="$(arg bag_color_im_topic)" from="/semi_keyframes"/>
         <param name="config_file" type="string" value="$(arg config_path)" />
       </node>
@@ -206,8 +209,19 @@
   </node>
 
 
-  <!-- Subscribes to keyframe pointcloud (from vins_estimator node) and publishes marker message to show 1st 50 frames point cloud and ground plane --> 
-  <node name="plane_detect" pkg="plane_detect" type="plane_detect_node.py"  output="log">
+  <!-- Subscribes to keyframe pointcloud (from vins_estimator node) and publishes marker message to show 1st 50 frames point cloud and ground plane -->
+  <node name="plane_detect" pkg="plane_detect" type="plane_detect_node.py"  output="screen">
+    <param name="RANSAC_n_iterations" type="int" value="2000"/>
+    <param name="RANSAC_sigma" type="double" value="0.01"/>
+    <param name="RANSAC_q" type="int" value="100"/>
+    <param name="WAIT_N_FRAMES" type="int" value="60"/>
+
+    <param name="PLANE_r_color" type="double" value="0.0"/>
+    <param name="PLANE_g_color" type="double" value="1.0"/>
+    <param name="PLANE_b_color" type="double" value="1.0"/>
+    <param name="PLANE_a_color" type="double" value=".8"/>
+    <param name="PLANE_xspan" type="double" value="50"/>
+    <param name="PLANE_yspan" type="double" value="10"/>
   </node>
 
 

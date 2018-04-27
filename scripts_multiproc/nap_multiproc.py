@@ -859,9 +859,9 @@ if __name__ == "__main__":
 
     PARAMS['TRACKED_FEATURE_TOPIC'] = '/vins_estimator/keyframe_point'
     PARAMS['OUTPUT_EDGES_TOPIC'] = '/raw_graph_edge'
-    PARAMS['PARAM_CALLBACK_SKIP'] = 4
+    PARAMS['PARAM_CALLBACK_SKIP'] = 3
     PARAMS['INPUT_IMAGE_TOPIC'] = '/semi_keyframes'
-    PARAMS['VINS_CONFIG_YAML_FNAME'] = VINS_CONFIG_YAML_FNAME = rospy.get_param( '/nap/config_file')
+    PARAMS['VINS_CONFIG_YAML_FNAME'] = rospy.get_param( '/nap/config_file')
     PARAMS['N_CPU'] = 4
 
     # Local launch
