@@ -1,6 +1,13 @@
 #!/usr/bin/env python
 
 """
+Newest thing about this edition is to streamline the CPU computation.
+Essentially a new cpu_worker process. This process mainly aims to
+do local bundle adjustment to get better pose estimates. After
+we get a dense match we track these points on adjacent views using daisy-descriptors.
+The tracked features are all put into napmsg.bundle with opmode28 and
+sent further for processing (to a separate node)
+
 This is a full multiprocess implementation of `script/nap_robustdaisy_bf.py`.
 At the core is the python multiprocessing package. For interprocess communication
 we make use of multiprocessing.Manager.list(), .dict() and .Queue().
@@ -26,7 +33,6 @@ main process to publish and subscribes to input topics
 
 
  TODO:
- - Get 3way matching working.
  - Still has issues of orphan process when the main is immediately closed.
 
 
@@ -77,6 +83,7 @@ single threaded version
         Edition : 4 (nap_daisy_bf.py 3rd Nov, 2017)
         Edition : 5 (nap_robustdaisy_bf.py 25th Dec, 2017)
         Edition : 6 (nap_multiproc_node.py 10th Apr, 2018)
+        Edition : 7 (nap_multiproc_node2.py 2nd May, 2018)
 
 """
 
@@ -117,6 +124,7 @@ from CartWheelFlow import VGGDescriptor
 from FeatureFactory import FeatureFactory
 from ImageReceiver import ImageReceiver
 from GeometricVerification import GeometricVerification
+from DaisyFlow import DaisyFlow
 
 try:
     from DaisyMeld.daisymeld import DaisyMeld
@@ -136,11 +144,13 @@ tcol = tcolor
 ################# UTIL Functions #################
 def xprint( msg, threadId ):
     threadId = str(threadId)
-    # if threadId.find( 'worker_score_computation') > 0 :
-        # return
+    if threadId.find( 'worker_score_computation') > 0 :
+        return
     if threadId.find( 'worker_cpu') > 0 :
         return
     if threadId.find( 'worker_gpu') > 0 :
+        return
+    if threadId.find( 'worker_bundle_cpu') > 0 :
         return
 
 
@@ -844,6 +854,182 @@ def worker_cpu( process_flags, Qd, S_thumbnails, S_timestamp, S_lut_raw,\
         Q_match_im3way_canvas.close()
     xprint( 'Terminate cpu_process', THREAD_NAME )
 
+def check_nearby( list_of_items_put_into_qdd, candidate ):
+    """ Given the history of all the items put into qdd and a candidate,
+        determine if this needs to go in, or it is possibly already processed
+
+        #TODO
+        Have this list_of_items_put_into_qdd as a global shared list. items
+        can be removed if the local bundle adjustment failed for some reason
+        on the candidates. ie, also store what happened to the bundle
+
+    """
+
+    c_a, c_b = candidate
+
+    for a,b in list_of_items_put_into_qdd:
+        if ( abs(c_a - a ) < 10 and abs( c_b - b) < 10 ) or (   abs(c_a - b ) < 10 and abs( c_b - a ) < 10 ):
+            return True
+    return False
+
+## Consumer of the Qdd queue. This queue contains verified candidates where you can
+## perform local bundle adjustment
+def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_raw ):
+    THREAD_NAME = '%5d-worker_qdd_processor' %( os.getpid() )
+
+    DF = DaisyFlow() #TODO May be have an argument to constructor of DaisyFlow to indicate how many daisy's to allocate
+
+    while process_flags['MAIN_ENDED'] is False:
+        curr_qsize = Qdd.qsize()
+        # Heuristic. If qsize gets more than 10 dequeue multiple. Essentually throwing away matches without checking
+        try:
+            if curr_qsize <= 5:
+                g = Qdd.get_nowait()
+            else:
+                for h in range( int(curr_qsize/5)+1  ):
+                    g = Qdd.get_nowait()
+        except:
+            # xprint( 'Sleep for 0.2', THREAD_NAME )
+            time.sleep( 0.2 )
+            continue
+
+        xprint( tcol.OKGREEN+'perform local-bundle-adjustment\ni_curr: %d, i_prev: %d' %( g[0], g[1] )+tcol.ENDC, THREAD_NAME )
+
+    Qdd.close()
+
+
+# Attempt to get rid of the GeometricVerification class. Consumed Qd to produce
+# 2way matches and bundles
+def worker_bundle_cpu(  process_flags, Qd, Qdd, S_thumbnails, S_timestamp, S_lut_raw,\
+                        FF ):
+
+    THREAD_NAME = '%5d-worker_bundle_cpu' %( os.getpid() )
+    DF = DaisyFlow()
+
+    list_of_items_put_into_qdd = []
+
+    prev_qsize = -1
+    while process_flags['MAIN_ENDED'] is False:
+        ###
+        ### Dequeue
+        ###
+
+        curr_qsize = Qd.qsize()
+        # Heuristic. If qsize gets more than 10 dequeue multiple. Essentually throwing away matches without checking
+        try:
+            if curr_qsize <= 10:
+                g = Qd.get_nowait()
+            else:
+                for h in range( int(curr_qsize/10.)+1  ):
+                    g = Qd.get_nowait()
+        except:
+            # xprint( 'Sleep for 0.2', THREAD_NAME )
+            time.sleep( 0.2 )
+            continue
+
+        xprint( '----------------\ni_curr: %d, i_prev: %d' %( g[0], g[1] ), THREAD_NAME )
+
+        ###
+        ### Assemble Data
+        ###
+        # Collect all the required things to compute the match
+
+        # Images
+        i_curr = g[0]
+        i_prev = g[1]
+        im_curr = S_thumbnails[ i_curr ]
+        im_prev = S_thumbnails[ i_prev ]
+
+        # Timestamps
+        t_curr   = S_timestamp[ i_curr ]
+        t_prev   = S_timestamp[ i_prev ]
+
+        # Features (From FeatureFactor)
+        # ? The way to get corresponding features is to search timestamp `t_curr` with
+        #   FeatureFactor.find_index().
+        # xprint( 'len(feature_factory.timestamp)=%d' %( len(FF['timestamp']) ), THREAD_NAME )
+        feat2d_curr_idx = find_index( FF['timestamp'], t_curr  )
+        feat2d_prev_idx = find_index( FF['timestamp'], t_prev  )
+        assert feat2d_curr_idx >= 0 , "This is a fatal error for geometry. tracked features corresponding to this image not found."
+        assert feat2d_prev_idx >= 0 , "This is a fatal error for geometry. tracked features corresponding to this image not found."
+
+        feat2d_curr_normed = FF['features'][feat2d_curr_idx ]
+        feat2d_prev_normed = FF['features'][feat2d_prev_idx ]
+
+        feat2d_curr = np.dot( FF['K'], feature_factory.features[feat2d_curr_idx ] ) #3xN in homogeneous cords
+        feat2d_prev = np.dot( FF['K'], feature_factory.features[feat2d_prev_idx ] )
+
+        feat3d_curr = FF['point3d'][feat2d_curr_idx]
+
+        xprint( 'feat2d_curr.shape: '+ str( feat2d_curr.shape ) , THREAD_NAME )
+        xprint( 'feat2d_prev.shape: '+ str( feat2d_prev.shape ) , THREAD_NAME )
+
+
+        ###
+        ### Feed Data and Daisy Geometry COmputation
+        ###
+        DF.set_image( im_curr, ch=0, d_ch=0 )
+        DF.set_image( im_prev, ch=1, d_ch=1 )
+
+
+        ###
+        ### Step-1 :  DF.guided_matches()
+        startGuided = time.time()
+        selected_curr_i, selected_prev_i, score=DF.guided_matches( 0, 0, feat2d_curr, 1, 1, feat2d_prev )
+        xprint( 'guided_matches exec in (ms): %4.2f' %( 1000. *( time.time() - startGuided) ), THREAD_NAME )
+        xprint( 'guided_matches Score: %4.2f' %(score), THREAD_NAME )
+
+
+        # Rules ! based on score-heuristics
+        #   Heuristics
+        #       Score > 3 ==> Exellent quality matching
+        #       Score>2 and score <= 3 and enuf number of matches ==> Usually good
+        #       Score > 0.5 and score <= 3 ==> try dense
+        #       score < 0.5 ==> Definite Reject
+
+        # Fill in Q_2way_napmsg
+        #           ---""--- usual stuff, copy from nap_multiproc_node.py (basically fill in 2way nap msg)
+        # TODO
+
+
+        # Fill in Qdd (queue to hold verified candidate worthy on dense local bundle adjustment.)
+        # Need to also limit the amount of info I put in this.
+        if score > 2:
+            if check_nearby( list_of_items_put_into_qdd, (i_curr, i_prev)) is False:
+                # if score is sufficiently high and this item is not already processed
+                xprint( tcol.OKGREEN+'Score is sufficiently high and this candidate is not already processed'+tcol.ENDC, THREAD_NAME )
+                list_of_items_put_into_qdd.append( (i_curr, i_prev) )
+                # Process this, put this candidate in qdd queue
+                Qdd.put( (i_curr, i_prev) )
+            else:
+                xprint( tcol.OKGREEN+'Score is sufficiently high but something similar to this candidate is already processed'+tcol.ENDC, THREAD_NAME )
+
+
+        if score < 2.5:
+            continue
+
+
+        # Visualize as Image
+        pts0_filtered = np.transpose( np.int0(feat2d_curr[0:2,selected_curr_i]) )
+        pts1_filtered = np.transpose( np.int0(feat2d_prev[0:2,selected_prev_i]) )
+        xcanvas_2way = DF.plot_point_sets( DF.uim[0].astype('uint8'), pts0_filtered, DF.uim[1].astype('uint8'),  pts1_filtered)
+
+        # A status-image
+        dash_pane = np.zeros( ( 100, xcanvas_2way.shape[1], 3 ), dtype='uint8' )
+        dash_pane = cv2.putText( dash_pane, '%d' %(i_curr), (100,30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 2 )
+        dash_pane = cv2.putText( dash_pane, '%d' %(i_prev), (im_curr.shape[1]+100,30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 2 )
+        dash_pane = cv2.putText( dash_pane, 'Score: %4.2f, inp#feat2d: %d out#feat2d: %d' %(score, feat2d_curr.shape[1], len(selected_curr_i)), (10,70), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 2 )
+        xcanvas = np.concatenate( (xcanvas_2way,dash_pane),  axis=0  )
+        cv2.imshow( 'xcanvas', xcanvas )
+        cv2.waitKey(10)
+
+
+
+
+
+
+    Qd.close()
+    Qdd.close()
 
 
 
@@ -862,7 +1048,7 @@ if __name__ == "__main__":
     PARAMS['PARAM_CALLBACK_SKIP'] = 3
     PARAMS['INPUT_IMAGE_TOPIC'] = '/semi_keyframes'
     PARAMS['VINS_CONFIG_YAML_FNAME'] = rospy.get_param( '/nap/config_file')
-    PARAMS['N_CPU'] = 4
+    PARAMS['N_CPU'] = 1
 
     # Local launch
     # PARAMS['INPUT_IMAGE_TOPIC'] = '/vins_estimator/keyframe_image'
@@ -891,6 +1077,7 @@ if __name__ == "__main__":
     process_flags['MAIN_ENDED'] = False
 
     Qd = Queue() # This queue will contains loop-closure candidates. Produced by `worker_score_computation`. consumed by p_cpu
+    Qdd = Queue() # This queue will contain candidate (verified), to be processed with local-bundle-adjustment
 
     Q_2way_napmsg = Queue()
     Q_3way_napmsg = Queue()
@@ -938,6 +1125,7 @@ if __name__ == "__main__":
     pub_Qi_size = rospy.Publisher( '/time/Qi_qsize', Float32, queue_size=1000 )
     pub_Qt_size = rospy.Publisher( '/time/Qt_qsize', Float32, queue_size=1000 )
     pub_Qd_size = rospy.Publisher( '/time/Qd_qsize', Float32, queue_size=1000 )
+    pub_Qdd_size = rospy.Publisher( '/time/Qdd_qsize', Float32, queue_size=1000 )
 
     # Time queues and publishers
     Q_time_netvlad = Queue()
@@ -977,21 +1165,41 @@ if __name__ == "__main__":
                 )\
                  )
 
+    p_qdd_proc = Process( target=worker_qdd_processor, name='worker_qdd_processor', args=\
+                            (
+                            process_flags,\
+                            Qdd,\
+                            S_thumbnails, S_timestamp, S_lut_raw\
+                            )\
+                        )
+
     assert PARAMS['N_CPU'] >= 1 , "N_CPU param need to be a positive number"
     n_cpu_procs = int(PARAMS['N_CPU'])
     cpu_jobs = []
     for i_cpu in range(n_cpu_procs):
-        p_cpu = Process( target=worker_cpu, name="cpu%d_process" %(i_cpu), args=\
-                        (   process_flags,\
-                            Qd,\
-                            S_thumbnails,\
-                            S_timestamp,\
-                            S_lut_raw,\
-                            FEAT_FACT_SEMAPHORES,\
-                            Q_2way_napmsg, Q_3way_napmsg,\
-                            Q_time_cpu, Q_match_im_canvas, Q_match_im3way_canvas\
-                        )\
-                    )
+        # p_cpu = Process( target=worker_cpu, name="cpu%d_process" %(i_cpu), args=\
+        #                 (   process_flags,\
+        #                     Qd,\
+        #                     S_thumbnails,\
+        #                     S_timestamp,\
+        #                     S_lut_raw,\
+        #                     FEAT_FACT_SEMAPHORES,\
+        #                     Q_2way_napmsg, Q_3way_napmsg,\
+        #                     Q_time_cpu, Q_match_im_canvas, Q_match_im3way_canvas\
+        #                 )\
+        #             )
+        p_cpu = Process( target=worker_bundle_cpu, name="new_cpu_process%d" %(i_cpu),\
+                         args=\
+                            (\
+                                process_flags, \
+                                Qd, \
+                                Qdd,\
+                                S_thumbnails, \
+                                S_timestamp, \
+                                S_lut_raw, \
+                                FEAT_FACT_SEMAPHORES\
+                            )\
+                       )
         cpu_jobs.append( p_cpu )
 
     p_scoring = Process( target=worker_score_computation, name="scoring_process" , args=\
@@ -1007,6 +1215,7 @@ if __name__ == "__main__":
 
     p_gpu.start()
     p_scoring.start()
+    p_qdd_proc.start()
 
     # p_cpu.start()
     for i_cpu in range(n_cpu_procs):
@@ -1038,6 +1247,7 @@ if __name__ == "__main__":
         publish_time( pub_Qi_size, image_receiver.im_queue.qsize() )
         publish_time( pub_Qt_size, image_receiver.im_timestamp_queue.qsize() )
         publish_time( pub_Qd_size, Qd.qsize() )
+        publish_time( pub_Qdd_size, Qdd.qsize() )
 
 
         # Debug Image Publishers
@@ -1104,6 +1314,7 @@ if __name__ == "__main__":
     # Close Queues
     image_receiver.qclose()
     Qd.close()
+    Qdd.close()
     Q_time_netvlad.close()
     Q_time_netvlad_etc.close()
     Q_time_cpu.close()
@@ -1141,6 +1352,9 @@ if __name__ == "__main__":
     p_scoring.join(timeout=.5)
     # p_scoring.terminate()
     print 'p_scoring joined'
+
+    p_qdd_proc.join(timeout=.5)
+    print 'p_qdd_proc joined'
 
     manager.shutdown()
     print 'Ending Main'

@@ -72,8 +72,8 @@
     <!-- Bag set 07, Sequences having good circle init, to enable estimating ground plane -->
     <arg name="bag_path" default="/media/mpkuse/Bulk_Data/other_seqs/blackbox4_bags/" />
     <!-- <arg name="bag_file" default="2018-04-25-11-15-10.bag" doc="ground plane"/> -->
-    <arg name="bag_file" default="2018-04-26-15-03-27.bag" doc="ground plane + long in lab"/>
-    <!-- <arg name="bag_file" default="2018-04-26-15-28-15.bag" doc="ground plane + long in lab. inside and outside 2ndflr cyt"/> -->
+    <!-- <arg name="bag_file" default="2018-04-26-15-03-27.bag" doc="ground plane + long in lab"/> -->
+    <arg name="bag_file" default="2018-04-26-15-28-15.bag" doc="ground plane + long in lab. inside and outside 2ndflr cyt"/>
 
 
     <!-- Bag set 07. captured with blackbox4 around coffee shop -->
@@ -140,7 +140,8 @@
       </node> -->
 
       <!-- Multiprocess and minimal nap node -->
-      <node name="nap" pkg="nap" type="nap_multiproc.py" output="log" >
+      <!-- <node name="nap" pkg="nap" type="nap_multiproc.py" output="screen" > -->
+      <node name="nap" pkg="nap" type="nap_multiproc2.py" output="screen" >
         <remap to="$(arg bag_color_im_topic)" from="/semi_keyframes"/>
         <param name="config_file" type="string" value="$(arg config_path)" />
         <param name="debug_output_dir" type="string" value="/home/mpkuse/Desktop/bundle_adj" />
@@ -216,7 +217,7 @@
     <arg name="ar_controls_scaling_list" default="1.5" />
     <arg name="ar_mesh_initial_positions_list" default="-8,-1,-0.5" />
 
-    <node pkg="ar_demo" type="ar_demo_node2" name="ar_demo_node" output="screen">
+    <node pkg="ar_demo" type="ar_demo_node2" name="ar_demo_node" output="log">
       <remap from="~image_raw" to="/pg_17302081/image" doc="input image"/>
       <remap from="~camera_path" to="/pose_graph/pose_graph_camera_path"/>
       <remap from="~object_mesh_pose" to="/interactive_marker_server/object_mesh_pose"/>
