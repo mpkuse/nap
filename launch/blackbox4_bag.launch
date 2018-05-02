@@ -71,8 +71,8 @@
 
     <!-- Bag set 07, Sequences having good circle init, to enable estimating ground plane -->
     <arg name="bag_path" default="/media/mpkuse/Bulk_Data/other_seqs/blackbox4_bags/" />
-    <arg name="bag_file" default="2018-04-25-11-15-10.bag" doc="ground plane"/>
-    <!-- <arg name="bag_file" default="2018-04-26-15-03-27.bag" doc="ground plane + long in lab"/> -->
+    <!-- <arg name="bag_file" default="2018-04-25-11-15-10.bag" doc="ground plane"/> -->
+    <arg name="bag_file" default="2018-04-26-15-03-27.bag" doc="ground plane + long in lab"/>
     <!-- <arg name="bag_file" default="2018-04-26-15-28-15.bag" doc="ground plane + long in lab. inside and outside 2ndflr cyt"/> -->
 
 
@@ -143,6 +143,7 @@
       <node name="nap" pkg="nap" type="nap_multiproc.py" output="log" >
         <remap to="$(arg bag_color_im_topic)" from="/semi_keyframes"/>
         <param name="config_file" type="string" value="$(arg config_path)" />
+        <param name="debug_output_dir" type="string" value="/home/mpkuse/Desktop/bundle_adj" />
       </node>
 
 

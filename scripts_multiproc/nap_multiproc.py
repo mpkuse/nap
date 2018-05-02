@@ -1078,6 +1078,28 @@ if __name__ == "__main__":
 
     process_flags['MAIN_ENDED'] = True
 
+    # Write Info to files (for debugging)
+    try:
+        BASE__DUMP = '/home/mpkuse/Desktop/bundle_adj'
+        BASE__DUMP = rospy.get_param( '/nap/debug_output_dir')
+        if BASE__DUMP is not None:
+            print 'Writing ', BASE__DUMP+'/S_netvlad.npy'
+            print 'Writing ', BASE__DUMP+'/S_timestamp.npy'
+            print 'Writing ', BASE__DUMP+'/S_thumbnails.npy'
+            print 'Writing ', BASE__DUMP+'/S_thumbnail_lut_raw.npy'
+            np.save( BASE__DUMP+'/S_netvlad.npy', np.array(S_netvlad) )
+            np.save( BASE__DUMP+'/S_timestamp.npy', np.array(S_timestamp) )
+            np.save( BASE__DUMP+'/S_thumbnails.npy', np.array(S_thumbnails) )
+            np.save( BASE__DUMP+'/S_lut_raw.npy', np.array(S_lut_raw) )
+    except:
+        print 'ROSPARAM `/nap/debug_output_dir` not found so not writing debug info'
+
+
+
+
+
+
+
     # Close Queues
     image_receiver.qclose()
     Qd.close()

@@ -84,3 +84,41 @@ class ColorLUT:
 
     def get_color( self, i ):
         return self._color[i].astype('int32')
+
+
+    def float_2_rgb( self, v, vmin, vmax ):
+        c = [1,1,1] #white
+        if v < vmin:
+            v = vmin;
+        if v > vmax:
+            v = vmax;
+        dv = vmax - vmin;
+        if dv == 0:
+            return c
+
+        if v < (vmin + 0.25 * dv):
+            c[0] = 0;
+            c[1] = 4 * (v - vmin) / dv;
+        elif v < (vmin + 0.5 * dv):
+            c[0] = 0;
+            c[2] = 1 + 4 * (vmin + 0.25 * dv - v) / dv
+        elif v < (vmin + 0.75 * dv):
+            c[0] = 4 * (v - vmin - 0.5 * dv) / dv
+            c[2] = 0;
+        else:
+            c[1] = 1 + 4 * (vmin + 0.75 * dv - v) / dv
+            c[2] = 0;
+
+
+        return c
+
+    def colorbar( self ):
+        """ returns a 500x50 image using float_2_rgb() """
+        Q = []
+        for i in np.linspace( 0, 10, 10):
+            color_i = self.float_2_rgb( i, 0, 10 )
+            Q.append( np.tile( color_i, [50,50,1] )  )
+
+        Q_cat = np.concatenate( Q, axis=1 )
+        Q_cat = (Q_cat*255).astype('uint8' )
+        return Q_cat
