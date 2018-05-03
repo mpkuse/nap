@@ -328,7 +328,8 @@ class DaisyFlow:
                 match2_total_score += 1.0
             if match2_tretained_score > 0.15 and match2_tretained_score <= 0.2:
                 match2_total_score += 0.5
-
+        if match2_tretained_score > 0.5:
+            match2_total_score += 0.5 #extra points if large quantity of points are retained.
 
         if match2_geometric_score > 0.55:
             match2_total_score -= 1.
@@ -340,10 +341,8 @@ class DaisyFlow:
             if match2_geometric_score < 0.2 :
                 match2_total_score += 1.5
 
-        # min/ max
-        # if (float(min(feat2d_curr.shape[1],feat2d_prev.shape[1])) / max(feat2d_curr.shape[1],feat2d_prev.shape[1])) < 0.70:
-            # match2_total_score -= 3
-            # print 'nTracked features are very different.'
+
+        # if absolute number of tracked points  TODO
 
         if PRINTING:
             print '==Total_score : ', match2_total_score, '=='
@@ -354,7 +353,7 @@ class DaisyFlow:
 
     ############################### PUBLIC ##############################################
 
-    def daisy_dense_matches_with_scores( self, ch0, d_ch0, ch1, d_ch1 ):
+    def daisy_dense_matches( self, ch0, d_ch0, ch1, d_ch1 ):
         """ Do daisy_dense_matches() for images self.uim[ch0] <--> self.uim[ch1].
             Assume their daisy-descriptors can be retrived as self._view_daisy[d_ch0] and
             self._view_daisy[d_ch1] respectively.
@@ -487,7 +486,15 @@ class DaisyFlow:
 
         return masked_pts_A, masked_pts_B, masked_pt_match_quality_scores
 
+    def make_dilated_mask_from_pts( self,pts, dims, win_size=32 ):
+        pts = np.array(pts)
+        m = np.zeros( dims, dtype='uint8' )
+        m[ pts[:,1], pts[:,0] ] = 255
 
+        # dilate
+        m_out = cv2.dilate( m, np.ones((win_size,win_size), dtype='uint8') )
+
+        return m_out
 
     def expand_matches( self, ch0, d_ch0,  pts, chx, d_chx ):
         """ using co-ordinates pts in image pointed by ch0 (corresponding daisy-descriptors in d_ch0),
@@ -500,29 +507,44 @@ class DaisyFlow:
         PARAM_W = 30
         DEBUG = False
 
-        # masked_pts: [(32,33), (111,21), ... ]. is a subset of pts where the mask was 1
-        # masked_pts = list( pts[i] for i in np.where( mask[:,0] == 1 )[0] )
-
-        _pts = np.array(pts)# np.array( masked_pts )
 
         # retrive images
         __im0 = self.uim[ch0]
         __im1 = self.uim[chx]
 
 
+        _pts = np.array(pts)# np.array( masked_pts ). note these are (x,y) or (col,row)
+
+        dilated_mask = self.make_dilated_mask_from_pts( _pts, __im0.shape[0:2], win_size=32 )
+        _pts_chx_rows, _pts_chx_cols = np.where( dilated_mask > 0 )
+
+        # code.interact( local=locals() )
+
         # retrive daisy descriptors
         D_curr = self._view_daisy( d_ch=d_ch0 )
         D_pts_curr = D_curr[  _pts[:,1], _pts[:,0], : ] # Nx20 retrive daisy of curr only at specified pts.
         D_currm = self._view_daisy( d_ch=d_chx ) # 240x320x20 dense daisy of currm (ie. chx, d_chx)
+        D_pts_currm = D_currm[ _pts_chx_rows, _pts_chx_cols, : ] # daisy descriptors of image currm based on the dilated mask computed above
 
         # make FLANN index for D_currm. search for D_pts_curr in this index
+        startFLANN = time.time()
         FLANN_INDEX_KDTREE = 0
         index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 5)
         search_params = dict(checks=50)   # or pass empty dictionary
 
         flann = cv2.FlannBasedMatcher(index_params,search_params)
 
-        matches = flann.knnMatch( D_pts_curr, D_currm.reshape( -1, 20 ), k=2 ) #N matches.
+
+        # Using all
+        # matches = flann.knnMatch( D_pts_curr, D_currm.reshape( -1, 20 ), k=2 ) #N matches.
+        matches = flann.knnMatch( D_pts_curr, D_pts_currm, k=2 ) #N matches.
+
+        #for speed just down-sample the image.A Another way could be selective sample. ie.
+        # only put points in the tree which are in the mask. A mask can be obtained
+        # marking the points D_pts_curr on a black image. Dilate this image in a say 40x40 neighbourhood.
+        # Only put points in the mask for KD-tree instead of currently everything.
+        # matches = flann.knnMatch( D_pts_curr, D_currm.reshape( -1, 20 ), k=2 ) #N matches.
+        # print 'expand_matches() flann took: %4.2f' %(  1000. * (time.time() - startFLANN) )
 
         __q_pt = []
         __t_pt = []
@@ -534,7 +556,8 @@ class DaisyFlow:
             lowe_ratio = m[0].distance / m[1].distance
 
             qPt = _pts[qIdx] # this is x,y or (col,row). To plot of circles we need x,y
-            tPt = np.unravel_index( tIdx, D_currm.shape[0:2] ) #this is row,col
+            # tPt = np.unravel_index( tIdx, D_currm.shape[0:2] ) #this is row,col
+            tPt = (_pts_chx_rows[tIdx], _pts_chx_cols[tIdx] ) #this is row,col
             tPt = ( tPt[1], tPt[0] ) #convert to (x,y)
 
             __q_pt.append( qPt )
@@ -835,16 +858,6 @@ class DaisyFlow:
         # Rules time now !
 
         return np.array(masked_selected_A_i), np.array(masked_selected_B_i), match2_total_score
-
-
-
-
-        try:
-            # code.interact( local=locals() , banner="before returning votes")
-            _stat_ = (min(pts_curr.shape[1], pts_prev.shape[1]), selected_A.shape[1], nInliers)
-            return np.array(masked_selected_A_i), np.array(masked_selected_B_i), _stat_, np.array(masked_selected_score)#max(masked_selected_score)
-        except:
-            code.interact( local=locals(), banner="Exception occured in voting in guided_matches()" )
 
 
 

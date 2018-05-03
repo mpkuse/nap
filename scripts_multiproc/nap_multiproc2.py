@@ -878,6 +878,7 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
     THREAD_NAME = '%5d-worker_qdd_processor' %( os.getpid() )
 
     DF = DaisyFlow() #TODO May be have an argument to constructor of DaisyFlow to indicate how many daisy's to allocate
+    output_dump_path = '/home/mpkuse/Desktop/bundle_adj/dump/'
 
     while process_flags['MAIN_ENDED'] is False:
         curr_qsize = Qdd.qsize()
@@ -892,6 +893,53 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
             # xprint( 'Sleep for 0.2', THREAD_NAME )
             time.sleep( 0.2 )
             continue
+
+        i_curr = g[0]
+        i_prev = g[1]
+
+        DF.set_image( S_thumbnails[i_curr], ch=0, d_ch=0 )
+        DF.set_image( S_thumbnails[i_prev], ch=1, d_ch=1 )
+
+        DF.set_lut( S_lut_raw[i_curr], ch=0 )
+        DF.set_lut( S_lut_raw[i_prev], ch=1 )
+        pts_A, pts_B, pt_match_quality_scores = DF.daisy_dense_matches( 0,0, 1,1 )
+
+        # visualize dense match
+        xcanvas_dense = DF.plot_point_sets( DF.uim[0], pts_A, DF.uim[1], pts_B )
+        status = np.zeros( (100, xcanvas_dense.shape[1], 3), dtype='uint8' )
+        status = cv2.putText( status, '#daisy-dense-matches: %d' %(len(pts_A)), (10,30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 2 )
+
+        xcanvas_dense = np.concatenate( (xcanvas_dense, status), axis=0 )
+        cv2.imwrite( '%s/%04d_%04d_xdense_daisy_match.png' %(output_dump_path, i_curr, i_prev), xcanvas_dense)
+
+
+        # Visualize Bundle Images
+        im_curr = []
+        for j in range(-5, 1): # i_curr, i_curr-1 , ...
+            this_im =  S_thumbnails[i_curr+j]
+            status = np.zeros( (100, this_im.shape[1], 3), dtype='uint8' )
+            status = cv2.putText( status, '%d' %(i_curr+j), (status.shape[1]/2,30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 2 )
+
+            im_curr.append( np.concatenate( (this_im, status), axis=0 ) )
+
+        im_prev = []
+        for j in range( -3, 3 ):
+            this_im =  S_thumbnails[i_prev+j]
+            status = np.zeros( (100, this_im.shape[1], 3), dtype='uint8' )
+            status = cv2.putText( status, '%d' %(i_prev+j), (status.shape[1]/2,30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 2 )
+
+            im_prev.append( np.concatenate( (this_im, status), axis=0 ) )
+
+        print 'Writing file to folder: ', output_dump_path
+        cv2.imwrite( '%s/%04d_%04d_im_curr_ary.png' %(output_dump_path, i_curr, i_prev), np.concatenate( im_curr, axis=1).astype('uint8') )
+        cv2.imwrite( '%s/%04d_%04d_im_prev_ary.png' %(output_dump_path, i_curr, i_prev), np.concatenate( im_prev, axis=1).astype('uint8') )
+
+        cv2.imshow( 'im_curr_ary', np.concatenate( im_curr, axis=1).astype('uint8') )
+        cv2.moveWindow( 'im_curr_ary', 20, 100 )
+        cv2.imshow( 'im_prev_ary', np.concatenate( im_prev, axis=1).astype('uint8') )
+        cv2.moveWindow( 'im_curr_ary', 20, 500 )
+        cv2.waitKey(10)
+
 
         xprint( tcol.OKGREEN+'perform local-bundle-adjustment\ni_curr: %d, i_prev: %d' %( g[0], g[1] )+tcol.ENDC, THREAD_NAME )
 
@@ -975,7 +1023,7 @@ def worker_bundle_cpu(  process_flags, Qd, Qdd, S_thumbnails, S_timestamp, S_lut
         ###
         ### Step-1 :  DF.guided_matches()
         startGuided = time.time()
-        selected_curr_i, selected_prev_i, score=DF.guided_matches( 0, 0, feat2d_curr, 1, 1, feat2d_prev )
+        selected_curr_i, selected_prev_i, score =DF.guided_matches( 0, 0, feat2d_curr, 1, 1, feat2d_prev )
         xprint( 'guided_matches exec in (ms): %4.2f' %( 1000. *( time.time() - startGuided) ), THREAD_NAME )
         xprint( 'guided_matches Score: %4.2f' %(score), THREAD_NAME )
 
@@ -994,7 +1042,7 @@ def worker_bundle_cpu(  process_flags, Qd, Qdd, S_thumbnails, S_timestamp, S_lut
 
         # Fill in Qdd (queue to hold verified candidate worthy on dense local bundle adjustment.)
         # Need to also limit the amount of info I put in this.
-        if score > 2:
+        if (score > 2 and len(selected_curr_i) > 20) or (score > 3 and len(selected_curr_i) > 15) or score > 3.5:
             if check_nearby( list_of_items_put_into_qdd, (i_curr, i_prev)) is False:
                 # if score is sufficiently high and this item is not already processed
                 xprint( tcol.OKGREEN+'Score is sufficiently high and this candidate is not already processed'+tcol.ENDC, THREAD_NAME )
@@ -1021,6 +1069,10 @@ def worker_bundle_cpu(  process_flags, Qd, Qdd, S_thumbnails, S_timestamp, S_lut
         dash_pane = cv2.putText( dash_pane, 'Score: %4.2f, inp#feat2d: %d out#feat2d: %d' %(score, feat2d_curr.shape[1], len(selected_curr_i)), (10,70), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 2 )
         xcanvas = np.concatenate( (xcanvas_2way,dash_pane),  axis=0  )
         cv2.imshow( 'xcanvas', xcanvas )
+        output_dump_path = '/home/mpkuse/Desktop/bundle_adj/dump/'
+        print 'Writing file to folder: ', output_dump_path
+        cv2.imwrite( '%s/%04d_%04d_xcanvas.png' %(output_dump_path, i_curr, i_prev), xcanvas )
+
         cv2.waitKey(10)
 
 
