@@ -5,7 +5,7 @@ from cv_bridge import CvBridge, CvBridgeError
 
 class ImageReceiver:
     """ This class holds the queue of received images """
-    def __init__(self, PARAM_CALLBACK_SKIP):
+    def __init__(self, PARAM_CALLBACK_SKIP, keep_full_resolution=False):
         """
         PARAM_CALLBACK_SKIP : Keep one of `PARAM_CALLBACK_SKIP` number of frames
         """
@@ -16,7 +16,10 @@ class ImageReceiver:
         # Setup internal Image queue
         #note that these are multiprocessing.Queues and not Queue.Queue
         self.im_queue = Queue()
-        self.im_queue_full_res = None #Queue.Queue() #Uncomment this if you need access to full resolution images
+        if keep_full_resolution:
+            self.im_queue_full_res = Queue()
+        else:
+            self.im_queue_full_res = None #Queue.Queue() #Uncomment this if you need access to full resolution images
         self.im_timestamp_queue = Queue()
 
     def _print( self, msg ):
@@ -43,3 +46,5 @@ class ImageReceiver:
     def qclose(self):
         self.im_queue.close()
         self.im_timestamp_queue.close() #note that these are multiprocessing.Queues and not Queue.Queue
+        if self.im_queue_full_res is not None:
+            self.im_queue_full_res.close()

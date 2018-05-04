@@ -356,8 +356,8 @@ def make_nap_msg( t_curr, t_prev, edge_color=None):
 
 
 
-def worker_gpu( process_flags, Qi, Qt, \
-                S_thumbnails, S_timestamp, S_netvlad, S_lut_raw,\
+def worker_gpu( process_flags, Qi, Qfull_res, Qt, \
+                S_thumbnails, S_full_res, S_timestamp, S_netvlad, S_lut_raw,\
                 Q_time_netvlad, Q_cluster_assgn_falsecolormap ):
     """ Consumes the Queue Qi and Qt to produce Qd.
     Qi contains the received images, Qt contains the corresponding timestamps.
@@ -422,6 +422,8 @@ def worker_gpu( process_flags, Qi, Qt, \
         try:
             im = Qi.get_nowait()
             timestamp = Qt.get_nowait()
+            if Qfull_res is not None:
+                im_full_res = Qfull_res.get_nowait()
         except:
             time.sleep( 0.2 )
             continue
@@ -461,6 +463,8 @@ def worker_gpu( process_flags, Qi, Qt, \
         #-------------------------- Storage  ---------------------------#
         # Dump into S_thumbnails, S_timestamp, S_netvlad
         S_thumbnails.append( im )
+        if S_full_res is not None:
+            S_full_res.append( im_full_res )
         S_timestamp.append( timestamp )
         S_netvlad.append( tff_vlad_word )
         S_lut_raw.append( Assgn_matrix[0,:,:] )
@@ -872,6 +876,29 @@ def check_nearby( list_of_items_put_into_qdd, candidate ):
             return True
     return False
 
+
+
+def create_visualization_image( DF, ch_alpha, ptset_alpha, ch_beta, ptset_beta, pset_mask, msg ):
+    """ Will create a [ image_alpha | image_beta ] """
+
+    _R, _C, _ = DF.uim[ch_alpha].shape
+
+    xcanvas_expanded = DF.plot_point_sets( DF.uim[ch_alpha], ptset_alpha, DF.uim[ch_beta], ptset_beta, mask=pset_mask )
+
+    status = np.zeros( (100, xcanvas_expanded.shape[1], 3), dtype='uint8' )
+    status = cv2.putText( status, '%d' %(DF.global_idx[ch_alpha]), (10,30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 2 )
+    status = cv2.putText( status, '%d' %(DF.global_idx[ch_beta]), (_C+10,30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 2 )
+
+    for i,m in enumerate(msg):
+        # status = cv2.putText( status, '#ftested daisy-dense-matches: %d' %(f_test_mask.sum()), (10,60), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 2 )
+        status = cv2.putText( status, m, (10,60+20*i), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 2 )
+
+    xcanvas_expanded = np.concatenate( (xcanvas_expanded, status), axis=0 )
+
+    return xcanvas_expanded
+
+
+
 ## Consumer of the Qdd queue. This queue contains verified candidates where you can
 ## perform local bundle adjustment
 def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_raw ):
@@ -897,12 +924,60 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
         i_curr = g[0]
         i_prev = g[1]
 
-        DF.set_image( S_thumbnails[i_curr], ch=0, d_ch=0 )
-        DF.set_image( S_thumbnails[i_prev], ch=1, d_ch=1 )
+
+        # HERE
+        xprint( tcol.OKGREEN+'perform local-bundle-adjustment\ni_curr: %d, i_prev: %d' %( g[0], g[1] )+tcol.ENDC, THREAD_NAME )
+
+        # Step-1 : Get Dense matches between i_curr, i_prev call them pts_A, pts_B respectively
+        DF.set_image( S_thumbnails[i_curr], ch=0, d_ch=0, global_idx=i_curr )
+        DF.set_image( S_thumbnails[i_prev], ch=1, d_ch=1, global_idx=i_prev )
 
         DF.set_lut( S_lut_raw[i_curr], ch=0 )
         DF.set_lut( S_lut_raw[i_prev], ch=1 )
         pts_A, pts_B, pt_match_quality_scores = DF.daisy_dense_matches( 0,0, 1,1 )
+        disp = [ '#daisy-dense-matches: %d' %(len(pts_A)) ]
+        xcanvas_dense = create_visualization_image( DF, 0, pts_A, 1, pts_B,  np.ones( (len(pts_A),1 ) ),  disp )
+        cv2.imwrite( '%s/%04d_%04d_local-bundle-dense-%04d_%04d.png' %(output_dump_path, i_curr, i_prev,  DF.global_idx[0], DF.global_idx[1]), xcanvas_dense )
+
+
+
+        # Step-2 : track pts_A on i_curr-j \forall j \in 1,...7 such that #tracked > 50% of pts_A
+        for e, _j in enumerate(range(-1,-5,-1)):
+            print e
+            if e % 2 == 0:
+                DF.set_image( S_thumbnails[i_curr+_j], ch=2, d_ch=2, global_idx=i_curr+_j )
+                pts_C, pts_C_NN_scores, pts_C_lowe_mask, f_test_mask = DF.expand_matches( 0,0, pts_A, 2,2, PARAM_W=32 )
+                disp = [ '#expand_matches : %d' %(f_test_mask.sum() ) ]
+                xcanvas_expanded = create_visualization_image( DF, 0, pts_A, 2, pts_C, f_test_mask, disp )
+                # cv2.imshow( 'tracking-a', xcanvas_expanded )
+                print 'Writing file to folder: ', output_dump_path
+                cv2.imwrite( '%s/%04d_%04d_local-bundle-%04d_%04d.png' %(output_dump_path, i_curr, i_prev, DF.global_idx[0], DF.global_idx[2]), xcanvas_expanded )
+            else:
+                DF.set_image( S_thumbnails[i_curr+_j], ch=0, d_ch=0, global_idx=i_curr+_j )
+                pts_A, pts_A_NN_scores, pts_A_lowe_mask, f_test_mask = DF.expand_matches( 2,2, pts_C, 0,0, PARAM_W=32 )
+                disp = [ '#expand_matches : %d' %(f_test_mask.sum() ) ]
+                xcanvas_expanded = create_visualization_image( DF, 2, pts_C, 0, pts_A, f_test_mask, disp )
+                # cv2.imshow( 'tracking-a', xcanvas_expanded )
+                print 'Writing file to folder: ', output_dump_path
+                cv2.imwrite( '%s/%04d_%04d_local-bundle-%04d_%04d.png' %(output_dump_path, i_curr, i_prev,  DF.global_idx[2], DF.global_idx[0]), xcanvas_expanded )
+
+            # cv2.waitKey(200)
+
+
+
+
+        # Step-3.1 : track pts_B on i_prev-j \forall j \in 1,...5 such that #tracked > 50% of pts_B
+
+
+        # Step-3.2 : track pts_B on i_prev+j \forall j \in 1,...5 such that #tracked > 50% of pts_B
+
+        # Step-4 : (optional) cross tracking
+
+        # Step-5 : Package all this data into NapMsg::sensor_msgs/PointCloud[] bundle
+
+        continue
+
+
 
         # visualize dense match
         xcanvas_dense = DF.plot_point_sets( DF.uim[0], pts_A, DF.uim[1], pts_B )
@@ -934,14 +1009,14 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
         cv2.imwrite( '%s/%04d_%04d_im_curr_ary.png' %(output_dump_path, i_curr, i_prev), np.concatenate( im_curr, axis=1).astype('uint8') )
         cv2.imwrite( '%s/%04d_%04d_im_prev_ary.png' %(output_dump_path, i_curr, i_prev), np.concatenate( im_prev, axis=1).astype('uint8') )
 
-        cv2.imshow( 'im_curr_ary', np.concatenate( im_curr, axis=1).astype('uint8') )
-        cv2.moveWindow( 'im_curr_ary', 20, 100 )
-        cv2.imshow( 'im_prev_ary', np.concatenate( im_prev, axis=1).astype('uint8') )
-        cv2.moveWindow( 'im_curr_ary', 20, 500 )
-        cv2.waitKey(10)
+        # cv2.imshow( 'im_curr_ary', np.concatenate( im_curr, axis=1).astype('uint8') )
+        # cv2.moveWindow( 'im_curr_ary', 20, 100 )
+        # cv2.imshow( 'im_prev_ary', np.concatenate( im_prev, axis=1).astype('uint8') )
+        # cv2.moveWindow( 'im_curr_ary', 20, 500 )
+        # cv2.waitKey(10)
 
 
-        xprint( tcol.OKGREEN+'perform local-bundle-adjustment\ni_curr: %d, i_prev: %d' %( g[0], g[1] )+tcol.ENDC, THREAD_NAME )
+
 
     Qdd.close()
 
@@ -1101,6 +1176,7 @@ if __name__ == "__main__":
     PARAMS['INPUT_IMAGE_TOPIC'] = '/semi_keyframes'
     PARAMS['VINS_CONFIG_YAML_FNAME'] = rospy.get_param( '/nap/config_file')
     PARAMS['N_CPU'] = 1
+    PARAMS['keep_full_resolution'] = True
 
     # Local launch
     # PARAMS['INPUT_IMAGE_TOPIC'] = '/vins_estimator/keyframe_image'
@@ -1120,6 +1196,10 @@ if __name__ == "__main__":
     ###
     manager = Manager()
     S_thumbnails = manager.list()
+    if PARAMS['keep_full_resolution'] is True:
+        S_full_res = manager.list()
+    else:
+        S_full_res = None
     S_timestamp = manager.list()
     S_netvlad = manager.list()
     S_lut_raw = manager.list() # The cluster-assignment map from NetVLAD's layer.
@@ -1138,7 +1218,7 @@ if __name__ == "__main__":
     ### Core Objects
     ###
     feature_factory = FeatureFactory( PARAMS['VINS_CONFIG_YAML_FNAME'], manager )
-    image_receiver =  ImageReceiver(  PARAMS['PARAM_CALLBACK_SKIP']    )
+    image_receiver =  ImageReceiver(  PARAMS['PARAM_CALLBACK_SKIP'] , keep_full_resolution=PARAMS['keep_full_resolution']   )
 
     FEAT_FACT_SEMAPHORES = manager.dict()
     FEAT_FACT_SEMAPHORES['timestamp'] = feature_factory.timestamp
@@ -1208,11 +1288,13 @@ if __name__ == "__main__":
     ###
     ### Launch Processes
     ###
+
     p_gpu = Process( target=worker_gpu, name="gpu_process", args=\
                 (process_flags, \
                  image_receiver.im_queue,\
+                 image_receiver.im_queue_full_res,\
                  image_receiver.im_timestamp_queue,\
-                 S_thumbnails, S_timestamp, S_netvlad, S_lut_raw,\
+                 S_thumbnails, S_full_res, S_timestamp, S_netvlad, S_lut_raw,\
                  Q_time_netvlad, Q_cluster_assgn_falsecolormap\
                 )\
                  )
@@ -1354,6 +1436,10 @@ if __name__ == "__main__":
             np.save( BASE__DUMP+'/S_timestamp.npy', np.array(S_timestamp) )
             np.save( BASE__DUMP+'/S_thumbnails.npy', np.array(S_thumbnails) )
             np.save( BASE__DUMP+'/S_lut_raw.npy', np.array(S_lut_raw) )
+
+            if S_full_res is not None:
+                print 'Writing ', BASE__DUMP+'/S_full_res.npy'
+                np.save( BASE__DUMP+'/S_full_res.npy', np.array(S_full_res) )
     except:
         print 'ROSPARAM `/nap/debug_output_dir` not found so not writing debug info'
 

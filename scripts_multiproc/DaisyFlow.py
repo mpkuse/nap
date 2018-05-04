@@ -45,6 +45,7 @@ class DaisyFlow:
 
         self.uim = {}
         self.uim_lut = {}
+        self.global_idx = {}
 
 
     def xprint( self, header, msg ):
@@ -100,7 +101,7 @@ class DaisyFlow:
         return self.dai[d_ch].get_daisy_view()
 
 
-    def set_image( self, image, ch, d_ch ):
+    def set_image( self, image, ch, d_ch, global_idx=None ):
         """ Sets the image in channel ch. Do daisy computation using d_ch.
         It is OK to set a color image here, bcoz in _crunch_daisy() we have a rgb2gray.
         """
@@ -108,9 +109,11 @@ class DaisyFlow:
         d_ch = int(d_ch)
         self.xprint( 'set_image', 'set image_(%s) into channel %d' %(str(image.shape), ch ) )
         self.uim[ch] = image.astype('uint8')
+        self.global_idx[ch] = global_idx
 
         if d_ch >= 0 :
             self._crunch_daisy( ch, d_ch )
+
 
     def set_lut( self, lut, ch ):
         """ sets lut in channel ch"""
@@ -486,7 +489,8 @@ class DaisyFlow:
 
         return masked_pts_A, masked_pts_B, masked_pt_match_quality_scores
 
-    def make_dilated_mask_from_pts( self,pts, dims, win_size=32 ):
+    def _make_dilated_mask_from_pts( self,pts, dims, win_size=32 ):
+        # TODO Move this function to helpers section
         pts = np.array(pts)
         m = np.zeros( dims, dtype='uint8' )
         m[ pts[:,1], pts[:,0] ] = 255
@@ -496,15 +500,17 @@ class DaisyFlow:
 
         return m_out
 
-    def expand_matches( self, ch0, d_ch0,  pts, chx, d_chx ):
+    def expand_matches( self, ch0, d_ch0,  pts, chx, d_chx, PARAM_W ):
         """ using co-ordinates pts in image pointed by ch0 (corresponding daisy-descriptors in d_ch0),
         this function will expand the match to another image (in temporal proximity) pointed
-        by ch1 (corresponding daisy in d_ch1).
+        by chx (corresponding daisy in d_chx).
 
         pts : [ (32,22), (120,43), .... ]
         ch0, d_ch0, chx, d_chx are integers
         """
-        PARAM_W = 30
+        assert PARAM_W > 10
+
+        PARAM_W = int(PARAM_W)
         DEBUG = False
 
 
@@ -515,7 +521,7 @@ class DaisyFlow:
 
         _pts = np.array(pts)# np.array( masked_pts ). note these are (x,y) or (col,row)
 
-        dilated_mask = self.make_dilated_mask_from_pts( _pts, __im0.shape[0:2], win_size=32 )
+        dilated_mask = self._make_dilated_mask_from_pts( _pts, __im0.shape[0:2], win_size=PARAM_W )
         _pts_chx_rows, _pts_chx_cols = np.where( dilated_mask > 0 )
 
         # code.interact( local=locals() )
