@@ -36,6 +36,7 @@ time t_curr_m
 # The corresponding image timestamps are in PolygonStamped[i]->header.stamp
 sensor_msgs/PointCloud[] bundle
 sensor_msgs/Image visibility_table
+int32[] visibility_table_idx
 ##############################################
 
 

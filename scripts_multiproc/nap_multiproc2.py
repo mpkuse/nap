@@ -926,8 +926,9 @@ def create_visualization_image( DF, ch_alpha, ptset_alpha, ch_beta, ptset_beta, 
 
 
 ## Consumer of the Qdd queue. This queue contains verified candidates where you can
-## perform re-triangulation
-def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_raw ):
+## perform re-triangulation. The nap_msg is created with op_mode28 and put into the
+## shared queue Q_bundle_napmsg. This Q_bundle_napmsg is published in main thread.
+def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_raw, Q_bundle_napmsg ):
     THREAD_NAME = '%5d-worker_qdd_processor' %( os.getpid() )
 
     DF = DaisyFlow() #TODO May be have an argument to constructor of DaisyFlow to indicate how many daisy's to allocate
@@ -1135,16 +1136,44 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
             # cv2.waitKey(0)
 
 
+        # continue
         # Create NapMsg with op_mode 28
         #napmsg.bundle # pointcloud
-        #napmsg.visibility_table #image NxF. N: number of images, F: number of base features
+        #napmsg.visibility_table #image NxF. N: number of image-pairs (ie. visibility_table.keys()), F: number of base features
         nap_msg = NapMsg()
         nap_msg.c_timestamp = S_timestamp[i_curr]
         nap_msg.prev_timestamp = S_timestamp[i_prev]
+        nap_msg.op_mode = 28
+
 
 
         # Queue.put() NapMsg (with op_mode28) on `Q_bundle_napmsg`. This will be published by the main thread.
+        # (A) set features_list in PointCloud
+        for _k in TRACKS.features_list.keys():
+            ptcld = PointCloud()
 
+            _pts = TRACKS.features_list[ _k ]
+            ptcld.header.stamp = S_timestamp[ int(_k) ]
+            ptcld.header.seq = int(_k)
+
+            for _pt in _pts:
+                ptcld.points.append( Point32( _pt[0], _pt[1], -7 ) ) #-7 is put arbitarily can be used to verify integrity
+
+            nap_msg.bundle.append( ptcld )
+
+
+        # (B) set visibility_table
+        visibility_table_np = []
+        for _k in TRACKS.visibility_table.keys() : #this has 2-tuple keys
+            nap_msg.visibility_table_idx.append( _k[0] )
+            nap_msg.visibility_table_idx.append( _k[1] )
+            visibility_table_np.append( TRACKS.visibility_table[ _k ] )
+
+        visibility_table_image = np.array(visibility_table_np).astype('uint8')
+        nap_msg.visibility_table = CvBridge().cv2_to_imgmsg( visibility_table_image, "mono8" )
+
+
+        Q_bundle_napmsg.put( nap_msg )
 
 
 
@@ -1152,6 +1181,7 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
 
 
     Qdd.close()
+    Q_bundle_napmsg.close()
 
 
 # Attempt to get rid of the GeometricVerification class. Consumed Qd to produce Qdd
@@ -1346,6 +1376,7 @@ if __name__ == "__main__":
 
     Q_2way_napmsg = Queue()
     Q_3way_napmsg = Queue()
+    Q_bundle_napmsg = Queue()
 
     ###
     ### Core Objects
@@ -1436,7 +1467,8 @@ if __name__ == "__main__":
                             (
                             process_flags,\
                             Qdd,\
-                            S_thumbnails, S_timestamp, S_lut_raw\
+                            S_thumbnails, S_timestamp, S_lut_raw,\
+                            Q_bundle_napmsg\
                             )\
                         )
 
@@ -1455,6 +1487,7 @@ if __name__ == "__main__":
         #                     Q_time_cpu, Q_match_im_canvas, Q_match_im3way_canvas\
         #                 )\
         #             )
+        # TODO: worker_bundle_cpu needs Q_2way_napmsg as input. Do this after Q_bundle_napmsg is well tested.
         p_cpu = Process( target=worker_bundle_cpu, name="new_cpu_process%d" %(i_cpu),\
                          args=\
                             (\
@@ -1547,10 +1580,16 @@ if __name__ == "__main__":
         # xprint( 'napmsg.qsize: %d %d' %(Q_2way_napmsg.qsize(), Q_3way_napmsg.qsize()) , 'MAIN' )
         try:
             pub_edge_msg.publish( Q_2way_napmsg.get_nowait() )
+        except:
+            pass
+        try:
             pub_edge_msg.publish( Q_3way_napmsg.get_nowait() )
         except:
             pass
-
+        try:
+            pub_edge_msg.publish( Q_bundle_napmsg.get_nowait() )
+        except:
+            pass
         rate.sleep()
 
     process_flags['MAIN_ENDED'] = True
@@ -1591,6 +1630,7 @@ if __name__ == "__main__":
     Q_time_cpu.close()
     Q_2way_napmsg.close()
     Q_3way_napmsg.close()
+    Q_bundle_napmsg.close()
     Q_scores_plot.close()
     if Q_match_im_canvas is not None:
         Q_match_im_canvas.close()
