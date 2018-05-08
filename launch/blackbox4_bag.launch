@@ -141,7 +141,7 @@
 
       <!-- Multiprocess and minimal nap node -->
       <!-- <node name="nap" pkg="nap" type="nap_multiproc.py" output="screen" > -->
-      <node name="nap" pkg="nap" type="nap_multiproc2.py" output="screen" >
+      <node name="nap" pkg="nap" type="nap_multiproc2.py" output="log" >
         <remap to="$(arg bag_color_im_topic)" from="/semi_keyframes"/>
         <param name="config_file" type="string" value="$(arg config_path)" />
         <param name="debug_output_dir" type="string" value="/home/mpkuse/Desktop/bundle_adj" />
@@ -170,7 +170,7 @@
      ##### Geometry Node / Custom Pose Graph Optimization #####
      ##########################################################
             subscribes to `vins/camera_pose`, `3d_point_cloud`, `napMsg`  -->
-    <node name="pgraph_opt" pkg="nap" type="pose_graph_opt_node" output="log">
+    <node name="pgraph_opt" pkg="nap" type="pose_graph_opt_node" output="screen">
         <param name="config_file" type="string" value="$(arg config_path)" />
         <!-- Commentout next line to remove the places-feedback-->
         <!-- <remap from="/colocation_chatter" to="/colocation" /> -->

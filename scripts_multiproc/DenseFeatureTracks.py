@@ -42,6 +42,7 @@ class DenseFeatureTracks:
         self.raw_data = {}
         self.visibility_table = {}
         self.feature_list = {}
+        self.pair_type = {} 
 
     def _xprint( self, header, msg ):
         # return
@@ -51,10 +52,16 @@ class DenseFeatureTracks:
         print '[%s] %s' %(header, msg)
 
 
-    def set( self, idx_1, pts_1, idx_2, pts_2, mask ):
+    def set( self, idx_1, pts_1, idx_2, pts_2, mask, TYPE ):
         """ idx_1, idx_2 : Scalars indicating global_idx of the image
             pts_1, pts_2 : Nx2 indicating co-ordinates.
             mask : mask from f-test in expand_matches()
+
+            TYPE: int32.
+                    -1 : Dense Match
+                     1 : i_prev + j  (j is +ve)
+                     2 : i_prev - j  (j is +ve)
+                     3 : i_curr - j  (j is +ve)
         """
 
         idx = (idx_1,idx_2)#'%d,%d' %(idx_1,idx_2)
@@ -64,6 +71,7 @@ class DenseFeatureTracks:
 
         self.raw_data[idx][ 'pt0'] = np.array(pts_1)
         self.raw_data[idx][ 'pt1'] = np.array(pts_2)
+        self.raw_data[idx][ 'TYPE'] = TYPE
 
     def verify_ind( self, idx, kappa ):
         """
@@ -159,8 +167,10 @@ class DenseFeatureTracks:
         # .
         # .
         visibility_table = {}
+        pair_type = {}
         for _k in self.raw_data.keys():
             visibility_table[_k] = self.raw_data[_k]['mask']
+            pair_type[_k] = self.raw_data[_k]['TYPE']
 
 
 
@@ -178,3 +188,4 @@ class DenseFeatureTracks:
 
         self.visibility_table = visibility_table
         self.features_list = features_list
+        self.pair_type = pair_type

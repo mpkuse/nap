@@ -987,7 +987,7 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
             xprint( tcol.FAIL+'too few matches (%d) in daisy_dense_matches(). Rejecting this candidate' %(len(pts_A))+tcol.ENDC, THREAD_NAME )
             continue
 
-        TRACKS.set( DF.global_idx[0], pts_A, DF.global_idx[1], pts_B, np.ones( (len(pts_A),1 ) ) )
+        TRACKS.set( DF.global_idx[0], pts_A, DF.global_idx[1], pts_B, np.ones( (len(pts_A),1 ) ), TYPE=-1 )
 
         # disp = [ '#daisy-dense-matches: %d' %(len(pts_A)) ]
         # xcanvas_dense = create_visualization_image( DF, 0, pts_A, 1, pts_B,  np.ones( (len(pts_A),1 ) ),  disp )
@@ -1003,7 +1003,7 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
             if e % 2 == 0:
                 DF.set_image( S_thumbnails[i_curr+_j], ch=2, d_ch=2, global_idx=i_curr+_j )
                 pts_C, pts_C_NN_scores, pts_C_lowe_mask, f_test_mask = DF.expand_matches( 0,0, pts_A, 2,2, PARAM_W=32 )
-                TRACKS.set( DF.global_idx[0], pts_A, DF.global_idx[2], pts_C, f_test_mask )
+                TRACKS.set( DF.global_idx[0], pts_A, DF.global_idx[2], pts_C, f_test_mask, TYPE=3 )
 
                 # disp = [ '#expand_matches : %d' %(f_test_mask.sum() ) ]
                 # xcanvas_expanded = create_visualization_image( DF, 0, pts_A, 2, pts_C, f_test_mask, disp )
@@ -1014,7 +1014,7 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
             else:
                 DF.set_image( S_thumbnails[i_curr+_j], ch=0, d_ch=0, global_idx=i_curr+_j )
                 pts_A, pts_A_NN_scores, pts_A_lowe_mask, f_test_mask = DF.expand_matches( 2,2, pts_C, 0,0, PARAM_W=32 )
-                TRACKS.set( DF.global_idx[2], pts_C, DF.global_idx[0], pts_A, f_test_mask )
+                TRACKS.set( DF.global_idx[2], pts_C, DF.global_idx[0], pts_A, f_test_mask, TYPE=3 )
 
                 # disp = [ '#expand_matches : %d' %(f_test_mask.sum() ) ]
                 # xcanvas_expanded = create_visualization_image( DF, 2, pts_C, 0, pts_A, f_test_mask, disp )
@@ -1042,7 +1042,7 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
             if e%2 == 0 :
                 DF.set_image( S_thumbnails[i_prev+_j], ch=3, d_ch=3, global_idx=i_prev+_j )
                 pts_D, pts_D_NN_scores, pts_D_lowe_mask, f_test_mask = DF.expand_matches( 1,1, pts_B, 3,3, PARAM_W=32 )
-                TRACKS.set( DF.global_idx[1], pts_B, DF.global_idx[3], pts_D, f_test_mask )
+                TRACKS.set( DF.global_idx[1], pts_B, DF.global_idx[3], pts_D, f_test_mask, TYPE=2 )
 
                 # disp = [ '#expand_matches : %d' %(f_test_mask.sum() ) ]
                 # xcanvas_expanded = create_visualization_image( DF, 1, pts_B, 3, pts_D, f_test_mask, disp )
@@ -1052,7 +1052,7 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
             else:
                 DF.set_image( S_thumbnails[i_prev+_j], ch=1, d_ch=1, global_idx=i_prev+_j )
                 pts_B, pts_B_NN_scores, pts_B_lowe_mask, f_test_mask = DF.expand_matches( 3,3, pts_D, 1,1, PARAM_W=32 )
-                TRACKS.set( DF.global_idx[3], pts_D, DF.global_idx[1], pts_B, f_test_mask )
+                TRACKS.set( DF.global_idx[3], pts_D, DF.global_idx[1], pts_B, f_test_mask, TYPE=2 )
 
                 # disp = [ '#expand_matches : %d' %(f_test_mask.sum() ) ]
                 # xcanvas_expanded = create_visualization_image( DF, 3, pts_D, 1, pts_B, f_test_mask, disp )
@@ -1077,7 +1077,7 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
             if e%2 == 0:
                 DF.set_image( S_thumbnails[i_prev+_j], ch=2, d_ch=2, global_idx=i_prev+_j )
                 pts_D, pts_D_NN_scores, pts_D_lowe_mask, f_test_mask = DF.expand_matches( 0,0, pts_B, 2,2, PARAM_W=32 )
-                TRACKS.set( DF.global_idx[0], pts_B, DF.global_idx[2], pts_D, f_test_mask )
+                TRACKS.set( DF.global_idx[0], pts_B, DF.global_idx[2], pts_D, f_test_mask, TYPE=1 )
 
 
                 # disp = [ '#+expand_matches : %d' %(f_test_mask.sum() ) ]
@@ -1088,7 +1088,7 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
             else:
                 DF.set_image( S_thumbnails[i_prev+_j], ch=0, d_ch=0, global_idx=i_prev+_j )
                 pts_B, pts_B_NN_scores, pts_B_lowe_mask, f_test_mask = DF.expand_matches( 2,2, pts_D, 0,0, PARAM_W=32 )
-                TRACKS.set( DF.global_idx[2], pts_D, DF.global_idx[0], pts_B, f_test_mask )
+                TRACKS.set( DF.global_idx[2], pts_D, DF.global_idx[0], pts_B, f_test_mask, TYPE=1 )
 
 
                 # disp = [ '#+expand_matches : %d' %(f_test_mask.sum() ) ]
@@ -1129,7 +1129,7 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
             xcanvas_dbg = create_visualization_image_static( DF,\
                     imA, ptsA, _k[0],   imB, ptsB, _k[1],  AB_mask, disp )
 
-            fname = output_dump_path+'/%d_%d_TRACKS_%d_%d.jpg' %( TRACKS.i_curr, TRACKS.i_prev, _k[0], _k[1] )
+            fname = output_dump_path+'/%d_%d_TRAC(Type=%d)_%d_%d.jpg' %( TRACKS.i_curr, TRACKS.i_prev, TRACKS.pair_type[_k] , _k[0], _k[1] )
             xprint( 'Writing image debug : %s' %(fname), THREAD_NAME )
             cv2.imwrite( fname, xcanvas_dbg )
             # cv2.imshow( 'xcanvas_dbg', xcanvas_dbg )
@@ -1165,8 +1165,15 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
         # (B) set visibility_table
         visibility_table_np = []
         for _k in TRACKS.visibility_table.keys() : #this has 2-tuple keys
+            ttype = TRACKS.pair_type[_k] #int32
+
             nap_msg.visibility_table_idx.append( _k[0] )
             nap_msg.visibility_table_idx.append( _k[1] )
+            nap_msg.visibility_table_idx.append( ttype )
+
+            nap_msg.visibility_table_stamp.append( S_timestamp[ _k[0] ] )
+            nap_msg.visibility_table_stamp.append( S_timestamp[ _k[1] ] )
+
             visibility_table_np.append( TRACKS.visibility_table[ _k ] )
 
         visibility_table_image = np.array(visibility_table_np).astype('uint8')

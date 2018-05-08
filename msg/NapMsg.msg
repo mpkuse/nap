@@ -37,6 +37,7 @@ time t_curr_m
 sensor_msgs/PointCloud[] bundle
 sensor_msgs/Image visibility_table
 int32[] visibility_table_idx
+time[] visibility_table_stamp
 ##############################################
 
 

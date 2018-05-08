@@ -77,12 +77,13 @@ using namespace std;
 #include "Node.h"
 #include "Edge.h"
 #include "PinholeCamera.h"
-
+#include "LocalBundle.h"
 
 // Debug enable/disable flags
 // #define _DEBUG_3WAY
 // #define _DEBUG_PNP
 // #define _DEBUG_POSEGRAPH_2_FILE
+#define _DEBUG_BUNDLE
 
 // make sure this folder exisits.!
 #define _DEBUG_SAVE_BASE_PATH "/home/mpkuse/Desktop/a/drag_posecompute_node/"

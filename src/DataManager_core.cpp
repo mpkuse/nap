@@ -237,7 +237,8 @@ void DataManager::camera_pose_callback( const nav_msgs::Odometry::ConstPtr msg )
   Node * n = new Node(msg->header.stamp, msg->pose.pose);
   nNodes.push_back( n );
   ROS_DEBUG( "Recvd msg - camera_pose_callback");
-  cout << "add-node : " << msg->header.stamp << endl;
+  // cout << "add-node : " << msg->header.stamp << endl;
+  ROS_DEBUG_STREAM( "add-node : " << msg->header.stamp );
 
 
   // ALSO add odometry edges to 1 previous.
@@ -403,6 +404,24 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
 
     return;
 
+  }
+
+
+  // Indicates this napmsg contains bundle
+  if( msg->op_mode == 28 )
+  {
+    // Contains dense features tracked for the bundle. See also nap/script_multiproc/nap_multiproc.py:worker_qdd_processor().
+    // The worker_qdd_processor() function
+    ROS_ERROR( "geometry_node OK! set edge as EDGE_TYPE_LOOP_SUBTYPE_BUNDLE" );
+
+    e->setLoopEdgeSubtype(EDGE_TYPE_LOOP_SUBTYPE_BUNDLE);
+    loopClosureEdges.push_back( e );
+
+    // Process this nap msg to produce pose from locally tracked dense features
+    // --HERE--
+
+    LocalBundle localBundle = LocalBundle( msg, this->nNodes );
+    return;
   }
 
   ROS_ERROR( "in place_recog_callback: Error computing rel pose. Edge added without pose. This might be fatal!");

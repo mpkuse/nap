@@ -142,6 +142,15 @@ int main(int argc, char ** argv )
   // ROS_INFO( "Subscribed to %s", point_cloud_topic.c_str() );
   // ros::Subscriber sub_pcl_topic = nh.subscribe( point_cloud_topic, 1000, &DataManager::point_cloud_callback, &dataManager );
 
+#if defined _DEBUG_BUNDLE
+
+  //
+  //   This is not a requirement for core computation. But is subscribed for debug reasons. Especially to verify correctness of 3way matches
+  string image_topic = string( "/vins_estimator/keyframe_image");
+  ROS_INFO( "Subscribed to %s", image_topic.c_str() );
+  ros::Subscriber sub_image = nh.subscribe( image_topic, 1000, &DataManager::image_callback, &dataManager );
+
+#endif
 
 #if defined _DEBUG_3WAY || defined _DEBUG_PNP
   // 2d features in normalized cords
