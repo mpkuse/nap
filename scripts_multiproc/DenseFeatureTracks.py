@@ -31,6 +31,12 @@ import code
 class DenseFeatureTracks:
     def __init__(self):
         self.raw_data = {}
+        self.verbosity = 1
+        self.i_curr = -1 # Meta info
+        self.i_prev = -1
+
+    def set_verbosity( self, verbosity ):
+        self.verbosity = int(verbosity)
 
     def reset(self):
         self.raw_data = {}
@@ -39,6 +45,9 @@ class DenseFeatureTracks:
 
     def _xprint( self, header, msg ):
         # return
+        if self.verbosity == 0:
+            return
+
         print '[%s] %s' %(header, msg)
 
 

@@ -125,6 +125,8 @@ from FeatureFactory import FeatureFactory
 from ImageReceiver import ImageReceiver
 from GeometricVerification import GeometricVerification
 from DaisyFlow import DaisyFlow
+from DenseFeatureTracks import DenseFeatureTracks
+
 
 try:
     from DaisyMeld.daisymeld import DaisyMeld
@@ -476,6 +478,8 @@ def worker_gpu( process_flags, Qi, Qfull_res, Qt, \
     xprint( 'close gpu process', THREAD_NAME )
     Qi.close()
     Qt.close()
+    if Qfull_res is not None:
+        Qfull_res.close()
 
     Q_time_netvlad.close()
     if Q_cluster_assgn_falsecolormap is not None:
@@ -877,9 +881,31 @@ def check_nearby( list_of_items_put_into_qdd, candidate ):
     return False
 
 
+def create_visualization_image_static( DF, im_alpha, ptset_alpha, idx_alpha, \
+                                            im_beta, ptset_beta,  idx_beta, pset_mask, msg ):
+    """ Will create a [ image_alpha | image_beta ]. DF is only for its plotting function
+    ie. DF.plot_point_sets()
+    """
+
+    _R, _C, _ = im_alpha.shape
+
+    xcanvas_expanded = DF.plot_point_sets(im_alpha, ptset_alpha, im_beta, ptset_beta, mask=pset_mask )
+
+    status = np.zeros( (100, xcanvas_expanded.shape[1], 3), dtype='uint8' )
+    status = cv2.putText( status, '%d' %(idx_alpha), (10,30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 2 )
+    status = cv2.putText( status, '%d' %(idx_beta), (_C+10,30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 2 )
+
+    for i,m in enumerate(msg):
+        status = cv2.putText( status, m, (10,60+20*i), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 2 )
+
+    xcanvas_expanded = np.concatenate( (xcanvas_expanded, status), axis=0 )
+
+    return xcanvas_expanded
+
 
 def create_visualization_image( DF, ch_alpha, ptset_alpha, ch_beta, ptset_beta, pset_mask, msg ):
-    """ Will create a [ image_alpha | image_beta ] """
+    """ Will create a [ image_alpha | image_beta ].
+    """
 
     _R, _C, _ = DF.uim[ch_alpha].shape
 
@@ -900,12 +926,15 @@ def create_visualization_image( DF, ch_alpha, ptset_alpha, ch_beta, ptset_beta, 
 
 
 ## Consumer of the Qdd queue. This queue contains verified candidates where you can
-## perform local bundle adjustment
+## perform re-triangulation
 def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_raw ):
     THREAD_NAME = '%5d-worker_qdd_processor' %( os.getpid() )
 
     DF = DaisyFlow() #TODO May be have an argument to constructor of DaisyFlow to indicate how many daisy's to allocate
+    TRACKS = DenseFeatureTracks()
+
     output_dump_path = '/home/mpkuse/Desktop/bundle_adj/dump/'
+
 
     while process_flags['MAIN_ENDED'] is False:
         curr_qsize = Qdd.qsize()
@@ -923,106 +952,210 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
 
         i_curr = g[0]
         i_prev = g[1]
+        TRACKS.reset()
+        TRACKS.i_curr = g[0]
+        TRACKS.i_prev = g[1]
 
 
         # HERE
-        xprint( tcol.OKGREEN+'perform local-bundle-adjustment\ni_curr: %d, i_prev: %d' %( g[0], g[1] )+tcol.ENDC, THREAD_NAME )
+        xprint( tcol.OKGREEN+'perform local-retriangulation\ni_curr: %d, i_prev: %d' %( g[0], g[1] )+tcol.ENDC, THREAD_NAME )
+        startLocalRetriangulation = time.time()
 
-        # Step-1 : Get Dense matches between i_curr, i_prev call them pts_A, pts_B respectively
+        ####
+        #### Step-1 : Get Dense matches between i_curr, i_prev call them pts_A, pts_B respectively
+        ####
         DF.set_image( S_thumbnails[i_curr], ch=0, d_ch=0, global_idx=i_curr )
         DF.set_image( S_thumbnails[i_prev], ch=1, d_ch=1, global_idx=i_prev )
 
         DF.set_lut( S_lut_raw[i_curr], ch=0 )
         DF.set_lut( S_lut_raw[i_prev], ch=1 )
         pts_A, pts_B, pt_match_quality_scores = DF.daisy_dense_matches( 0,0, 1,1 )
-        disp = [ '#daisy-dense-matches: %d' %(len(pts_A)) ]
-        xcanvas_dense = create_visualization_image( DF, 0, pts_A, 1, pts_B,  np.ones( (len(pts_A),1 ) ),  disp )
-        cv2.imwrite( '%s/%04d_%04d_local-bundle-dense-%04d_%04d.png' %(output_dump_path, i_curr, i_prev,  DF.global_idx[0], DF.global_idx[1]), xcanvas_dense )
+
+        # TODO
+        # A better way to evaluate a dense match is using the histogram2d. ie.
+        # to know of how well distributed the points are. Ideally they should be
+        # in multiple sections of the image instead of all concentrated in one part
+        # of the image. Point features which are well distributed in image space
+        # will give better geometry estimates
+        # Example usage of histogram2d()::
+        # >>> F = np.random.randint( 0, 100, size=(200,2) ) #200 image co-ordinates
+        # >>> S = np.histogram2d( F[:,0], F[:,1], bins=10 , range=[ [xmin, xmax], [ymin, ymax] ])
+        # >>> S[0] is a 10x10 matrix. Taking entropy might tell you if this is uniform of skewed.
+
+        if len(pts_A) < 100 : ## too few dense matches
+            xprint( tcol.FAIL+'too few matches (%d) in daisy_dense_matches(). Rejecting this candidate' %(len(pts_A))+tcol.ENDC, THREAD_NAME )
+            continue
+
+        TRACKS.set( DF.global_idx[0], pts_A, DF.global_idx[1], pts_B, np.ones( (len(pts_A),1 ) ) )
+
+        # disp = [ '#daisy-dense-matches: %d' %(len(pts_A)) ]
+        # xcanvas_dense = create_visualization_image( DF, 0, pts_A, 1, pts_B,  np.ones( (len(pts_A),1 ) ),  disp )
+        # cv2.imwrite( '%s/%04d_%04d_local-bundle-dense-%04d_%04d.png' \
+        #                 %(output_dump_path, i_curr, i_prev,  DF.global_idx[0], DF.global_idx[1]), xcanvas_dense )
 
 
-
-        # Step-2 : track pts_A on i_curr-j \forall j \in 1,...7 such that #tracked > 50% of pts_A
+        ####
+        #### Step-2 : track pts_A on i_curr-j \forall j \in 1,...7 such that #tracked > 50% of pts_A
+        ####
+        L = len(pts_A)
         for e, _j in enumerate(range(-1,-5,-1)):
-            print e
             if e % 2 == 0:
                 DF.set_image( S_thumbnails[i_curr+_j], ch=2, d_ch=2, global_idx=i_curr+_j )
                 pts_C, pts_C_NN_scores, pts_C_lowe_mask, f_test_mask = DF.expand_matches( 0,0, pts_A, 2,2, PARAM_W=32 )
-                disp = [ '#expand_matches : %d' %(f_test_mask.sum() ) ]
-                xcanvas_expanded = create_visualization_image( DF, 0, pts_A, 2, pts_C, f_test_mask, disp )
-                # cv2.imshow( 'tracking-a', xcanvas_expanded )
-                print 'Writing file to folder: ', output_dump_path
-                cv2.imwrite( '%s/%04d_%04d_local-bundle-%04d_%04d.png' %(output_dump_path, i_curr, i_prev, DF.global_idx[0], DF.global_idx[2]), xcanvas_expanded )
+                TRACKS.set( DF.global_idx[0], pts_A, DF.global_idx[2], pts_C, f_test_mask )
+
+                # disp = [ '#expand_matches : %d' %(f_test_mask.sum() ) ]
+                # xcanvas_expanded = create_visualization_image( DF, 0, pts_A, 2, pts_C, f_test_mask, disp )
+                # # cv2.imshow( 'tracking-a', xcanvas_expanded )
+                # xprint( 'Writing file to folder: '+ output_dump_path+ ' '+ str(DF.global_idx[0])+ ' '+str(DF.global_idx[2]), THREAD_NAME )
+                # cv2.imwrite( '%s/%04d_%04d_local-track-%04d_%04d.png'\
+                #         %(output_dump_path, i_curr, i_prev, DF.global_idx[0], DF.global_idx[2]), xcanvas_expanded )
             else:
                 DF.set_image( S_thumbnails[i_curr+_j], ch=0, d_ch=0, global_idx=i_curr+_j )
                 pts_A, pts_A_NN_scores, pts_A_lowe_mask, f_test_mask = DF.expand_matches( 2,2, pts_C, 0,0, PARAM_W=32 )
-                disp = [ '#expand_matches : %d' %(f_test_mask.sum() ) ]
-                xcanvas_expanded = create_visualization_image( DF, 2, pts_C, 0, pts_A, f_test_mask, disp )
-                # cv2.imshow( 'tracking-a', xcanvas_expanded )
-                print 'Writing file to folder: ', output_dump_path
-                cv2.imwrite( '%s/%04d_%04d_local-bundle-%04d_%04d.png' %(output_dump_path, i_curr, i_prev,  DF.global_idx[2], DF.global_idx[0]), xcanvas_expanded )
+                TRACKS.set( DF.global_idx[2], pts_C, DF.global_idx[0], pts_A, f_test_mask )
+
+                # disp = [ '#expand_matches : %d' %(f_test_mask.sum() ) ]
+                # xcanvas_expanded = create_visualization_image( DF, 2, pts_C, 0, pts_A, f_test_mask, disp )
+                # # cv2.imshow( 'tracking-a', xcanvas_expanded )
+                # xprint( 'Writing file to folder: '+ output_dump_path+ ' '+ str(DF.global_idx[2])+ ' '+ str(DF.global_idx[0]) , THREAD_NAME )
+                # cv2.imwrite( '%s/%04d_%04d_local-track-%04d_%04d.png' \
+                #         %(output_dump_path, i_curr, i_prev,  DF.global_idx[2], DF.global_idx[0]), xcanvas_expanded )
 
             # cv2.waitKey(200)
+            # if enuf features cannot be tracked then break
+            if f_test_mask.sum() < 0.5*L:
+                xprint( 'break', THREAD_NAME )
+                break
 
 
 
 
-        # Step-3.1 : track pts_B on i_prev-j \forall j \in 1,...5 such that #tracked > 50% of pts_B
+        ####
+        #### Step-3.1 : track pts_B on i_prev-j \forall j \in 1,...5 such that #tracked > 50% of pts_B
+        ####
+        org_pts_B = pts_B
+
+        L = len(pts_B)
+        for e, _j in enumerate( range( -1, -5, -1 ) ):
+            if e%2 == 0 :
+                DF.set_image( S_thumbnails[i_prev+_j], ch=3, d_ch=3, global_idx=i_prev+_j )
+                pts_D, pts_D_NN_scores, pts_D_lowe_mask, f_test_mask = DF.expand_matches( 1,1, pts_B, 3,3, PARAM_W=32 )
+                TRACKS.set( DF.global_idx[1], pts_B, DF.global_idx[3], pts_D, f_test_mask )
+
+                # disp = [ '#expand_matches : %d' %(f_test_mask.sum() ) ]
+                # xcanvas_expanded = create_visualization_image( DF, 1, pts_B, 3, pts_D, f_test_mask, disp )
+                # xprint( 'Writing file to folder: '+ output_dump_path+ '  '+str(DF.global_idx[1])+ ' '+str(DF.global_idx[3]), THREAD_NAME )
+                # cv2.imwrite( '%s/%04d_%04d_local-track--%04d_%04d.png' \
+                #             %(output_dump_path, i_curr, i_prev,  DF.global_idx[1], DF.global_idx[3]), xcanvas_expanded )
+            else:
+                DF.set_image( S_thumbnails[i_prev+_j], ch=1, d_ch=1, global_idx=i_prev+_j )
+                pts_B, pts_B_NN_scores, pts_B_lowe_mask, f_test_mask = DF.expand_matches( 3,3, pts_D, 1,1, PARAM_W=32 )
+                TRACKS.set( DF.global_idx[3], pts_D, DF.global_idx[1], pts_B, f_test_mask )
+
+                # disp = [ '#expand_matches : %d' %(f_test_mask.sum() ) ]
+                # xcanvas_expanded = create_visualization_image( DF, 3, pts_D, 1, pts_B, f_test_mask, disp )
+                # xprint( 'Writing file to folder: '+ output_dump_path+ ' '+ str(DF.global_idx[3])+ ' '+str(DF.global_idx[1]), THREAD_NAME )
+                # cv2.imwrite( '%s/%04d_%04d_local-track--%04d_%04d.png' \
+                #             %(output_dump_path, i_curr, i_prev,  DF.global_idx[3], DF.global_idx[1]), xcanvas_expanded )
 
 
-        # Step-3.2 : track pts_B on i_prev+j \forall j \in 1,...5 such that #tracked > 50% of pts_B
+            # if enuf features cannot be tracked then break
+            if f_test_mask.sum() < 0.5*L:
+                xprint( 'break', THREAD_NAME )
+                break
+
+
+        ####
+        #### Step-3.2 : track pts_B on i_prev+j \forall j \in 1,...5 such that #tracked > 50% of pts_B
+        ####
+        # Implementing this is very very bug prone. or may be use 0,2 for this.
+        pts_B = org_pts_B
+        DF.set_image( S_thumbnails[i_prev], ch=0, d_ch=0, global_idx=i_prev )
+        for e, _j in enumerate( range( 1, 5 ) ):
+            if e%2 == 0:
+                DF.set_image( S_thumbnails[i_prev+_j], ch=2, d_ch=2, global_idx=i_prev+_j )
+                pts_D, pts_D_NN_scores, pts_D_lowe_mask, f_test_mask = DF.expand_matches( 0,0, pts_B, 2,2, PARAM_W=32 )
+                TRACKS.set( DF.global_idx[0], pts_B, DF.global_idx[2], pts_D, f_test_mask )
+
+
+                # disp = [ '#+expand_matches : %d' %(f_test_mask.sum() ) ]
+                # xcanvas_expanded = create_visualization_image( DF, 0, pts_B, 2, pts_D, f_test_mask, disp )
+                # xprint( 'Writing file to folder: '+ output_dump_path+ '  '+str(DF.global_idx[0])+ ' '+str(DF.global_idx[2]), THREAD_NAME )
+                # cv2.imwrite( '%s/%04d_%04d_local-track++--%04d_%04d.png' \
+                #             %(output_dump_path, i_curr, i_prev,  DF.global_idx[0], DF.global_idx[2]), xcanvas_expanded )
+            else:
+                DF.set_image( S_thumbnails[i_prev+_j], ch=0, d_ch=0, global_idx=i_prev+_j )
+                pts_B, pts_B_NN_scores, pts_B_lowe_mask, f_test_mask = DF.expand_matches( 2,2, pts_D, 0,0, PARAM_W=32 )
+                TRACKS.set( DF.global_idx[2], pts_D, DF.global_idx[0], pts_B, f_test_mask )
+
+
+                # disp = [ '#+expand_matches : %d' %(f_test_mask.sum() ) ]
+                # xcanvas_expanded = create_visualization_image( DF, 2, pts_D, 0, pts_B, f_test_mask, disp )
+                # xprint( 'Writing file to folder: '+ output_dump_path+ '  '+str(DF.global_idx[2])+ ' '+str(DF.global_idx[0]), THREAD_NAME )
+                # cv2.imwrite( '%s/%04d_%04d_local-track++--%04d_%04d.png' \
+                #             %(output_dump_path, i_curr, i_prev,  DF.global_idx[2], DF.global_idx[0]), xcanvas_expanded )
+
+            if f_test_mask.sum() < 0.5*L:
+                xprint( 'break', THREAD_NAME )
+                break
+
 
         # Step-4 : (optional) cross tracking
 
-        # Step-5 : Package all this data into NapMsg::sensor_msgs/PointCloud[] bundle
+
+        xprint( tcol.OKGREEN+'Daisy dense match and tracking done in %4.2f (ms)' %( 1000. * (time.time() - startLocalRetriangulation))+tcol.ENDC, THREAD_NAME )
+
+        ####
+        #### Step-5 : Package all this data into NapMsg::sensor_msgs/PointCloud[] bundle
+        ####
+        # All the needed data is in TRACKS.visibility_table and TRACKS.feature_list
+        TRACKS.set_verbosity(0)
+        TRACKS.optimize_layout()
+
+        # Verify data from the TRACKS.
+        # Now lets look at just the data in feat_track.feature_list and feat_track.visibility_table
+        for _k in TRACKS.visibility_table.keys():
+            imA = S_thumbnails[ _k[0] ]
+            imB = S_thumbnails[ _k[1] ]
+            ptsA = TRACKS.features_list[ _k[0] ]
+            ptsB = TRACKS.features_list[ _k[1] ]
+            AB_mask = TRACKS.visibility_table[ _k ]
+            print _k[0], _k[1], AB_mask.sum()
+
+            # xcanvas_dbg = DF.plot_point_sets( imA, ptsA, imB, ptsB, mask=AB_mask )
+            disp = [ '#+expand_matches : %d' %(AB_mask.sum() ) ]
+            xcanvas_dbg = create_visualization_image_static( DF,\
+                    imA, ptsA, _k[0],   imB, ptsB, _k[1],  AB_mask, disp )
+
+            fname = output_dump_path+'/%d_%d_TRACKS_%d_%d.jpg' %( TRACKS.i_curr, TRACKS.i_prev, _k[0], _k[1] )
+            xprint( 'Writing image debug : %s' %(fname), THREAD_NAME )
+            cv2.imwrite( fname, xcanvas_dbg )
+            # cv2.imshow( 'xcanvas_dbg', xcanvas_dbg )
+            # cv2.waitKey(0)
+
+
+        # Create NapMsg with op_mode 28
+        #napmsg.bundle # pointcloud
+        #napmsg.visibility_table #image NxF. N: number of images, F: number of base features
+        nap_msg = NapMsg()
+        nap_msg.c_timestamp = S_timestamp[i_curr]
+        nap_msg.prev_timestamp = S_timestamp[i_prev]
+
+
+        # Queue.put() NapMsg (with op_mode28) on `Q_bundle_napmsg`. This will be published by the main thread.
+
+
+
 
         continue
-
-
-
-        # visualize dense match
-        xcanvas_dense = DF.plot_point_sets( DF.uim[0], pts_A, DF.uim[1], pts_B )
-        status = np.zeros( (100, xcanvas_dense.shape[1], 3), dtype='uint8' )
-        status = cv2.putText( status, '#daisy-dense-matches: %d' %(len(pts_A)), (10,30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 2 )
-
-        xcanvas_dense = np.concatenate( (xcanvas_dense, status), axis=0 )
-        cv2.imwrite( '%s/%04d_%04d_xdense_daisy_match.png' %(output_dump_path, i_curr, i_prev), xcanvas_dense)
-
-
-        # Visualize Bundle Images
-        im_curr = []
-        for j in range(-5, 1): # i_curr, i_curr-1 , ...
-            this_im =  S_thumbnails[i_curr+j]
-            status = np.zeros( (100, this_im.shape[1], 3), dtype='uint8' )
-            status = cv2.putText( status, '%d' %(i_curr+j), (status.shape[1]/2,30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 2 )
-
-            im_curr.append( np.concatenate( (this_im, status), axis=0 ) )
-
-        im_prev = []
-        for j in range( -3, 3 ):
-            this_im =  S_thumbnails[i_prev+j]
-            status = np.zeros( (100, this_im.shape[1], 3), dtype='uint8' )
-            status = cv2.putText( status, '%d' %(i_prev+j), (status.shape[1]/2,30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 2 )
-
-            im_prev.append( np.concatenate( (this_im, status), axis=0 ) )
-
-        print 'Writing file to folder: ', output_dump_path
-        cv2.imwrite( '%s/%04d_%04d_im_curr_ary.png' %(output_dump_path, i_curr, i_prev), np.concatenate( im_curr, axis=1).astype('uint8') )
-        cv2.imwrite( '%s/%04d_%04d_im_prev_ary.png' %(output_dump_path, i_curr, i_prev), np.concatenate( im_prev, axis=1).astype('uint8') )
-
-        # cv2.imshow( 'im_curr_ary', np.concatenate( im_curr, axis=1).astype('uint8') )
-        # cv2.moveWindow( 'im_curr_ary', 20, 100 )
-        # cv2.imshow( 'im_prev_ary', np.concatenate( im_prev, axis=1).astype('uint8') )
-        # cv2.moveWindow( 'im_curr_ary', 20, 500 )
-        # cv2.waitKey(10)
-
-
 
 
     Qdd.close()
 
 
-# Attempt to get rid of the GeometricVerification class. Consumed Qd to produce
-# 2way matches and bundles
+# Attempt to get rid of the GeometricVerification class. Consumed Qd to produce Qdd
+# 2way matches and bundles. This is replacement for worker_cpu.
 def worker_bundle_cpu(  process_flags, Qd, Qdd, S_thumbnails, S_timestamp, S_lut_raw,\
                         FF ):
 
@@ -1098,7 +1231,7 @@ def worker_bundle_cpu(  process_flags, Qd, Qdd, S_thumbnails, S_timestamp, S_lut
         ###
         ### Step-1 :  DF.guided_matches()
         startGuided = time.time()
-        selected_curr_i, selected_prev_i, score =DF.guided_matches( 0, 0, feat2d_curr, 1, 1, feat2d_prev )
+        selected_curr_i, selected_prev_i, score = DF.guided_matches( 0, 0, feat2d_curr, 1, 1, feat2d_prev )
         xprint( 'guided_matches exec in (ms): %4.2f' %( 1000. *( time.time() - startGuided) ), THREAD_NAME )
         xprint( 'guided_matches Score: %4.2f' %(score), THREAD_NAME )
 
@@ -1144,9 +1277,9 @@ def worker_bundle_cpu(  process_flags, Qd, Qdd, S_thumbnails, S_timestamp, S_lut
         dash_pane = cv2.putText( dash_pane, 'Score: %4.2f, inp#feat2d: %d out#feat2d: %d' %(score, feat2d_curr.shape[1], len(selected_curr_i)), (10,70), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 2 )
         xcanvas = np.concatenate( (xcanvas_2way,dash_pane),  axis=0  )
         cv2.imshow( 'xcanvas', xcanvas )
-        output_dump_path = '/home/mpkuse/Desktop/bundle_adj/dump/'
-        print 'Writing file to folder: ', output_dump_path
-        cv2.imwrite( '%s/%04d_%04d_xcanvas.png' %(output_dump_path, i_curr, i_prev), xcanvas )
+        # output_dump_path = '/home/mpkuse/Desktop/bundle_adj/dump/'
+        # print 'Writing file to folder: ', output_dump_path
+        # cv2.imwrite( '%s/%04d_%04d_xcanvas.png' %(output_dump_path, i_curr, i_prev), xcanvas )
 
         cv2.waitKey(10)
 
