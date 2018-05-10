@@ -47,6 +47,8 @@ public:
   PinholeCamera() { mValid = false; }
   PinholeCamera( string config_file );
 
+  void printCameraInfo( int verbosity );
+
   cv::Mat m_K; //3x3
   cv::Mat m_D; //4x1
 
@@ -88,6 +90,8 @@ public:
   // [Output]
   //    point set in undistorted image space
   void undistortPointSet( const cv::Mat& pts_observed_image_space, cv::Mat& pts_undistorted_image_space );
+  void undistortPointSet( const MatrixXd& pts_observed_image_space, MatrixXd& pts_undistorted_image_space );
+
 
   // Given a) the pose of 2 cameras (to compute fundamental matrix), b) Point matches in observed space.
   // This function undisorts these point sets and correct matches to be consistent with the fundamental matrix.

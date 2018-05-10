@@ -16,7 +16,7 @@ DataManager::DataManager(const DataManager &obj) {
 
 }
 
-void DataManager::setCamera( PinholeCamera& camera )
+void DataManager::setCamera( const PinholeCamera& camera )
 {
   this->camera = camera;
 
@@ -418,9 +418,17 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
     loopClosureEdges.push_back( e );
 
     // Process this nap msg to produce pose from locally tracked dense features
-    // --HERE--
 
-    LocalBundle localBundle = LocalBundle( msg, this->nNodes );
+    // this->camera.printCameraInfo(1);
+    LocalBundle localBundle = LocalBundle( msg, this->nNodes, this->camera );
+    // localBundle.sayHi();
+    // localBundle.multiviewTriangulate(); // this should triangulate multiview using (a) and (b)
+                                        // (a) i_prev+5, i_prev+4, ... i_prev, i_prev-1, i_prev-2, ... i_prev-5
+                                        // (b) i_curr, i_curr-1, i_curr-2, ...
+    localBundle.randomViewTriangulate( 20 );                                          
+
+    // publish
+
     return;
   }
 

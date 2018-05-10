@@ -16,6 +16,7 @@
 #include <vector>
 
 
+
 //opencv
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -31,6 +32,12 @@
 #include <sensor_msgs/Image.h>
 
 #include <nap/NapMsg.h>
+#include "PinholeCamera.h"
+
+#include <Eigen/Dense>
+#include <Eigen/Geometry>
+using namespace Eigen;
+#include <opencv2/core/eigen.hpp>
 
 #include "Node.h"
 
@@ -41,8 +48,10 @@ using namespace cv;
 class LocalBundle {
 
 public:
-  LocalBundle( const nap::NapMsg::ConstPtr& msg, const vector<Node*>& global_nodes   );
+  LocalBundle( const nap::NapMsg::ConstPtr& msg, const vector<Node*>& global_nodes, const PinholeCamera& camera   );
 
+  void multiviewTriangulate();
+  void randomViewTriangulate(int max_itr);
   void sayHi();
 
 private:
@@ -51,13 +60,89 @@ private:
 
 
   void write_image( string fname, const cv::Mat&);
+
+  // Plots [ imA | imaB ] with points correspondences
+  // [Input]
+  //    imA, imB : Images
+  //    ptsA, ptsB : 2xN or 3xN
+  //    idxA, idxB : Index of each of the image. This will appear in status part. No other imppact of these
+  //    mask : binary mask, 1 ==> plot, 0 ==> ignore point. Must be of length N
+  // [Output]
+  //    outImg : Output image
   void plot_point_sets( const cv::Mat& imA, const MatrixXd& ptsA, int idxA,
                         const cv::Mat& imB, const MatrixXd& ptsB, int idxB,
                         const VectorXd& mask,
-                        const vector<string>& msg,
+                        /*const vector<string>& msg,*/
+                        const string& msg,
                       cv::Mat& outImg );
+
+   // Plots im with its points.
+   // [Input]
+   //     im : Image
+   //     pts : 2xN or 3xN
+   //     mask : binary mask, 1 ==> plot, 0 ==> ignore point. Must be of length N
+   //     color : color of the circles. eg. cv::Scalar(255,128,0)
+   //     annotate_pts : true will also overlay putText ie. index of the point on the image
+   //     enable_status_image : true will append a status image of height 100px at the bottom of the image.
+   void plot_point_sets( const cv::Mat& im, const MatrixXd& pts, const VectorXd& mask,
+                  const cv::Scalar& color, bool annotate_pts, bool enable_status_image, const string& msg ,
+                  cv::Mat& outImg );
 
   // Given a pointcloud, get a Eigen::MatrixXd
   void pointcloud_2_matrix( const vector<geometry_msgs::Point32>& ptCld, MatrixXd& G );
+
+  void printMatrixInfo( const string& msg, const cv::Mat& M );
+  void printMatrixInfo( const string& msg, const MatrixXd& M );
+  string type2str(int type);
+
+
+  int n_ptClds;
+  vector<int> _1set, _2set, _3set, _m1set; //list of nodes in each of the types.
+  vector<MatrixXd> uv; // original points for each frame. Same as that received
+  vector<MatrixXd> unvn; // normalized image co-ordinates
+  vector<MatrixXd> uv_undistorted; // undistored points
+
+  MatrixXd adj_mat;
+  MatrixXd adj_mat_dirn; ///< Adjacency matrix
+
+  // pairs info
+  vector<int> global_idx_of_pairs;
+  vector<int> local_idx_of_pairs;
+  vector<int> nap_idx_of_pairs; // index from nap_multiproc.py node
+  vector<int> pair_type;
+  MatrixXd visibility_mask ; //n_pairsx100. 100 is total features
+  int n_pairs;
+
+
+  // Camera
+  const PinholeCamera camera;
+  // All the nodes to get relative pose info for whichever pose needed.
+  const vector<Node*> global_nodes;
+
+
+
+  // Related to Triangulation
+
+  // Given global ids of 2 nodes, this function returns triangulated points
+  // [Input]
+  //    global_idx_i, global_idx_j : global ids
+  //    _uv_i : undistorted uv of node _i 3xN
+  //    _uv_j : undistorted uv of node _j 3xN
+  // [Output]
+  //    _3d : the 3d points 4xN in *** world frame ***
+  void triangulate_points( int global_idx_i, const MatrixXd& _uv_i,
+                           int global_idx_j, const MatrixXd& _uv_j,
+                           MatrixXd& _3d
+                         );
+
+
+   // Given a node index (local), finds the edge type out from this node. Returns the first non-zero value from
+   // corresponding row of adj_mat
+   int edge_type_from_node( int nx );
+
+   int pair_0idx_of_node( int nx ); // looks at local_idx_of_pairs[2*i]
+   int pair_1idx_of_node( int nx ); // looks at local_idx_of_pairs[2*i+1]
+
+
 
 };

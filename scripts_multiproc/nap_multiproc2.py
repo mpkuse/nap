@@ -1130,6 +1130,7 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
                     imA, ptsA, _k[0],   imB, ptsB, _k[1],  AB_mask, disp )
 
             fname = output_dump_path+'/%d_%d_TRAC(Type=%d)_%d_%d.jpg' %( TRACKS.i_curr, TRACKS.i_prev, TRACKS.pair_type[_k] , _k[0], _k[1] )
+            # fname = output_dump_path+'org_%d_%d.jpg' %( _k[0], _k[1] )
             xprint( 'Writing image debug : %s' %(fname), THREAD_NAME )
             cv2.imwrite( fname, xcanvas_dbg )
             # cv2.imshow( 'xcanvas_dbg', xcanvas_dbg )

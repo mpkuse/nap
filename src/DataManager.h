@@ -94,7 +94,7 @@ public:
   DataManager( ros::NodeHandle &nh );
   DataManager(const DataManager &obj);
 
-  void setCamera( PinholeCamera& camera );
+  void setCamera( const PinholeCamera& camera );
   void setVisualizationTopic( string rviz_topic );
 
   ~DataManager();  //< Writes pose graph to file and deallocation

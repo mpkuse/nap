@@ -246,6 +246,42 @@ void PinholeCamera::undistortPointSet( const cv::Mat& pts_observed_image_space, 
 }
 
 
+// [Input]
+//      pts_observed_image_space : 2xN or 3xN matrix
+// [Output]
+//      pts_undistorted_image_space: 3xN matrixXd
+void PinholeCamera::undistortPointSet( const MatrixXd& pts_observed_image_space, MatrixXd& pts_undistorted_image_space )
+{
+  assert( pts_observed_image_space.rows() == 2 || pts_observed_image_space.rows() == 3);
+
+
+  ///////////////// MatrixXd to cv::Mat 2-channel ////////////////////////
+  cv::Mat _2 =  cv::Mat( 1, pts_observed_image_space.cols(), CV_32FC2 );
+  if( _2.empty() )
+    cout << "_2 looks empty.. Thos fatal\n";
+
+  for( int l=0 ; l< pts_observed_image_space.cols() ; l++ )
+  {
+    _2.at<cv::Vec2f>(0,l)[0] = (float)pts_observed_image_space(0,l);
+    _2.at<cv::Vec2f>(0,l)[1] = (float)pts_observed_image_space(1,l);
+  }
+
+  cv::Mat _out;// = cv::Mat::eye(3,3, CV_64FC1);
+  cv::undistortPoints( _2, _out, m_K,  m_D, cv::Mat::eye(3,3, CV_32F), m_K );
+  // print_cvmat_info( "_out", _out );
+
+
+  ///////////////// cv::Mat 2-channel to MatrixXd  ////////////////////////
+  pts_undistorted_image_space = MatrixXd( 3, _out.cols );
+  for( int l=0 ; l<_out.cols ; l++ )
+  {
+    pts_undistorted_image_space(0,l) = (double)_out.at<cv::Vec2f>(0,l)[0];
+    pts_undistorted_image_space(1,l) = (double)_out.at<cv::Vec2f>(0,l)[1];
+    pts_undistorted_image_space(2,l) = (double)1.0;
+  }
+}
+
+
 void PinholeCamera::getUndistortedNormalizedCords( const cv::Mat& pts_observed_image_space, cv::Mat& pts_undist_normed )
 {
   // cout << "Not Implemented undistort_points\n";
@@ -325,6 +361,35 @@ void PinholeCamera::jointUndistortPointSets( const cv::Mat& F,
   }
 
 }
+
+void PinholeCamera::printCameraInfo( int verbosity )
+{
+  cout << "====== PinholeCamera::printCameraInfo ======\n";
+  if( !isValid() )
+    cout << "camera not set\n";
+
+  cout << "config_file: " << this->config_file_name << endl;
+  cout << "Image Rows: " << getImageRows() << endl;
+  cout << "Image Cols: " << getImageCols() << endl;
+  cout << "fx: " << fx() << " ;  fy: " << fy() << endl;
+  cout << "cx: " << cx() << " ;  cy: " << cy() << endl;
+  cout << "(distortion params)k1,k2,p1,p2" << " " <<  k1() << " " <<  k2() << " " <<  p1() << " " <<  p2() << endl;
+
+  if( verbosity >= 1 ) {
+    cout << "--cv::Mat \n";
+    cout << "m_K\n" << m_K << endl;
+    cout << "m_D\n" << m_D << endl;
+
+    cout << "--Eigen::Matrix \n";
+    cout << "e_K\n" << e_K << endl;
+    cout << "e_K\n" << e_D << endl;
+  }
+
+  cout << "================================================\n";
+
+
+}
+
 
 void PinholeCamera::print_cvmat_info( string msg, const cv::Mat& A )
 {
