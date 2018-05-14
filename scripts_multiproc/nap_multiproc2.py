@@ -889,7 +889,9 @@ def create_visualization_image_static( DF, im_alpha, ptset_alpha, idx_alpha, \
 
     _R, _C, _ = im_alpha.shape
 
-    xcanvas_expanded = DF.plot_point_sets(im_alpha, ptset_alpha, im_beta, ptset_beta, mask=pset_mask )
+    # xcanvas_expanded = DF.plot_point_sets(im_alpha, ptset_alpha, im_beta, ptset_beta, mask=pset_mask )
+    xcanvas_expanded = DF.plot_dense_point_sets( im_alpha, ptset_alpha, im_beta, ptset_beta, mask=pset_mask, enable_text=True  )
+
 
     status = np.zeros( (100, xcanvas_expanded.shape[1], 3), dtype='uint8' )
     status = cv2.putText( status, '%d' %(idx_alpha), (10,30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 2 )
@@ -909,7 +911,9 @@ def create_visualization_image( DF, ch_alpha, ptset_alpha, ch_beta, ptset_beta, 
 
     _R, _C, _ = DF.uim[ch_alpha].shape
 
-    xcanvas_expanded = DF.plot_point_sets( DF.uim[ch_alpha], ptset_alpha, DF.uim[ch_beta], ptset_beta, mask=pset_mask )
+    # xcanvas_expanded = DF.plot_point_sets( DF.uim[ch_alpha], ptset_alpha, DF.uim[ch_beta], ptset_beta, mask=pset_mask )
+    xcanvas_expanded = DF.plot_dense_point_sets( DF.uim[ch_alpha], ptset_alpha, DF.uim[ch_beta], ptset_beta, mask=pset_mask, enable_text=True  )
+
 
     status = np.zeros( (100, xcanvas_expanded.shape[1], 3), dtype='uint8' )
     status = cv2.putText( status, '%d' %(DF.global_idx[ch_alpha]), (10,30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 2 )
@@ -983,7 +987,7 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
         # >>> S = np.histogram2d( F[:,0], F[:,1], bins=10 , range=[ [xmin, xmax], [ymin, ymax] ])
         # >>> S[0] is a 10x10 matrix. Taking entropy might tell you if this is uniform of skewed.
 
-        if len(pts_A) < 100 : ## too few dense matches
+        if len(pts_A) < 200 : ## too few dense matches
             xprint( tcol.FAIL+'too few matches (%d) in daisy_dense_matches(). Rejecting this candidate' %(len(pts_A))+tcol.ENDC, THREAD_NAME )
             continue
 
@@ -1003,6 +1007,8 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
             if e % 2 == 0:
                 DF.set_image( S_thumbnails[i_curr+_j], ch=2, d_ch=2, global_idx=i_curr+_j )
                 pts_C, pts_C_NN_scores, pts_C_lowe_mask, f_test_mask = DF.expand_matches( 0,0, pts_A, 2,2, PARAM_W=32 )
+                if f_test_mask.sum() < 0.6*L: #if enough were not tracked than break.
+                    break
                 TRACKS.set( DF.global_idx[0], pts_A, DF.global_idx[2], pts_C, f_test_mask, TYPE=3 )
 
                 # disp = [ '#expand_matches : %d' %(f_test_mask.sum() ) ]
@@ -1014,6 +1020,8 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
             else:
                 DF.set_image( S_thumbnails[i_curr+_j], ch=0, d_ch=0, global_idx=i_curr+_j )
                 pts_A, pts_A_NN_scores, pts_A_lowe_mask, f_test_mask = DF.expand_matches( 2,2, pts_C, 0,0, PARAM_W=32 )
+                if f_test_mask.sum() < 0.6*L: #if enough were not tracked than break.
+                    break
                 TRACKS.set( DF.global_idx[2], pts_C, DF.global_idx[0], pts_A, f_test_mask, TYPE=3 )
 
                 # disp = [ '#expand_matches : %d' %(f_test_mask.sum() ) ]
@@ -1023,11 +1031,7 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
                 # cv2.imwrite( '%s/%04d_%04d_local-track-%04d_%04d.png' \
                 #         %(output_dump_path, i_curr, i_prev,  DF.global_idx[2], DF.global_idx[0]), xcanvas_expanded )
 
-            # cv2.waitKey(200)
-            # if enuf features cannot be tracked then break
-            if f_test_mask.sum() < 0.5*L:
-                xprint( 'break', THREAD_NAME )
-                break
+
 
 
 
@@ -1042,6 +1046,8 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
             if e%2 == 0 :
                 DF.set_image( S_thumbnails[i_prev+_j], ch=3, d_ch=3, global_idx=i_prev+_j )
                 pts_D, pts_D_NN_scores, pts_D_lowe_mask, f_test_mask = DF.expand_matches( 1,1, pts_B, 3,3, PARAM_W=32 )
+                if f_test_mask.sum() < 0.6*L: #if enough were not tracked than break.
+                    break
                 TRACKS.set( DF.global_idx[1], pts_B, DF.global_idx[3], pts_D, f_test_mask, TYPE=2 )
 
                 # disp = [ '#expand_matches : %d' %(f_test_mask.sum() ) ]
@@ -1052,6 +1058,8 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
             else:
                 DF.set_image( S_thumbnails[i_prev+_j], ch=1, d_ch=1, global_idx=i_prev+_j )
                 pts_B, pts_B_NN_scores, pts_B_lowe_mask, f_test_mask = DF.expand_matches( 3,3, pts_D, 1,1, PARAM_W=32 )
+                if f_test_mask.sum() < 0.6*L: #if enough were not tracked than break.
+                    break
                 TRACKS.set( DF.global_idx[3], pts_D, DF.global_idx[1], pts_B, f_test_mask, TYPE=2 )
 
                 # disp = [ '#expand_matches : %d' %(f_test_mask.sum() ) ]
@@ -1061,10 +1069,7 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
                 #             %(output_dump_path, i_curr, i_prev,  DF.global_idx[3], DF.global_idx[1]), xcanvas_expanded )
 
 
-            # if enuf features cannot be tracked then break
-            if f_test_mask.sum() < 0.5*L:
-                xprint( 'break', THREAD_NAME )
-                break
+
 
 
         ####
@@ -1077,6 +1082,8 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
             if e%2 == 0:
                 DF.set_image( S_thumbnails[i_prev+_j], ch=2, d_ch=2, global_idx=i_prev+_j )
                 pts_D, pts_D_NN_scores, pts_D_lowe_mask, f_test_mask = DF.expand_matches( 0,0, pts_B, 2,2, PARAM_W=32 )
+                if f_test_mask.sum() < 0.6*L: #if enough were not tracked than break.
+                    break
                 TRACKS.set( DF.global_idx[0], pts_B, DF.global_idx[2], pts_D, f_test_mask, TYPE=1 )
 
 
@@ -1088,6 +1095,8 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
             else:
                 DF.set_image( S_thumbnails[i_prev+_j], ch=0, d_ch=0, global_idx=i_prev+_j )
                 pts_B, pts_B_NN_scores, pts_B_lowe_mask, f_test_mask = DF.expand_matches( 2,2, pts_D, 0,0, PARAM_W=32 )
+                if f_test_mask.sum() < 0.6*L: #if enough were not tracked than break.
+                    break
                 TRACKS.set( DF.global_idx[2], pts_D, DF.global_idx[0], pts_B, f_test_mask, TYPE=1 )
 
 
@@ -1097,9 +1106,7 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
                 # cv2.imwrite( '%s/%04d_%04d_local-track++--%04d_%04d.png' \
                 #             %(output_dump_path, i_curr, i_prev,  DF.global_idx[2], DF.global_idx[0]), xcanvas_expanded )
 
-            if f_test_mask.sum() < 0.5*L:
-                xprint( 'break', THREAD_NAME )
-                break
+
 
 
         # Step-4 : (optional) cross tracking
@@ -1122,13 +1129,17 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
             ptsA = TRACKS.features_list[ _k[0] ]
             ptsB = TRACKS.features_list[ _k[1] ]
             AB_mask = TRACKS.visibility_table[ _k ]
+            pair_type = TRACKS.pair_type[_k]
             print _k[0], _k[1], AB_mask.sum()
+
 
             # xcanvas_dbg = DF.plot_point_sets( imA, ptsA, imB, ptsB, mask=AB_mask )
             disp = [ '#+expand_matches : %d' %(AB_mask.sum() ) ]
             xcanvas_dbg = create_visualization_image_static( DF,\
                     imA, ptsA, _k[0],   imB, ptsB, _k[1],  AB_mask, disp )
 
+            if pair_type != -1:
+                continue
             fname = output_dump_path+'/%d_%d_TRAC(Type=%d)_%d_%d.jpg' %( TRACKS.i_curr, TRACKS.i_prev, TRACKS.pair_type[_k] , _k[0], _k[1] )
             # fname = output_dump_path+'org_%d_%d.jpg' %( _k[0], _k[1] )
             xprint( 'Writing image debug : %s' %(fname), THREAD_NAME )

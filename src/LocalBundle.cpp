@@ -144,6 +144,12 @@ void LocalBundle::randomViewTriangulate(int max_itr)
   assert( adj_mat_dirn.rows() == adj_mat.rows() );
 
   int n_success = 0;
+
+  // Collection from each random try. This is collected so that DLT can be used for triangulation.
+  vector<Matrix4d> w_T_c1, w_T_c2;
+  vector<MatrixXd> _1_unvn_undistorted, _2_unvn_undistorted;
+  vector<VectorXd> mmask;
+
   for( int itr=0 ; itr<max_itr ; itr++ )
   {
     cout << "---itr="<<itr << "---\n";
@@ -210,7 +216,7 @@ void LocalBundle::randomViewTriangulate(int max_itr)
     if( _2_pairid >= 0 ) {
       _2_globalid = global_idx_of_pairs[2*_2_pairid];
       _2_localid = local_idx_of_pairs[2*_2_pairid];
-      _2_napid = global_idx_of_pairs[2*_2_pairid];
+      _2_napid = nap_idx_of_pairs[2*_2_pairid];
       cout << _2 << " Was found in pair#" << _2_pairid << " in 1st postion\n";
     }
     else {
@@ -236,9 +242,13 @@ void LocalBundle::randomViewTriangulate(int max_itr)
     assert( _2_localid == _2 );
 
 
-    MatrixXd ___3dpts;
-    triangulate_points(  _1_globalid, uv_undistorted[_1], _2_globalid, uv_undistorted[_2], ___3dpts );
-    printMatrixInfo( "___3dpts", ___3dpts );
+    Matrix4d __w_T_c1, __w_T_c2;
+    global_nodes[_1_globalid]->getOriginalTransform(__w_T_c1);//4x4
+    global_nodes[_2_globalid]->getOriginalTransform(__w_T_c2);//4x4
+    w_T_c1.push_back( __w_T_c1 );
+    w_T_c2.push_back( __w_T_c2 );
+    _1_unvn_undistorted.push_back( unvn_undistorted[_1] );
+    _2_unvn_undistorted.push_back( unvn_undistorted[_2] );
 
 
 
@@ -252,21 +262,55 @@ void LocalBundle::randomViewTriangulate(int max_itr)
     cout << "#verified pts in composed_mask = "<< composed_mask.sum() << endl;
 
 
-    // Plot the tracked points using the composed_mask.
-    // TODO
-
-    // Reproject 3d points on each of the views and plot.
-    // TODO
+    mmask.push_back( composed_mask );
 
 
-    // Store composed_mask and 3d points in each step for Kalman filter.
+    // Visualize this _1, _2
+    // cv::Mat dst;
+    // plot_point_sets( global_nodes[_1_globalid]->getImageRef(), uv[_1],  _1_napid,
+    //                  global_nodes[_2_globalid]->getImageRef(), uv[_2],  _2_napid,
+    //                  composed_mask, cv::Scalar(0,0,255), true, "", dst
+    //               );
+    // write_image( to_string(_1_napid) + "_" + to_string(_2_napid)+"_observed.png" , dst );
 
 
   }
   cout << "n_success="<< n_success << " max_itr="<< max_itr << endl;
+  assert( n_success == w_T_c1.size() );
+  assert( n_success == w_T_c2.size() );
+  assert( n_success == _1_unvn_undistorted.size() );
+  assert( n_success == _2_unvn_undistorted.size() );
+  assert( n_success == mmask.size() );
+
 
 
   // Kalman filter to get better estimates of 3d points.
+  MatrixXd w_X_triang; //triangulated 3d points in world co-prdinates from multiple views
+  robust_triangulation( w_T_c1, w_T_c2, _1_unvn_undistorted, _2_unvn_undistorted, mmask, w_X_triang );
+
+
+  // Plot the triangulated 3d points on all the available views.
+  for( int v=0 ; v<n_ptClds ; v++ )
+  {
+    //plot observed points
+    cv::Mat outImg;
+    int node_gid = global_idx_of_nodes[v];
+    int node_napid = nap_idx_of_nodes[v];
+    string msg;
+    msg = "lid="+to_string( v) + "; gid="+to_string(node_gid) + "; nap_id="+to_string(node_napid);
+    plot_dense_point_sets( global_nodes[node_gid]->getImageRef(), uv[v], visibility_mask_nodes.row(v),
+                       true, true, msg, outImg );
+
+    //plot reprojected points
+
+
+    //save
+    assert( _m1set.size() == 2 );
+    write_image( to_string(nap_idx_of_nodes[_m1set[0]])+"_"+to_string(nap_idx_of_nodes[_m1set[1]])+"___"+to_string(node_napid)+"_observed.png" , outImg );
+
+  }
+
+
 }
 
 
@@ -414,6 +458,7 @@ LocalBundle::LocalBundle( const nap::NapMsg::ConstPtr& msg,
 
   /////////////////////////// loop on tracked points /////////////////////////////
   this->n_ptClds = msg->bundle.size();
+  this->n_features = msg->bundle[0].points.size();
   for( int i=0 ; i<msg->bundle.size() ; i++ )
   {
     cout << "---\nPointbundle "<< i << endl;
@@ -424,12 +469,21 @@ LocalBundle::LocalBundle( const nap::NapMsg::ConstPtr& msg,
     pointcloud_2_matrix(msg->bundle[i].points, e_ptsA  );
     uv.push_back( e_ptsA );
 
-    // use the camera to get normalized co-ordinates and undistorded co-ordinates
 
     MatrixXd e_ptsA_undistored;
-    this->camera.undistortPointSet( e_ptsA, e_ptsA_undistored );
+    this->camera.undistortPointSet( e_ptsA, e_ptsA_undistored, false );
     printMatrixInfo( "e_ptsA_undistored", e_ptsA_undistored);
     uv_undistorted.push_back( e_ptsA_undistored );
+
+    // use the camera to get normalized co-ordinates and undistorded co-ordinates
+    MatrixXd e_ptsA_undistored_normalized;
+    this->camera.undistortPointSet( e_ptsA, e_ptsA_undistored_normalized, true );
+    printMatrixInfo( "e_ptsA_undistored_normalized", e_ptsA_undistored_normalized);
+    unvn_undistorted.push_back( e_ptsA_undistored_normalized );
+
+
+    global_idx_of_nodes.push_back( seq );
+    nap_idx_of_nodes.push_back(seq_debug);
 
 
     cout << "pointcloud : idx=" << seq <<  "\t#pts=" <<  msg->bundle[i].points.size()  << "\tdebug_idx=" << seq_debug <<  "\tvalid_image: " << global_nodes[seq]->valid_image()  << endl;
@@ -442,6 +496,7 @@ LocalBundle::LocalBundle( const nap::NapMsg::ConstPtr& msg,
   cout << "Setting adj_matrix dimensions\n";
   this->adj_mat = MatrixXd::Zero(this->n_ptClds, this->n_ptClds);
   this->adj_mat_dirn = MatrixXd::Zero(this->n_ptClds, this->n_ptClds);
+  visibility_mask_nodes = MatrixXd::Ones( n_ptClds, n_features  );
   printMatrixInfo( "adj_mat", adj_mat );
   printMatrixInfo( "adj_mat_dirn", adj_mat_dirn );
   for( int i=0 ; i<N_pairs ; i++ )
@@ -478,15 +533,21 @@ LocalBundle::LocalBundle( const nap::NapMsg::ConstPtr& msg,
       case 1:
         _1set.push_back( _i );
         _1set.push_back( _j );
+        break;
       case 2:
         _2set.push_back( _i );
         _2set.push_back( _j );
+        break;
       case 3:
         _3set.push_back( _i );
         _3set.push_back( _j );
+        break;
       case -1:
         _m1set.push_back( _i );
         _m1set.push_back( _j );
+        break;
+      default:
+        assert( false );
 
     }
     // ttype:
@@ -494,6 +555,11 @@ LocalBundle::LocalBundle( const nap::NapMsg::ConstPtr& msg,
     // 1  : iprev+j
     // 2  : iprev-j
     // 3  : icurr-j
+
+
+    // Set pair visibility mask into node visibility mask
+    visibility_mask_nodes.row(_i) = visibility_mask_nodes.row(_i).cwiseProduct(   visibility_mask.row(i)   );
+    visibility_mask_nodes.row(_j) = visibility_mask_nodes.row(_j).cwiseProduct(   visibility_mask.row(i)   );
 
 
 
@@ -536,6 +602,64 @@ void LocalBundle::write_image( string fname, const cv::Mat& img)
     cv::imwrite( (base+fname).c_str(), img );
 }
 
+//////////////////////////////////////// Plottting /////////////////////////////////
+
+void LocalBundle::plot_dense_point_sets( const cv::Mat& im, const MatrixXd& pts, const VectorXd& mask,
+            bool enable_text, bool enable_status_image, const string& msg ,
+            cv::Mat& dst )
+{
+  assert( pts.rows() == 2 || pts.rows() == 3 );
+  assert( mask.size() == pts.cols() );
+
+  cv::Mat outImg = im.clone();
+  ColorLUT lut = ColorLUT();
+
+  int count = 0 ;
+  int n_every = pts.cols()/75; //10
+  for( int kl=0 ; kl<pts.cols() ; kl++ )
+  {
+    if( mask(kl) == 0 )
+      continue;
+
+      count++;
+
+      cv::Point2d A( pts(0,kl), pts(1,kl) );
+
+      cv::Scalar color1 = lut.get_color( A.x / 10 ) ; // cv::Scalar( 255,255,0);
+      cv::Scalar color2 = lut.get_color( A.y / 10 ) ;
+      cv::Scalar color = cv::Scalar( (color1[2]+color2[2])/2 , (color1[1]+color2[1])/2, (color1[0]+color2[0])/2 );
+
+      //// >>>c = lut.get_color( int( pt1[xi][0] / 10 ) ) + lut.get_color( int( pt1[xi][1] / 10 ) )
+      //// >>>c = c / 2
+      cv::circle( outImg, A, 1, color, -1 );
+
+      if( enable_text && kl%n_every == 0 ) // if write text only on 10% of the points to avoid clutter.
+        cv::putText( outImg, to_string(kl), A, cv::FONT_HERSHEY_SIMPLEX, 0.3, color, 1 );
+  }
+
+
+  // Make status image
+  cv::Mat status = cv::Mat(100, outImg.cols, CV_8UC3, cv::Scalar(0,0,0) );
+  string s = "Plotted "+to_string(count)+" of "+to_string(mask.size());
+
+
+  if( !enable_status_image ) {
+    cv::putText( outImg, s.c_str(), cv::Point(10,30), cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(0,0,255), 2 );
+    return;
+  }
+
+  cv::putText( status, s.c_str(), cv::Point(10,30), cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255,255,255), 2 );
+
+
+  if( msg.length() > 0 )
+    cv::putText( status, msg.c_str(), cv::Point(10,70), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255,255,255), 2 );
+
+  cv::vconcat( outImg, status, dst );
+
+
+}
+
+
 void LocalBundle::plot_point_sets( const cv::Mat& im, const MatrixXd& pts, const VectorXd& mask,
             const cv::Scalar& color, bool annotate, bool enable_status_image,
             const string& msg ,
@@ -576,7 +700,7 @@ void LocalBundle::plot_point_sets( const cv::Mat& im, const MatrixXd& pts, const
 
 
   if( msg.length() > 0 )
-    cv::putText( status, msg.c_str(), cv::Point(10,70), cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255,255,255), 2 );
+    cv::putText( status, msg.c_str(), cv::Point(10,70), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255,255,255), 2 );
 
   cv::vconcat( outImg, status, dst );
 
@@ -585,7 +709,7 @@ void LocalBundle::plot_point_sets( const cv::Mat& im, const MatrixXd& pts, const
 
 void LocalBundle::plot_point_sets( const cv::Mat& imA, const MatrixXd& ptsA, int idxA,
                       const cv::Mat& imB, const MatrixXd& ptsB, int idxB,
-                      const VectorXd& mask,
+                      const VectorXd& mask, const cv::Scalar& color, bool annotate_pts,
                       /*const vector<string>& msg,*/
                       const string& msg,
                     cv::Mat& dst )
@@ -611,10 +735,16 @@ void LocalBundle::plot_point_sets( const cv::Mat& imA, const MatrixXd& ptsA, int
     cv::Point2d A( ptsA(0,kl), ptsA(1,kl) );
     cv::Point2d B( ptsB(0,kl), ptsB(1,kl) );
 
-    cv::circle( outImg, A, 2, cv::Scalar(0,255,0), -1 );
-    cv::circle( outImg, B+cv::Point2d(imA.cols,0), 2, cv::Scalar(0,255,0), -1 );
+    cv::circle( outImg, A, 2,color, -1 );
+    cv::circle( outImg, B+cv::Point2d(imA.cols,0), 2,color, -1 );
 
     cv::line( outImg,  A, B+cv::Point2d(imA.cols,0), cv::Scalar(255,0,0) );
+
+    if( annotate_pts )
+    {
+      cv::putText( outImg, to_string(kl), A, cv::FONT_HERSHEY_SIMPLEX, 0.3, color, 1 );
+      cv::putText( outImg, to_string(kl), B+cv::Point2d(imA.cols,0), cv::FONT_HERSHEY_SIMPLEX, 0.3, color, 1 );
+    }
   }
 
 
@@ -633,7 +763,7 @@ void LocalBundle::plot_point_sets( const cv::Mat& imA, const MatrixXd& ptsA, int
 
 }
 
-
+//////////////////////////////////////// END Plottting /////////////////////////////////
 void LocalBundle::pointcloud_2_matrix( const vector<geometry_msgs::Point32>& ptCld, MatrixXd& G )
 {
   int N = ptCld.size() ;
@@ -718,4 +848,84 @@ string LocalBundle::type2str(int type) {
   r += (chans+'0');
 
   return r;
+}
+
+
+
+void LocalBundle::robust_triangulation( const vector<Matrix4d>& w_T_c1,
+                           const vector<Matrix4d>& w_T_c2,
+                           const vector<MatrixXd>& _1_unvn_undistorted,
+                           const vector<MatrixXd>& _2_unvn_undistorted,
+                           const vector<VectorXd>& mask,
+                           MatrixXd& result_3dpts_in_world_cords
+         )
+{
+
+  cout << "<><><><><>><><><><><><><><><><>><><>\nIn function  LocalBundle::robust_triangulation\n";
+  // Loop over each point
+  int n_pts = _1_unvn_undistorted[0].cols();
+  int n_samples = mask.size();
+
+  result_3dpts_in_world_cords = MatrixXd::Zero( 4, n_pts );
+  assert( mask.size() == n_samples );
+  assert( _2_unvn_undistorted.size() == n_samples );
+  assert( _1_unvn_undistorted.size() == n_samples );
+  assert( w_T_c1.size() == n_samples );
+  assert( w_T_c2.size() == n_samples );
+  assert( _1_unvn_undistorted[0].rows() == 2 || _1_unvn_undistorted[0].rows() == 3 );
+  assert( _2_unvn_undistorted[0].rows() == 2 || _2_unvn_undistorted[0].rows() == 3 );
+
+
+  cout << "There are total of "<< n_pts << " points to triangulate from " << n_samples << " view-pairs\n";
+
+  int pt_id = 0; //later loop for every point. Be careful with mask of this pair at this point.
+  for( int pt_id=0 ; pt_id < n_pts ; pt_id++)
+  {
+    MatrixXd A = MatrixXd::Zero(4*n_samples, 4 );
+    for( int s=0 ; s<n_samples ; s++ ) //loop over pairs
+    {
+
+      VectorXd this_mask = mask[s];
+      if( mask[s](pt_id) == 0  )
+        continue;
+
+      double u, v, ud, vd;
+      u = (_1_unvn_undistorted[s])(0,pt_id);
+      v = (_1_unvn_undistorted[s])(1,pt_id);
+      ud = (_2_unvn_undistorted[s])(0,pt_id);
+      vd = (_2_unvn_undistorted[s])(1,pt_id);
+
+      // Do this calculation only when mask of this pair at this pt_id is non-zero.
+
+      Matrix4d P, Pd;
+      P = (w_T_c1[s]).inverse();
+      Pd = (w_T_c2[s]).inverse();
+
+      A.row( 4*s )   = -P.row(1)  + v*P.row(2);
+      A.row( 4*s+1 ) =  P.row(0)  - u*P.row(2);
+      A.row( 4*s+2 ) = -Pd.row(1) + vd*Pd.row(2);
+      A.row( 4*s+3 ) =  Pd.row(0) - ud*Pd.row(2);
+
+    }
+
+    // From Chap. 12 (Triangulation) from Hartley-Zizzerman.
+    JacobiSVD<MatrixXd> svd( A, ComputeThinU | ComputeThinV );
+    MatrixXd Cp = svd.matrixU() * svd.singularValues().asDiagonal() * svd.matrixV().transpose();
+    MatrixXd diff = Cp - A;
+    // cout << "diff          : " << diff.array().abs().sum() << endl;
+    // cout << "singularValues: " << svd.singularValues() << endl;
+    // printMatrixInfo( "A", A );
+    // printMatrixInfo( "U", svd.matrixU() );
+    // printMatrixInfo( "S", svd.singularValues().asDiagonal() );
+    // printMatrixInfo( "V", svd.matrixV() );
+    MatrixXd V = svd.matrixV();
+
+
+    // Last col of V. This is quite standard way to solve a homogeneous equation. Good explaination in Appendix 5.4 of Hartley-Zizzerman book
+    // Vector4d X_3d = V.col(3);
+    result_3dpts_in_world_cords.col( pt_id ) = V.col(3);
+
+
+  }
+  cout << "<><><><><>><><><><><><><><><><>><><>\nDone with function  LocalBundle::robust_triangulation\n";
 }

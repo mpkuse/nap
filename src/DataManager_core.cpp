@@ -425,7 +425,7 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
     // localBundle.multiviewTriangulate(); // this should triangulate multiview using (a) and (b)
                                         // (a) i_prev+5, i_prev+4, ... i_prev, i_prev-1, i_prev-2, ... i_prev-5
                                         // (b) i_curr, i_curr-1, i_curr-2, ...
-    localBundle.randomViewTriangulate( 20 );                                          
+    localBundle.randomViewTriangulate( 50 );                                          
 
     // publish
 

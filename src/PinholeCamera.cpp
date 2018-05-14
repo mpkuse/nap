@@ -174,6 +174,12 @@ void PinholeCamera::normalizedImCords_2_imageCords( const MatrixXd& im_pts, Matr
 }
 
 
+void PinholeCamera::distortNormalizedUndistortedPoints( const MatrixXd& in_, MatrixXd& out_ )
+{
+  normalizedImCords_2_imageCords( in_, out_ );
+}
+
+
 // Input 3d points in homogeneous co-ordinates 4xN matrix.
 void PinholeCamera::perspectiveProject3DPoints( cv::Mat& _3dpts,
                                   cv::Mat& out_pts )
@@ -250,15 +256,14 @@ void PinholeCamera::undistortPointSet( const cv::Mat& pts_observed_image_space, 
 //      pts_observed_image_space : 2xN or 3xN matrix
 // [Output]
 //      pts_undistorted_image_space: 3xN matrixXd
-void PinholeCamera::undistortPointSet( const MatrixXd& pts_observed_image_space, MatrixXd& pts_undistorted_image_space )
+void PinholeCamera::undistortPointSet( const MatrixXd& pts_observed_image_space, MatrixXd& pts_undistorted_image_space, bool return_normalized_cordinates )
 {
   assert( pts_observed_image_space.rows() == 2 || pts_observed_image_space.rows() == 3);
 
 
   ///////////////// MatrixXd to cv::Mat 2-channel ////////////////////////
   cv::Mat _2 =  cv::Mat( 1, pts_observed_image_space.cols(), CV_32FC2 );
-  if( _2.empty() )
-    cout << "_2 looks empty.. Thos fatal\n";
+  assert( !_2.empty() );
 
   for( int l=0 ; l< pts_observed_image_space.cols() ; l++ )
   {
@@ -267,7 +272,12 @@ void PinholeCamera::undistortPointSet( const MatrixXd& pts_observed_image_space,
   }
 
   cv::Mat _out;// = cv::Mat::eye(3,3, CV_64FC1);
-  cv::undistortPoints( _2, _out, m_K,  m_D, cv::Mat::eye(3,3, CV_32F), m_K );
+  if( return_normalized_cordinates ) {
+    cv::undistortPoints( _2, _out, m_K,  m_D, cv::Mat::eye(3,3, CV_32F) );
+  }
+  else {
+    cv::undistortPoints( _2, _out, m_K,  m_D, cv::Mat::eye(3,3, CV_32F), m_K );
+  }
   // print_cvmat_info( "_out", _out );
 
 

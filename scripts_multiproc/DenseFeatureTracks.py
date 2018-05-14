@@ -42,7 +42,7 @@ class DenseFeatureTracks:
         self.raw_data = {}
         self.visibility_table = {}
         self.feature_list = {}
-        self.pair_type = {} 
+        self.pair_type = {}
 
     def _xprint( self, header, msg ):
         # return

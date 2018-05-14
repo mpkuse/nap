@@ -131,6 +131,50 @@ class DaisyFlow:
 
 
     ########################### Plotting ################################################
+    def plot_dense_point_sets( self, im1, pt1, im2, pt2, mask=None, enable_text=False, enable_lines=False ):
+        assert len(pt1) == len(pt2)
+        xcanvas = np.concatenate( (im1, im2), axis=1 )
+
+        lut = ColorLUT()
+
+
+        for xi in range( len(pt1) ):
+            if (mask is not None) and (mask[xi,0] == 0):
+                continue
+
+
+
+            # Way-1
+            # c = lut.float_2_rgb( xi%80, 0, 80 )
+
+            # Way-2
+            c = lut.get_color( int( pt1[xi][0] / 10 ) ) + lut.get_color( int( pt1[xi][1] / 10 ) )
+            c = c / 2
+
+            # Way-3
+            # c = lut.float_2_rgb( int( pt1[xi][0]  ) * 320  +   int( pt1[xi][0] ), 0, 320*240  )
+            # c = lut.float_2_rgb( xi, 0, len(pt1) )
+
+            line_color = 255*np.array(c).astype('uint8')
+            line_color = ( int(line_color[2]), int(line_color[1]), int(line_color[0]) )
+            circle_color = line_color
+            text_color = line_color
+
+
+            cv2.circle( xcanvas, tuple(pt1[xi]), 1, circle_color, -1 )
+            ptb = tuple(np.array(pt2[xi]) + [im1.shape[1],0])
+            cv2.circle( xcanvas, ptb, 1, circle_color, -1 )
+
+            if enable_lines:
+                cv2.line( xcanvas, tuple(pt1[xi]), ptb, line_color)  #true color is blue
+
+
+            if enable_text and np.random.random() < .1:
+                color_com = text_color #(0,0,255)
+                cv2.putText( xcanvas, str(xi), tuple(pt1[xi]), cv2.FONT_HERSHEY_SIMPLEX, .3, color_com )
+                cv2.putText( xcanvas, str(xi), ptb, cv2.FONT_HERSHEY_SIMPLEX, .3, color_com )
+        return xcanvas
+
     def plot_point_sets( self, im1, pt1, im2, pt2, mask=None, enable_text=False, mark=None, markmin=None, markmax=None ):
         assert len(pt1) == len(pt2)
         xcanvas = np.concatenate( (im1, im2), axis=1 )
@@ -234,6 +278,7 @@ class DaisyFlow:
 
         if printing:
             print 'Total time (ms) :', 1000.*(time.time() - startTime)
+
         return Z
 
 
@@ -388,6 +433,20 @@ class DaisyFlow:
         Z_prev = self._prominent_clusters(ch1)
         # self.xprint( 'daisy_dense_matches_with_scores', 'Prominent clusters computation took (ms): %f' %( 1000. * ( time.time() - startProminentClusters  ) ) )
         self._print_time( 'daisy_dense_matches_with_scores', 'Prominent clusters', startProminentClusters, time.time() )
+
+
+        # Step 0: Z_curr.shape, Z_prev.shape 80x60. Values in it is the clusterID of top-5 clusters.
+        #       Idea to merge the rest of clusters into one to get even more dense matches
+        #       This was added on 14th May, 2018
+        if True: # Enable/disable merging smaller clusters
+            ____K = (self.uim_lut[ch0]).max() + 1
+            for hj in range(____K-1, 0, -1): #range(1,____K):
+                if (Z_curr == hj).sum() == 0 and (Z_prev == hj).sum() == 0:
+                    # Make all the best of the clusters as hj. ie. replace all the zeros with hj
+                    Z_curr[ Z_curr == 0 ] = hj
+                    Z_prev[ Z_prev == 0 ] = hj
+                    # code.interact( local=locals() )
+                    break
 
 
 

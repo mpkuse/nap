@@ -90,7 +90,7 @@ public:
   // [Output]
   //    point set in undistorted image space
   void undistortPointSet( const cv::Mat& pts_observed_image_space, cv::Mat& pts_undistorted_image_space );
-  void undistortPointSet( const MatrixXd& pts_observed_image_space, MatrixXd& pts_undistorted_image_space );
+  void undistortPointSet( const MatrixXd& pts_observed_image_space, MatrixXd& pts_undistorted_image_space, bool return_normalized_cordinates );
 
 
   // Given a) the pose of 2 cameras (to compute fundamental matrix), b) Point matches in observed space.
@@ -118,6 +118,14 @@ public:
    // in normalized image co-ordinates. This function shall doDistortion() followed
    // by scaling with camera intrinsic to give point these points in distorted_image_cords
    void normalizedImCords_2_imageCords( const MatrixXd& in_, MatrixXd& out_ );
+
+   // Given undistorted-normalized co-ordinates, distorts the points followed
+   // by multiplication of camera matrix
+   //   [Input]:
+   //       undistorted and normalized points
+   //   [Output]:
+   //       distorted image co-ordinates
+   void distortNormalizedUndistortedPoints( const MatrixXd& in_, MatrixXd& out_ );
 
 
 private:

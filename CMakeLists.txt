@@ -79,6 +79,7 @@ add_executable( pose_graph_opt_node
                     src/DataManager_looppose_computation.cpp
                     src/DataManager_ceres.cpp
                     src/LocalBundle.cpp
+                    src/ColorLUT.cpp
                     src/cnpy.cpp
               )
 

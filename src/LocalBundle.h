@@ -31,15 +31,19 @@
 #include <geometry_msgs/Point32.h>
 #include <sensor_msgs/Image.h>
 
-#include <nap/NapMsg.h>
-#include "PinholeCamera.h"
+
 
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
+#include <Eigen/Core>
+#include <Eigen/SVD>
 using namespace Eigen;
 #include <opencv2/core/eigen.hpp>
 
+#include <nap/NapMsg.h>
+#include "PinholeCamera.h"
 #include "Node.h"
+#include "ColorLUT.h"
 
 using namespace std;
 using namespace cv;
@@ -71,7 +75,7 @@ private:
   //    outImg : Output image
   void plot_point_sets( const cv::Mat& imA, const MatrixXd& ptsA, int idxA,
                         const cv::Mat& imB, const MatrixXd& ptsB, int idxB,
-                        const VectorXd& mask,
+                        const VectorXd& mask,const cv::Scalar& color, bool annotate_pts,
                         /*const vector<string>& msg,*/
                         const string& msg,
                       cv::Mat& outImg );
@@ -88,6 +92,14 @@ private:
                   const cv::Scalar& color, bool annotate_pts, bool enable_status_image, const string& msg ,
                   cv::Mat& outImg );
 
+
+
+   // Plotting a point set on single image. Tailored to plot large number of points. Colors of each
+   // point smartly set
+  void plot_dense_point_sets( const cv::Mat& im, const MatrixXd& pts, const VectorXd& mask,
+              bool enable_text, bool enable_status_image, const string& msg ,
+              cv::Mat& dst );
+
   // Given a pointcloud, get a Eigen::MatrixXd
   void pointcloud_2_matrix( const vector<geometry_msgs::Point32>& ptCld, MatrixXd& G );
 
@@ -97,10 +109,14 @@ private:
 
 
   int n_ptClds;
-  vector<int> _1set, _2set, _3set, _m1set; //list of nodes in each of the types.
+  vector<int> _1set, _2set, _3set, _m1set; //list of nodes in each of the types. TODO. currently not in use
   vector<MatrixXd> uv; // original points for each frame. Same as that received
-  vector<MatrixXd> unvn; // normalized image co-ordinates
+  vector<MatrixXd> unvn_undistorted; // normalized image co-ordinates. Undistorted points.
   vector<MatrixXd> uv_undistorted; // undistored points
+  vector<int> global_idx_of_nodes; //global index of nodes
+  vector<int> nap_idx_of_nodes; //nap index of nodes
+
+  MatrixXd visibility_mask_nodes; // n_ptsClds x 100. 100 is total features.
 
   MatrixXd adj_mat;
   MatrixXd adj_mat_dirn; ///< Adjacency matrix
@@ -112,6 +128,7 @@ private:
   vector<int> pair_type;
   MatrixXd visibility_mask ; //n_pairsx100. 100 is total features
   int n_pairs;
+  int n_features;
 
 
   // Camera
@@ -143,6 +160,18 @@ private:
    int pair_0idx_of_node( int nx ); // looks at local_idx_of_pairs[2*i]
    int pair_1idx_of_node( int nx ); // looks at local_idx_of_pairs[2*i+1]
 
+
+
+
+
+   // RObist triangulation (DLT)
+   void robust_triangulation( const vector<Matrix4d>& w_T_c1,
+                              const vector<Matrix4d>& w_T_c2,
+                              const vector<MatrixXd>& _1_unvn_undistorted,
+                              const vector<MatrixXd>& _2_unvn_undistorted,
+                              const vector<VectorXd>& mask,
+                              MatrixXd& result_3dpts
+            );
 
 
 };
