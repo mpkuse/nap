@@ -287,7 +287,10 @@ void LocalBundle::randomViewTriangulate(int max_itr)
   // Kalman filter to get better estimates of 3d points.
   MatrixXd w_X_triang; //triangulated 3d points in world co-prdinates from multiple views
   robust_triangulation( w_T_c1, w_T_c2, _1_unvn_undistorted, _2_unvn_undistorted, mmask, w_X_triang );
-
+  w_X_triang.row(0).array() /= w_X_triang.row(3).array();
+  w_X_triang.row(1).array() /= w_X_triang.row(3).array();
+  w_X_triang.row(2).array() /= w_X_triang.row(3).array();
+  w_X_triang.row(3).array() /= w_X_triang.row(3).array();
 
   // Plot the triangulated 3d points on all the available views.
   for( int v=0 ; v<n_ptClds ; v++ )
@@ -301,12 +304,27 @@ void LocalBundle::randomViewTriangulate(int max_itr)
     plot_dense_point_sets( global_nodes[node_gid]->getImageRef(), uv[v], visibility_mask_nodes.row(v),
                        true, true, msg, outImg );
 
-    //plot reprojected points
-
 
     //save
     assert( _m1set.size() == 2 );
     write_image( to_string(nap_idx_of_nodes[_m1set[0]])+"_"+to_string(nap_idx_of_nodes[_m1set[1]])+"___"+to_string(node_napid)+"_observed.png" , outImg );
+
+
+    //plot reprojected points
+    MatrixXd v_X, reproj_pts;
+    Matrix4d w_T_gid;
+    global_nodes[node_gid]->getOriginalTransform(w_T_gid);//4x4
+
+    v_X = w_T_gid.inverse() * w_X_triang;
+
+    camera.perspectiveProject3DPoints( v_X, reproj_pts);
+    plot_dense_point_sets( global_nodes[node_gid]->getImageRef(), reproj_pts, visibility_mask_nodes.row(v),
+                       true, true, msg, outImg );
+
+    //save
+    write_image( to_string(nap_idx_of_nodes[_m1set[0]])+"_"+to_string(nap_idx_of_nodes[_m1set[1]])+"___"+to_string(node_napid)+"_reproj.png" , outImg );
+
+
 
   }
 
@@ -625,12 +643,15 @@ void LocalBundle::plot_dense_point_sets( const cv::Mat& im, const MatrixXd& pts,
 
       cv::Point2d A( pts(0,kl), pts(1,kl) );
 
-      cv::Scalar color1 = lut.get_color( A.x / 10 ) ; // cv::Scalar( 255,255,0);
-      cv::Scalar color2 = lut.get_color( A.y / 10 ) ;
-      cv::Scalar color = cv::Scalar( (color1[2]+color2[2])/2 , (color1[1]+color2[1])/2, (color1[0]+color2[0])/2 );
-
       //// >>>c = lut.get_color( int( pt1[xi][0] / 10 ) ) + lut.get_color( int( pt1[xi][1] / 10 ) )
       //// >>>c = c / 2
+      // cv::Scalar color1 = lut.get_color( A.x / 10 ) ; // cv::Scalar( 255,255,0);
+      // cv::Scalar color2 = lut.get_color( A.y / 10 ) ;
+      // cv::Scalar color = cv::Scalar( (color1[2]+color2[2])/2 , (color1[1]+color2[1])/2, (color1[0]+color2[0])/2 );
+
+      cv::Scalar color = lut.get_color( kl % 64 );
+
+
       cv::circle( outImg, A, 1, color, -1 );
 
       if( enable_text && kl%n_every == 0 ) // if write text only on 10% of the points to avoid clutter.
