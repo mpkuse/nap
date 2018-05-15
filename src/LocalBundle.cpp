@@ -8,6 +8,7 @@ void LocalBundle::sayHi()
   cout << "#nodes in global_nodes = " << global_nodes.size() << endl;
 
   int count = 0;
+  /*
   for( int i=0 ; i< global_nodes.size() ; i++ ) {
     Matrix4d M;
     global_nodes[i]->getOriginalTransform(M);
@@ -19,10 +20,61 @@ void LocalBundle::sayHi()
       break;
 
   }
+  */
 
 
   cout << "n_pairs : " << n_pairs << endl;
   cout << "n_ptClds: " << uv.size() << endl;
+
+
+  assert( this->isValid_w_X_iprev_triangulated );
+  assert( this->isValid_w_X_icurr_triangulated );
+  // Plot the triangulated 3d points on all the available views.
+  for( int v=0 ; v<n_ptClds ; v++ )
+  {
+    //plot observed points
+    cv::Mat outImg;
+    int node_gid = global_idx_of_nodes[v];
+    int node_napid = nap_idx_of_nodes[v];
+    string msg;
+    msg = "lid="+to_string( v) + "; gid="+to_string(node_gid) + "; nap_id="+to_string(node_napid);
+    plot_dense_point_sets( global_nodes[node_gid]->getImageRef(), uv[v], visibility_mask_nodes.row(v),
+                       true, true, msg, outImg );
+
+
+    //save
+    assert( _m1set.size() == 2 );
+    write_image( to_string(nap_idx_of_nodes[_m1set[0]])+"_"+to_string(nap_idx_of_nodes[_m1set[1]])+"___"+to_string(node_napid)+"_observed.png" , outImg );
+
+
+    //plot reprojected points (3d points being generated from iprev-5 to iprev+5)
+    MatrixXd v_X, reproj_pts;
+    Matrix4d w_T_gid;
+    global_nodes[node_gid]->getOriginalTransform(w_T_gid);//4x4
+
+    v_X = w_T_gid.inverse() * w_X_iprev_triangulated;
+
+    camera.perspectiveProject3DPoints( v_X, reproj_pts);
+    plot_dense_point_sets( global_nodes[node_gid]->getImageRef(), reproj_pts, visibility_mask_nodes.row(v),
+                       true, true, msg, outImg );
+
+    //save
+    write_image( to_string(nap_idx_of_nodes[_m1set[0]])+"_"+to_string(nap_idx_of_nodes[_m1set[1]])+"___"+to_string(node_napid)+"_reproj_3diprev.png" , outImg );
+
+
+    // reproject 3d points generated from icurr-5 to icurr
+    v_X = w_T_gid.inverse() * w_X_icurr_triangulated;
+
+    camera.perspectiveProject3DPoints( v_X, reproj_pts);
+    plot_dense_point_sets( global_nodes[node_gid]->getImageRef(), reproj_pts, visibility_mask_nodes.row(v),
+                       true, true, msg, outImg );
+
+    //save
+    write_image( to_string(nap_idx_of_nodes[_m1set[0]])+"_"+to_string(nap_idx_of_nodes[_m1set[1]])+"___"+to_string(node_napid)+"_reproj_3dicurr.png" , outImg );
+
+
+
+  }
 }
 
 
@@ -123,8 +175,10 @@ int LocalBundle::pair_1idx_of_node( int nx )
   return -1;
 }
 
+// #define randomViewTriangulate_debug( msg )  msg ;
+#define randomViewTriangulate_debug( msg )  ;
 
-void LocalBundle::randomViewTriangulate(int max_itr)
+void LocalBundle::randomViewTriangulate(int max_itr, int flag )
 {
   // Pseudo code :
   // 1. a,b = randomly pick 2 nodes suchthat (edgefrom-a.type==1 or edgefrom-a.type==2 ) and (edgefrom-b.type==1 or edgefrom-b.type==2)
@@ -134,14 +188,17 @@ void LocalBundle::randomViewTriangulate(int max_itr)
   // 5. store( mask, _3dpt )
   //    repeat
 
+  assert( flag == 0 || flag == 1);
 
-  printMatrixInfo( "adj_mat", adj_mat );
+  // printMatrixInfo( "adj_mat", adj_mat );
   assert( n_pairs > 0 );
   assert( n_ptClds > 0 );
   assert( adj_mat.rows() == n_ptClds );
   assert( adj_mat.rows() == adj_mat.cols() );
   assert( adj_mat_dirn.rows() == adj_mat_dirn.cols() );
   assert( adj_mat_dirn.rows() == adj_mat.rows() );
+
+  assert( _1set.size() * _2set.size() * _3set.size() * _m1set.size() > 0 ); //everyone should be +ve
 
   int n_success = 0;
 
@@ -150,41 +207,94 @@ void LocalBundle::randomViewTriangulate(int max_itr)
   vector<MatrixXd> _1_unvn_undistorted, _2_unvn_undistorted;
   vector<VectorXd> mmask;
 
+  // Random Pairs
   for( int itr=0 ; itr<max_itr ; itr++ )
   {
-    cout << "---itr="<<itr << "---\n";
+    randomViewTriangulate_debug( cout << "---itr="<<itr << "---\n" );
 
     //////////////////
     ///// Step-1 /////
     //////////////////
 
-    // pick a rrandom node
-    int _1 = rand() % n_ptClds;
-    int _2 = rand() % n_ptClds;
-    cout << "picked nodes with local index "<< _1 << " " << _2 << endl;
+    int _1, _2;
+    // pick a rrandom node --A
+    _1 = rand() % n_ptClds;
+    _2 = rand() % n_ptClds;
+
+    // pick a random node from _1set, _2set, _3set. --B
+    if( flag == 0 )
+    {
+      int c = rand() % 4;
+      switch (c) {
+        case 0:
+          _1 = _1set[ rand()%_1set.size() ];
+          _2 = _1set[ rand()%_1set.size() ];
+          break;
+        case 1:
+          _1 = _2set[ rand()%_2set.size() ];
+          _2 = _2set[ rand()%_2set.size() ];
+          break;
+        case 2:
+          _1 = _1set[ rand()%_1set.size() ];
+          _2 = _2set[ rand()%_2set.size() ];
+          break;
+        case 3:
+          _1 = _2set[ rand()%_2set.size() ];
+          _2 = _1set[ rand()%_1set.size() ];
+          break;
+        default:
+          assert( false && "Impossible");
+      }
+    }
+
+    if( flag == 1 )
+    {
+      //pick a random from  _3set
+      _1 = _3set[ rand()%_3set.size() ];
+      _2 = _3set[ rand()%_3set.size() ];
+    }
+
+
+    ////// Done picking
+
+
+    randomViewTriangulate_debug(cout << "picked nodes with local index "<< _1 << " " << _2 << endl);
 
     if( _1 == _2 )
     {
-      cout << "same, ignore it\n";
+      randomViewTriangulate_debug(cout << "same, ignore it\n");
       continue;
     }
 
     // find edge from _1
     int _1_type = edge_type_from_node( _1 );
     int _2_type = edge_type_from_node( _2 );
-    cout << "_1 is of type: "<< _1_type << endl;
-    cout << "_2 is of type: "<< _2_type << endl;
+    randomViewTriangulate_debug(cout << "_1 is of type: "<< _1_type << endl);
+    randomViewTriangulate_debug(cout << "_2 is of type: "<< _2_type << endl);
 
+    if( flag == 0 )
+    {
     if(  !( ( _1_type==1 || _1_type == 2 ) && ( _2_type==1 || _2_type == 2 )  ) )
     {
-      cout << "reject, since type is something other than 1 or 2\n";
+      randomViewTriangulate_debug(cout << "reject, since type is something other than 1 or 2\n");
       continue;
     }
+    }
 
-    cout << "process\n";
+
+    if( flag == 1 )
+    {
+    if(  !( ( _1_type==3 ) && ( _2_type==3 )  ) )
+    {
+      randomViewTriangulate_debug(cout << "reject, since type is something other than 1 or 2\n");
+      continue;
+    }
+    }
+
+    randomViewTriangulate_debug(cout << "process\n");
 
     //////////////////
-    ///// Step-2 ///// You exactly need to find the entire path. Just get an edge going out of _a and an edge going out of _2
+    ///// Step-2 ///// You exactly need to find the entire path. Just get an edge going out of _a and an edge going out of _2. But this is an acceptable approximation
     //////////////////
 
     n_success++;
@@ -199,7 +309,7 @@ void LocalBundle::randomViewTriangulate(int max_itr)
       _1_globalid = global_idx_of_pairs[2*_1_pairid];
       _1_localid = local_idx_of_pairs[2*_1_pairid];
       _1_napid = nap_idx_of_pairs[2*_1_pairid];
-      cout << _1 << " Was found in pair#" << _1_pairid << " in 1st postion\n";
+      randomViewTriangulate_debug(cout << _1 << " Was found in pair#" << _1_pairid << " in 1st postion\n");
     }
     else {
       _1_pairid = pair_1idx_of_node( _1 );
@@ -207,7 +317,7 @@ void LocalBundle::randomViewTriangulate(int max_itr)
       _1_globalid = global_idx_of_pairs[2*_1_pairid+1];
       _1_localid = local_idx_of_pairs[2*_1_pairid+1];
       _1_napid = nap_idx_of_pairs[2*_1_pairid+1];
-      cout << _1 << " Was found in pair#" << _1_pairid << " in 2nd postion\n";
+      randomViewTriangulate_debug(cout << _1 << " Was found in pair#" << _1_pairid << " in 2nd postion\n");
     }
 
 
@@ -217,7 +327,7 @@ void LocalBundle::randomViewTriangulate(int max_itr)
       _2_globalid = global_idx_of_pairs[2*_2_pairid];
       _2_localid = local_idx_of_pairs[2*_2_pairid];
       _2_napid = nap_idx_of_pairs[2*_2_pairid];
-      cout << _2 << " Was found in pair#" << _2_pairid << " in 1st postion\n";
+      randomViewTriangulate_debug(cout << _2 << " Was found in pair#" << _2_pairid << " in 1st postion\n");
     }
     else {
       _2_pairid = pair_1idx_of_node( _2 );
@@ -225,7 +335,7 @@ void LocalBundle::randomViewTriangulate(int max_itr)
       _2_globalid = global_idx_of_pairs[2*_2_pairid+1];
       _2_localid = local_idx_of_pairs[2*_2_pairid+1];
       _2_napid = nap_idx_of_pairs[2*_2_pairid+1];
-      cout << _2 << " Was found in pair#" << _2_pairid << " in 2nd postion\n";
+      randomViewTriangulate_debug(cout << _2 << " Was found in pair#" << _2_pairid << " in 2nd postion\n");
 
     }
 
@@ -235,9 +345,12 @@ void LocalBundle::randomViewTriangulate(int max_itr)
     ///// Step-3 ///// Triangulate
     //////////////////
 
-    cout << "==>Triangulate globalid "<< _1_globalid << " and " << _2_globalid << endl;
-    cout << "==>Triangulate localid  "<< _1_localid << " and " << _2_localid << endl;
-    cout << "==>Triangulate napid    "<< _1_napid << " and " << _2_napid << endl;
+    randomViewTriangulate_debug(cout << "==>Triangulate globalid "<< _1_globalid << " and " << _2_globalid << endl);
+    randomViewTriangulate_debug(cout << "==>Triangulate localid  "<< _1_localid << " and " << _2_localid << endl);
+    randomViewTriangulate_debug(cout << "==>Triangulate napid    "<< _1_napid << " and " << _2_napid << endl);
+    cout << itr << "==>Triangulate globalid=("<< _1_globalid << "," << _2_globalid << ") ; ";
+    cout << "localid=("<< _1_localid << "," << _2_localid << ") ; ";
+    cout << "napid=("<< _1_napid << "," << _2_napid << ") ; " << endl;
     assert( _1_localid == _1 );
     assert( _2_localid == _2 );
 
@@ -257,8 +370,8 @@ void LocalBundle::randomViewTriangulate(int max_itr)
     //////////////////
     VectorXd composed_mask;
     composed_mask = visibility_mask.row(_1_pairid).cwiseProduct(  visibility_mask.row(_2_pairid)   );
-    cout << "#verified pts in " << _1 << " = "<< visibility_mask.row(_1_pairid).sum() << endl;
-    cout << "#verified pts in " << _2 << " = "<< visibility_mask.row(_2_pairid).sum() << endl;
+    randomViewTriangulate_debug(cout << "#verified pts in " << _1 << " = "<< visibility_mask.row(_1_pairid).sum() << endl);
+    randomViewTriangulate_debug(cout << "#verified pts in " << _2 << " = "<< visibility_mask.row(_2_pairid).sum() << endl);
     cout << "#verified pts in composed_mask = "<< composed_mask.sum() << endl;
 
 
@@ -276,6 +389,7 @@ void LocalBundle::randomViewTriangulate(int max_itr)
 
   }
   cout << "n_success="<< n_success << " max_itr="<< max_itr << endl;
+  assert( n_success > 2 );
   assert( n_success == w_T_c1.size() );
   assert( n_success == w_T_c2.size() );
   assert( n_success == _1_unvn_undistorted.size() );
@@ -284,7 +398,7 @@ void LocalBundle::randomViewTriangulate(int max_itr)
 
 
 
-  // Kalman filter to get better estimates of 3d points.
+  // DLT-SVD to get better estimates of 3d points.
   MatrixXd w_X_triang; //triangulated 3d points in world co-prdinates from multiple views
   robust_triangulation( w_T_c1, w_T_c2, _1_unvn_undistorted, _2_unvn_undistorted, mmask, w_X_triang );
   w_X_triang.row(0).array() /= w_X_triang.row(3).array();
@@ -292,41 +406,19 @@ void LocalBundle::randomViewTriangulate(int max_itr)
   w_X_triang.row(2).array() /= w_X_triang.row(3).array();
   w_X_triang.row(3).array() /= w_X_triang.row(3).array();
 
-  // Plot the triangulated 3d points on all the available views.
-  for( int v=0 ; v<n_ptClds ; v++ )
+  if( flag == 0 )
   {
-    //plot observed points
-    cv::Mat outImg;
-    int node_gid = global_idx_of_nodes[v];
-    int node_napid = nap_idx_of_nodes[v];
-    string msg;
-    msg = "lid="+to_string( v) + "; gid="+to_string(node_gid) + "; nap_id="+to_string(node_napid);
-    plot_dense_point_sets( global_nodes[node_gid]->getImageRef(), uv[v], visibility_mask_nodes.row(v),
-                       true, true, msg, outImg );
-
-
-    //save
-    assert( _m1set.size() == 2 );
-    write_image( to_string(nap_idx_of_nodes[_m1set[0]])+"_"+to_string(nap_idx_of_nodes[_m1set[1]])+"___"+to_string(node_napid)+"_observed.png" , outImg );
-
-
-    //plot reprojected points
-    MatrixXd v_X, reproj_pts;
-    Matrix4d w_T_gid;
-    global_nodes[node_gid]->getOriginalTransform(w_T_gid);//4x4
-
-    v_X = w_T_gid.inverse() * w_X_triang;
-
-    camera.perspectiveProject3DPoints( v_X, reproj_pts);
-    plot_dense_point_sets( global_nodes[node_gid]->getImageRef(), reproj_pts, visibility_mask_nodes.row(v),
-                       true, true, msg, outImg );
-
-    //save
-    write_image( to_string(nap_idx_of_nodes[_m1set[0]])+"_"+to_string(nap_idx_of_nodes[_m1set[1]])+"___"+to_string(node_napid)+"_reproj.png" , outImg );
-
-
-
+    this->w_X_iprev_triangulated = MatrixXd(w_X_triang);
+    isValid_w_X_iprev_triangulated = true;
   }
+
+  if( flag == 1 )
+  {
+    this->w_X_icurr_triangulated = MatrixXd(w_X_triang);
+    isValid_w_X_icurr_triangulated = true;
+  }
+
+
 
 
 }
@@ -517,6 +609,7 @@ LocalBundle::LocalBundle( const nap::NapMsg::ConstPtr& msg,
   visibility_mask_nodes = MatrixXd::Ones( n_ptClds, n_features  );
   printMatrixInfo( "adj_mat", adj_mat );
   printMatrixInfo( "adj_mat_dirn", adj_mat_dirn );
+  cout << "global_idx\t\t\tnap_idx[]\t\t\tlocal_idx{}\n";
   for( int i=0 ; i<N_pairs ; i++ )
   {
     //
@@ -563,6 +656,8 @@ LocalBundle::LocalBundle( const nap::NapMsg::ConstPtr& msg,
       case -1:
         _m1set.push_back( _i );
         _m1set.push_back( _j );
+        localidx_of_icurr = _i;
+        localidx_of_iprev = _j;
         break;
       default:
         assert( false );
@@ -583,30 +678,27 @@ LocalBundle::LocalBundle( const nap::NapMsg::ConstPtr& msg,
 
     //
     // print data (to screen) for this pair
+
     cout << a_stamp_global_idx << "<--(type="<< ttype << ")-->" << b_stamp_global_idx  << "\t\t";
     cout << "[" << a << "   " << b << "]" << "\t\t";
     cout << "{" << _i << "   " << _j << "}" << endl;
 
-    /*
-    cv::Mat outImg;
-    vector<string> __tmp;
-    MatrixXd e_ptsA, e_ptsB;
-    assert( _i >= 0 );
-    assert( _j >= 0 );
-    pointcloud_2_matrix(msg->bundle[_i].points, e_ptsA  );
-    pointcloud_2_matrix(msg->bundle[_j].points, e_ptsB  );
 
-    VectorXd mask = e_visibility_table.row(i);
-    // VectorXd mask = VectorXd::Ones( e_ptsA.cols(), 1 );
-    plot_point_sets( global_nodes[a_stamp_global_idx]->getImageRef(), e_ptsA,  a_stamp_global_idx,
-                      global_nodes[b_stamp_global_idx]->getImageRef(), e_ptsB, b_stamp_global_idx,
-                      mask,
-                     __tmp, outImg );
-    // cv::imshow( "huhuX", outImg);
-    write_image( to_string(a)+"_"+to_string(b)+".png", outImg );
-    */
+
 
   }
+  cout << "array lengths of : ";
+  cout << "_m1set=" << _m1set.size()  << ";";
+  cout << "_1set=" << _1set.size() << ";";
+  cout << "_2set=" << _2set.size() << ";";
+  cout << "_3set=" << _3set.size() << ";";
+  cout << endl;
+  assert( _m1set.size() == 2 );
+  assert( _1set.size() > 2 );
+  assert( _2set.size() > 2 );
+  assert( _3set.size() > 2 );
+
+
 
 
 
@@ -871,6 +963,34 @@ string LocalBundle::type2str(int type) {
   return r;
 }
 
+void LocalBundle::printMatrix2d( const string& msg, const double * D, int nRows, int nCols )
+{
+  cout << msg << endl;
+  int c = 0 ;
+  cout << "[\n";
+  for( int i=0; i<nRows ; i++ )
+  {
+    cout << "\t[";
+    for( int j=0 ; j<nCols ; j++ )
+    {
+      cout << D[c] << ", ";
+      c++;
+    }
+    cout << "]\n";
+  }
+  cout << "]\n";
+
+}
+
+void LocalBundle::printMatrix1d( const string& msg, const double * D, int n  )
+{
+  cout << msg << endl;
+  cout << "\t[";
+  for( int i=0 ; i<n ; i++ )
+    cout << D[i] << ", " ;
+  cout << "]\n";
+}
+
 
 
 void LocalBundle::robust_triangulation( const vector<Matrix4d>& w_T_c1,
@@ -949,4 +1069,273 @@ void LocalBundle::robust_triangulation( const vector<Matrix4d>& w_T_c1,
 
   }
   cout << "<><><><><>><><><><><><><><><><>><><>\nDone with function  LocalBundle::robust_triangulation\n";
+}
+
+
+///////////////// Pose compitation related helpers /////////////////
+
+void LocalBundle::raw_to_eigenmat( const double * quat, const double * t, Matrix4d& dstT )
+{
+  Quaterniond q = Quaterniond( quat[0], quat[1], quat[2], quat[3] );
+
+  dstT = Matrix4d::Zero();
+  dstT.topLeftCorner<3,3>() = q.toRotationMatrix();
+
+  dstT(0,3) = t[0];
+  dstT(1,3) = t[1];
+  dstT(2,3) = t[2];
+  dstT(3,3) = 1.0;
+}
+
+void LocalBundle::eigenmat_to_raw( const Matrix4d& T, double * quat, double * t)
+{
+  Quaterniond q( T.topLeftCorner<3,3>() );
+  quat[0] = q.w();
+  quat[1] = q.x();
+  quat[2] = q.y();
+  quat[3] = q.z();
+  t[0] = T(0,3);
+  t[1] = T(1,3);
+  t[2] = T(2,3);
+}
+
+
+
+
+///////////////////////////////// Pose Computation ///////////////////////////
+
+
+void LocalBundle::crossPoseComputation3d2d()
+{
+  assert( isValid_w_X_iprev_triangulated );
+
+
+  // 3d-2d align here.
+  // initially just do between the 3d points and undistorted-normalized-observed points on curr.
+
+}
+
+/// Get pose between icurr and iprev by 3d-2d alignment. (non-linear least squares)
+/// [3d points] w_X_triang
+/// [2d points] unvn_undistorted[_3set[0]]
+void LocalBundle::crossPoseComputation()
+{
+  assert( isValid_w_X_iprev_triangulated );
+  //make use of this->w_X_iprev_triangulated 4xN matrix. Already w-divided.
+  assert( isValid_w_X_icurr_triangulated );
+  //make use of this->w_X_icurr_triangulated 4xN matrix. Already w-divided.
+
+  assert( this->w_X_iprev_triangulated.cols() == this->w_X_icurr_triangulated.cols() );
+
+  //
+  // Plot the 3d points and observed points on the images
+  // We now have access to the triangulated points
+  //
+
+  // loop on all nodes TODO
+  //    // plot observed points
+  //    // reproject w_X_iprev_triangulated  using VIO pose
+  //    // reproject w_X_icurr_triangulated  using VIO pose
+
+
+
+  /*
+  // Make Problem - Sample
+  ceres::Problem problem;
+  double x = 5.0;
+  ceres::CostFunction * cost_function = new ceres::AutoDiffCostFunction<DampleResidue, 1, 1>(new DampleResidue);
+  problem.AddResidualBlock( cost_function, NULL, &x);
+
+  // Solve
+  ceres::Solver::Options options;
+  options.linear_solver_type = ceres::DENSE_QR;
+  options.minimizer_progress_to_stdout = true;
+  ceres::Solver::Summary summary;
+  ceres::Solve( options, &problem, &summary );
+
+  cout << summary.BriefReport() << endl;
+  cout << "Optimized x : " << x << endl;
+  */
+
+
+  /*
+  // 3d-3d Alignment
+  ceres::Problem problem;
+  double p_R_c[9] = {1,0,0,  0,1,0,  0,0,1}; // Identity
+  double p_Tr_c[3] = {0,0,0};
+  printMatrix2d( "p_R_c init", p_R_c, 3,3 );
+  printMatrix1d( "p_Tr_c init", p_Tr_c, 3 );
+
+  // Make Problem
+  for( int i=0 ; i< this->w_X_iprev_triangulated.cols() ; i++ ) {
+      double p_X[3], c_Xd[3];
+      p_X[0] = this->w_X_iprev_triangulated(0,i);
+      p_X[1] = this->w_X_iprev_triangulated(1,i);
+      p_X[2] = this->w_X_iprev_triangulated(2,i);
+      c_Xd[0] = this->w_X_icurr_triangulated(0,i);
+      c_Xd[1] = this->w_X_icurr_triangulated(1,i);
+      c_Xd[2] = this->w_X_icurr_triangulated(2,i);
+      ceres::CostFunction * cost_function =
+        new ceres::AutoDiffCostFunction<Align3dPointsResidue, 3, 9, 3>( new Align3dPointsResidue(p_X, c_Xd) );
+
+      problem.AddResidualBlock( cost_function, NULL, p_R_c, p_Tr_c );
+      // problem.AddResidualBlock( cost_function, new CauchyLoss(0.5), p_R_c, p_Tr_c );
+  }
+
+  // Solve
+  ceres::Solver::Options options;
+  options.linear_solver_type = ceres::DENSE_QR;
+  options.minimizer_progress_to_stdout = true;
+  ceres::Solver::Summary summary;
+  ceres::Solve( options, &problem, &summary );
+
+  // cout << summary.BriefReport() << endl;
+  cout << summary.FullReport() << endl;
+  printMatrix2d( "p_R_c optimized", p_R_c, 3,3 );
+  printMatrix1d( "p_Tr_c optimized", p_Tr_c, 3 );
+  */
+
+
+
+
+  // remember the computed 3d points are in world co-ordinate frame, they need to be converted to icurr frame and iprev frame.
+  Matrix4d w_T_p, w_T_c;
+  global_nodes[ global_idx_of_nodes[localidx_of_icurr] ]->getOriginalTransform(w_T_c);
+  global_nodes[ global_idx_of_nodes[localidx_of_iprev] ]->getOriginalTransform(w_T_p);
+  cout << "CERES: curr: "<< localidx_of_icurr << " " <<  global_idx_of_nodes[localidx_of_icurr] << " "<< nap_idx_of_nodes[localidx_of_icurr] << endl;
+  cout << "CERES: prev: "<< localidx_of_iprev << " " <<  global_idx_of_nodes[localidx_of_iprev] << " "<< nap_idx_of_nodes[localidx_of_iprev] << endl;
+
+
+  MatrixXd X_pts, Xd_pts;
+  X_pts = w_T_p.inverse() *  this->w_X_iprev_triangulated;
+  Xd_pts = w_T_p.inverse() *  this->w_X_icurr_triangulated;
+  printMatrixInfo( "X_pts", X_pts );
+  printMatrixInfo( "Xd_pts", Xd_pts );
+
+
+  // Initial Guess
+  Matrix4d delta_pose = Matrix4d::Identity(); //set here watever you want later
+  double delta_pose_q[10], delta_pose_t[10];
+  eigenmat_to_raw( delta_pose, delta_pose_q, delta_pose_t );
+  cout << "delta_pose(init)\n" << delta_pose << endl;
+  printMatrix1d( "delta_pose_q(init)", delta_pose_q, 4 );
+  printMatrix1d( "delta_pose_t(init)", delta_pose_t, 3 );
+
+
+
+  //
+  // Setup the Residuals
+  ceres::Problem problem;
+  for( int i=0 ; i< this->w_X_iprev_triangulated.cols() ; i++ )// loop over each 3d point
+  {
+    ceres::CostFunction * cost_function = Align3dPointsResidueEigen::Create( X_pts.col(i), Xd_pts.col(i)  );
+    problem.AddResidualBlock( cost_function, new ceres::HuberLoss(1.0), delta_pose_q, delta_pose_t );
+  }
+
+  //
+  // Set q as a Quaternion Increment
+  ceres::LocalParameterization *quaternion_parameterization = new ceres::QuaternionParameterization;
+  problem.SetParameterization( delta_pose_q, quaternion_parameterization );
+
+  //
+  // Solve
+  ceres::Solver::Options options;
+  options.linear_solver_type = ceres::DENSE_QR;
+  options.minimizer_progress_to_stdout = true;
+  ceres::Solver::Summary summary;
+  ceres::Solve( options, &problem, &summary );
+
+  cout << summary.BriefReport() << endl;
+
+
+  //
+  // Retrive Result
+  raw_to_eigenmat(  delta_pose_q, delta_pose_t, delta_pose );
+  cout << "delta_pose(init)\n" << delta_pose << endl;
+  printMatrix1d( "delta_pose_q(final)", delta_pose_q, 4 );
+  printMatrix1d( "delta_pose_t(final)", delta_pose_t, 3 );
+
+
+
+
+
+  // visualize
+  // Plot the triangulated 3d points on all the available views.
+
+  for( int v=0 ; v<n_ptClds ; v++ )
+  {
+    //plot observed points
+    cv::Mat outImg;
+    int node_gid = global_idx_of_nodes[v];
+    int node_napid = nap_idx_of_nodes[v];
+    cout << " node_lid="<< v;
+    cout << " node_gid="<< node_gid;
+    cout << " node_napid="<< node_napid << endl;
+
+    bool in_1set, in_2set, in_3set, in_m1set;
+    in_1set = ( std::find( begin(_1set), end(_1set), v ) != end(_1set) )? true: false;
+    in_2set = ( std::find( begin(_2set), end(_2set), v ) != end(_2set) )? true: false;
+    in_3set = ( std::find( begin(_3set), end(_3set), v ) != end(_3set) )? true: false;
+    in_m1set = ( std::find( begin(_m1set), end(_m1set), v ) != end(_m1set) )? true: false;
+    cout << "v occurs in (1set,2set,3set,m1set)=" << in_1set << " " << in_2set << " " << in_3set << " " << in_m1set << endl;
+    cout << "v occurs in ";
+    cout << " in_1set="<<in_1set;
+    cout << " in_2set="<<in_2set;
+    cout << " in_3set="<<in_3set;
+    cout << " in_m1set="<<in_m1set << endl;
+
+
+    string msg;
+    msg = "lid="+to_string( v) + "; gid="+to_string(node_gid) + "; nap_id="+to_string(node_napid);
+    plot_dense_point_sets( global_nodes[node_gid]->getImageRef(), uv[v], visibility_mask_nodes.row(v),
+                       true, true, msg, outImg );
+
+    // save
+    write_image( to_string(nap_idx_of_nodes[_m1set[0]])+"_"+to_string(nap_idx_of_nodes[_m1set[1]])+"___"+to_string(node_napid)+"_observed.png" , outImg );
+
+
+
+    // Reproject w_X_iprev_triangulated
+    Matrix4d w_T_gid;
+    global_nodes[node_gid]->getOriginalTransform(w_T_gid);//4x4
+
+    MatrixXd v_X;
+    v_X = w_T_gid.inverse() * w_X_iprev_triangulated;
+
+    MatrixXd reproj_pts;
+    camera.perspectiveProject3DPoints( v_X, reproj_pts);
+    plot_dense_point_sets( global_nodes[node_gid]->getImageRef(), reproj_pts, visibility_mask_nodes.row(v),
+                       true, true, msg, outImg );
+
+    // save
+    write_image( to_string(nap_idx_of_nodes[_m1set[0]])+"_"+to_string(nap_idx_of_nodes[_m1set[1]])+"___"+to_string(node_napid)+"_reproj_3diprev.png" , outImg );
+
+
+
+    if( in_3set && in_m1set ) //if in icurr-5 to icurr.
+    {
+      Matrix4d w_T_prev;
+      global_nodes[ global_idx_of_nodes[localidx_of_iprev]  ]->getOriginalTransform(w_T_prev);
+
+      MatrixXd v_X;
+      v_X =   (w_T_prev * delta_pose).inverse() * w_X_iprev_triangulated;
+
+      MatrixXd reproj_pts;
+      camera.perspectiveProject3DPoints( v_X, reproj_pts);
+      plot_dense_point_sets( global_nodes[node_gid]->getImageRef(), reproj_pts, visibility_mask_nodes.row(v),
+                         true, true, msg, outImg );
+
+      // save
+      write_image( to_string(nap_idx_of_nodes[_m1set[0]])+"_"+to_string(nap_idx_of_nodes[_m1set[1]])+"___"+to_string(node_napid)+"_reproj_corrected_3diprev.png" , outImg );
+
+
+    }
+
+
+  }
+
+
+
+
+
 }

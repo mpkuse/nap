@@ -4,7 +4,7 @@
 ColorLUT::ColorLUT()
 {
   //make colors
-  cout << "Make Colors";
+  // cout << "Make Colors";
   // _color = []
   _color.push_back( cv::Scalar(0, 0, 0) );
   _color.push_back( cv::Scalar(0, 255, 0) );

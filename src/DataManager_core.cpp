@@ -421,13 +421,19 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
 
     // this->camera.printCameraInfo(1);
     LocalBundle localBundle = LocalBundle( msg, this->nNodes, this->camera );
-    // localBundle.sayHi();
     // localBundle.multiviewTriangulate(); // this should triangulate multiview using (a) and (b)
                                         // (a) i_prev+5, i_prev+4, ... i_prev, i_prev-1, i_prev-2, ... i_prev-5
                                         // (b) i_curr, i_curr-1, i_curr-2, ...
-    localBundle.randomViewTriangulate( 50 );                                          
+    ROS_INFO( "Done setting bundle data");
+    localBundle.randomViewTriangulate( 50, 0 );
+    localBundle.randomViewTriangulate( 50, 1 );
+    ROS_INFO( "Done triangulating icurr and iprev");
+
+    // localBundle.sayHi();
+    localBundle.crossPoseComputation();
 
     // publish
+    ROS_ERROR( "Bundle Processing OK. Done!");
 
     return;
   }
