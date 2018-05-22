@@ -4,7 +4,7 @@
 
 void DataManager::publish_once()
 {
-  publish_pose_graph_nodes();
+  // publish_pose_graph_nodes();
   publish_pose_graph_nodes_original_poses();
   publish_pose_graph_edges( this->odometryEdges );
   publish_pose_graph_edges( this->loopClosureEdges );
@@ -198,7 +198,8 @@ void DataManager::publish_pose_graph_nodes_original_poses()
     // marker.text = std::to_string(i)+std::string(":")+std::to_string(n->ptCld.cols())+std::string(":")+((n->getImageRef().data)?"I":"~I");
 
     std::stringstream buffer;
-    buffer << i << ":" << n->time_stamp - nNodes[0]->time_stamp;
+    // buffer << i << ":" << n->time_stamp - nNodes[0]->time_stamp; //long version
+    buffer << i; //short version
     // buffer << i << ":" << n->time_stamp - nNodes[0]->time_stamp << ":" << n->time_image- nNodes[0]->time_stamp  ;
     marker.text = buffer.str();
     // marker.text = std::to_string(i)+std::string(":")+std::to_string( n->time_stamp );

@@ -301,6 +301,7 @@ private:
   ros::NodeHandle nh; //< Node Handle
   ros::Publisher pub_pgraph; //< Visualization Marker handle, nodes will have curr pose
   ros::Publisher pub_pgraph_org; //< Publishes Original (unoptimized pose graph)
+  ros::Publisher pub_bundle; //< Info related to bundle (opmode28)
 
   PinholeCamera camera; //< Camera Intrinsics. See corresponding class
 

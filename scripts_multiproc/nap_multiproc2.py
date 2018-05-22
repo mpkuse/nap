@@ -1123,6 +1123,7 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
 
         # Verify data from the TRACKS.
         # Now lets look at just the data in feat_track.feature_list and feat_track.visibility_table
+        print 'pairs in TRACKS (_k0, _k1, AB_mask.sum()): '
         for _k in TRACKS.visibility_table.keys():
             imA = S_thumbnails[ _k[0] ]
             imB = S_thumbnails[ _k[1] ]
@@ -1156,6 +1157,7 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
         nap_msg.c_timestamp = S_timestamp[i_curr]
         nap_msg.prev_timestamp = S_timestamp[i_prev]
         nap_msg.op_mode = 28
+        xprint( "Make nap_msg.op_mode28", THREAD_NAME )
 
 
 
@@ -1193,7 +1195,7 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
 
 
         Q_bundle_napmsg.put( nap_msg )
-
+        xprint( "put nap_msg.op_mode28 on Q_bundle_napmsg", THREAD_NAME )
 
 
         continue

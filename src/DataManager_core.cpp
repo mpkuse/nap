@@ -31,6 +31,8 @@ void DataManager::setVisualizationTopic( string rviz_topic )
   // usually was "/mish/pose_nodes"
   pub_pgraph = nh.advertise<visualization_msgs::Marker>( rviz_topic.c_str(), 0 );
   pub_pgraph_org = nh.advertise<visualization_msgs::Marker>( (rviz_topic+string("_original")).c_str(), 0 );
+
+  pub_bundle = nh.advertise<visualization_msgs::Marker>( (rviz_topic+string("_bundle_opmode28")).c_str(), 0 );
 }
 
 
@@ -427,10 +429,17 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
     ROS_INFO( "Done setting bundle data");
     localBundle.randomViewTriangulate( 50, 0 );
     localBundle.randomViewTriangulate( 50, 1 );
+
+    // Debug computed info . 
+    localBundle.saveTriangulatedPoints();
+    localBundle.publishTriangulatedPoints( pub_bundle  );
     ROS_INFO( "Done triangulating icurr and iprev");
 
     // localBundle.sayHi();
-    localBundle.crossPoseComputation();
+    // localBundle.crossPoseComputation();
+    // localBundle.crossPoseComputation3d2d();
+    localBundle.crossRelPoseComputation3d2d();
+    // localBundle.ceresDummy();
 
     // publish
     ROS_ERROR( "Bundle Processing OK. Done!");
