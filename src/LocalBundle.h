@@ -32,6 +32,7 @@
 #include <geometry_msgs/Point.h>
 #include <sensor_msgs/Image.h>
 #include <visualization_msgs/Marker.h>
+#include <std_msgs/ColorRGBA.h>
 
 
 #include <Eigen/Dense>
@@ -57,6 +58,8 @@ class LocalBundle {
 
 public:
   LocalBundle( const nap::NapMsg::ConstPtr& msg, const vector<Node*>& global_nodes, const PinholeCamera& camera   );
+  bool isValid_incoming_msg;
+
 
   // this was for unit test. Remove this if not needed.
   void multiviewTriangulate();

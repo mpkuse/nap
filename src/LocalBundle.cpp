@@ -442,6 +442,7 @@ void LocalBundle::randomViewTriangulate(int max_itr, int flag )
   // DLT-SVD to get better estimates of 3d points.
   MatrixXd w_X_triang; //triangulated 3d points in world co-prdinates from multiple views
   robust_triangulation( vector_of_pairs, w_T_c1, w_T_c2, _1_unvn_undistorted, _2_unvn_undistorted, mmask, w_X_triang );
+  // THIS is unnecassary to w divide. As some points can be at infinity (ie w=0.). However removing this can have some unintented consequences somewhere.
   w_X_triang.row(0).array() /= w_X_triang.row(3).array();
   w_X_triang.row(1).array() /= w_X_triang.row(3).array();
   w_X_triang.row(2).array() /= w_X_triang.row(3).array();
@@ -483,22 +484,61 @@ void LocalBundle::publishTriangulatedPoints(  const ros::Publisher& pub )
 {
     cout << " LocalBundle::publishTriangulatedPoints" << endl;
 
-    visualization_msgs::Marker marker;
-    vector<visualization_msgs::Marker> pointcloud_text;
     assert( isValid_w_X_iprev_triangulated );
+    assert( isValid_iprev_X_iprev_triangulated );
 
+
+    // Compute reprojection residue
+
+    printMatrixInfo( "unvn_undistorted[localidx_of_iprev]", unvn_undistorted[localidx_of_iprev] );
+    MatrixXd reprojection_residue = MatrixXd::Zero( 2, iprev_X_iprev_triangulated.cols() );
+    reprojection_residue.row(0) =  unvn_undistorted[localidx_of_iprev].row(0) -  ( iprev_X_iprev_triangulated.row(0).array() / iprev_X_iprev_triangulated.row(2).array() ).matrix();
+    reprojection_residue.row(1) =  unvn_undistorted[localidx_of_iprev].row(1) -  ( iprev_X_iprev_triangulated.row(1).array() / iprev_X_iprev_triangulated.row(2).array() ).matrix();
+    write_EigenMatrix( to_string(nap_idx_of_nodes[_m1set[0]])+"_"+to_string(nap_idx_of_nodes[_m1set[1]])+"_triangulated3d_obs_residue.txt", reprojection_residue );
+
+
+
+    // Publish just 1 marker, type=points
+    #if 1
+    visualization_msgs::Marker marker;
     string ns = to_string(nap_idx_of_nodes[_m1set[0]])+"_"+to_string(nap_idx_of_nodes[_m1set[1]])+"__w_X_iprev_triangulated";
     eigenpointcloud_2_ros_markermsg( w_X_iprev_triangulated, marker, ns );
-    string ns2 = "text_"+to_string(nap_idx_of_nodes[_m1set[0]])+"_"+to_string(nap_idx_of_nodes[_m1set[1]])+"__w_X_iprev_triangulated";
-    eigenpointcloud_2_ros_markertextmsg( w_X_iprev_triangulated, pointcloud_text, ns2 );
-
-
-    // statistics on iprev_X_iprev_triangulated.
-    assert( isValid_iprev_X_iprev_triangulated );
-    int less_than_2m=0, less_than_5m=0, less_than_10m=0, less_than_20m=0, more_than_20=0;
-    printMatrixInfo( "iprev_X_iprev_triangulated", iprev_X_iprev_triangulated );
+    // set per point color
     for( int i=0 ; i<iprev_X_iprev_triangulated.cols() ; i++ )
     {
+        VectorXd _d = iprev_X_iprev_triangulated.col(i);
+        double d = sqrt( _d(0)*_d(0) + _d(1)*_d(1) + _d(2)*_d(2) );
+
+        bool is_behind = ( _d(2) < 0 )?true:false;
+        bool good_ = ( reprojection_residue.col(i).norm() < 0.1 )?true:false;
+
+
+        std_msgs::ColorRGBA Kolor;
+        Kolor.a = 1.0;
+        if( is_behind && good_  )  { Kolor.r=1.; Kolor.g=1.; Kolor.b=0.;} //yellow
+        if( is_behind && !good_  ) { Kolor.r=0.; Kolor.g=0.; Kolor.b=1.; } //blue
+        if( !is_behind && good_  ) { Kolor.r=0.; Kolor.g=1.; Kolor.b=0.; } //green
+        if( !is_behind && !good_ ) { Kolor.r=1.; Kolor.g=1.; Kolor.b=1.;} //white
+
+        marker.colors.push_back( Kolor );
+
+    }
+    pub.publish( marker );
+    cout << "MarkerInfo: " << marker.type << "  " << marker.ns << " " << marker.id << endl;
+    #endif
+
+
+    #if 0
+    // publish 1 marker for each 3d point. good for analysis.
+    vector<visualization_msgs::Marker> pointcloud_text;
+    string ns2 = "text_"+to_string(nap_idx_of_nodes[_m1set[0]])+"_"+to_string(nap_idx_of_nodes[_m1set[1]])+"__w_X_iprev_triangulated";
+    eigenpointcloud_2_ros_markertextmsg( w_X_iprev_triangulated, pointcloud_text, ns2 );
+    cout << "pointcloud_text.size: "<< pointcloud_text.size() << endl;
+
+    int less_than_2m=0, less_than_5m=0, less_than_10m=0, less_than_20m=0, more_than_20=0, n_behind=0;
+    for( int i=0 ; i<pointcloud_text.size() ; i++ )
+    {
+        // Color behind points differently
         VectorXd _d = iprev_X_iprev_triangulated.col(i);
         double d = sqrt( _d(0)*_d(0) + _d(1)*_d(1) + _d(2)*_d(2) );
         if( d < 2. ) { less_than_2m++; }
@@ -506,17 +546,33 @@ void LocalBundle::publishTriangulatedPoints(  const ros::Publisher& pub )
         if( d < 10.  && d >= 5) { less_than_10m++;}
         if( d < 20. && d >= 10 ) { less_than_20m++;}
         if( d>= 20. ) { more_than_20++; }
+
+        if( _d(2) < 0 )
+        {
+            pointcloud_text[i].color.r = 0;
+            pointcloud_text[i].color.g = 0;
+            pointcloud_text[i].color.b = 0;
+            n_behind++;
+        }
+
+
+
+        cout << pointcloud_text[i].ns << " " << pointcloud_text[i].id << " " << pointcloud_text[i].color.r << pointcloud_text[i].color.g << pointcloud_text[i].color.b <<  endl;
+        pub.publish( pointcloud_text[i] );
     }
+
     cout << "less_than_2m: "<< less_than_2m << "; ";
-    cout << "less_than_5m: "<< less_than_5m << "; ";
-    cout << "less_than_10m: "<< less_than_10m << "; ";
-    cout << "less_than_20m: "<< less_than_20m << "; " ;
+    cout << "between_2m_5m: "<< less_than_5m << "; ";
+    cout << "between_5m_10m: "<< less_than_10m << "; ";
+    cout << "between_10m_20m: "<< less_than_20m << "; " ;
     cout << "more_than_20: "<< more_than_20 << "; " << endl;
+    cout << "n_behind: " << n_behind<< endl;
+    #endif
 
 
 
-    // pub.publish( marker );
-    for( int i=0 ; i<pointcloud_text.size() ; i++ ) { pub.publish( pointcloud_text[i] ); }
+
+
 
 
     cout << "Done... LocalBundle::publishTriangulatedPoints" << endl;
@@ -827,10 +883,19 @@ LocalBundle::LocalBundle( const nap::NapMsg::ConstPtr& msg,
   cout << "_2set=" << _2set.size() << ";";
   cout << "_3set=" << _3set.size() << ";";
   cout << endl;
-  assert( _m1set.size() == 2 );
-  assert( _1set.size() > 2 );
-  assert( _2set.size() > 2 );
-  assert( _3set.size() > 2 );
+  // assert( _m1set.size() == 2 );
+  // assert( _1set.size() > 2 );
+  // assert( _2set.size() > 2 );
+  // assert( _3set.size() > 2 );
+
+  if( ( _m1set.size() == 2 ) && ( _1set.size() > 2 ) && ( _2set.size() > 2 ) && ( _3set.size() > 2 ) )
+  {
+      isValid_incoming_msg = true;
+  }
+  else
+  {
+      isValid_incoming_msg = false;
+  }
 
 
 
@@ -1576,6 +1641,13 @@ void LocalBundle::crossRelPoseComputation3d2d()
   // ceres-solver will estimate c_T_p.
 
   //
+  // Reprojection residues. Only use good 3d points which are in the front.
+  MatrixXd reprojection_residue = MatrixXd::Zero( 2, iprev_X_iprev_triangulated.cols() );
+  reprojection_residue.row(0) =  unvn_undistorted[localidx_of_iprev].row(0) -  ( iprev_X_iprev_triangulated.row(0).array() / iprev_X_iprev_triangulated.row(2).array() ).matrix();
+  reprojection_residue.row(1) =  unvn_undistorted[localidx_of_iprev].row(1) -  ( iprev_X_iprev_triangulated.row(1).array() / iprev_X_iprev_triangulated.row(2).array() ).matrix();
+
+
+  //
   // Initial Guess
   Matrix4d T_cap;
   T_cap = gi_T_gj( localidx_of_icurr, localidx_of_iprev );
@@ -1610,6 +1682,13 @@ void LocalBundle::crossRelPoseComputation3d2d()
     if( curr_mask(i) == 0 ) { // this 3dpoint is not visible in this view
       continue;
     }
+
+
+    // Only use good 3d points which are in the front.
+    bool is_behind = ( (iprev_X_iprev_triangulated(2,i) ) < 0 )?true:false;
+    bool good_ = ( reprojection_residue.col(i).norm() < 0.1 )?true:false;
+    if( !is_behind && good_ ) {} else{ continue ;}
+
     nresidual_terms++;
 
     // 4DOF loss
@@ -1627,6 +1706,7 @@ void LocalBundle::crossRelPoseComputation3d2d()
   cout << "Total 3d points : "<< this->iprev_X_iprev_triangulated.cols() << endl;
   cout << "nresidual_terms : "<< nresidual_terms << endl;
   cout << "curr_mask.sum() : "<< curr_mask.sum() << endl;
+  assert( nresidual_terms > 10 ); //should have atleast 10 good points for pnp
 
   //
   // 4DOF needs normalized step for yaw (not a euclidean step)
@@ -2163,7 +2243,7 @@ void LocalBundle::markObservedPointsOnPrevIm()
 
 
 
-////////////////////////////// ROS Publishing helpers ///////////////////////////////
+/////////////////////////////ROS Publishing helpers ///////////////////////////////
 void LocalBundle::eigenpointcloud_2_ros_markermsg( const MatrixXd& M, visualization_msgs::Marker& marker, const string& ns )
 {
     marker.header.frame_id = "world";
@@ -2177,8 +2257,8 @@ void LocalBundle::eigenpointcloud_2_ros_markermsg( const MatrixXd& M, visualizat
     marker.scale.y = .05;
     marker.scale.z = 1.05;
 
-    marker.color.r = 200;
-    marker.color.g = 200;
+    marker.color.r = .8;
+    marker.color.g = .8;
     marker.color.b = 0;
     marker.color.a = .9; // Don't forget to set the alpha!
 
@@ -2197,31 +2277,35 @@ void LocalBundle::eigenpointcloud_2_ros_markertextmsg( const MatrixXd& M,
     vector<visualization_msgs::Marker>& marker_ary, const string& ns )
 {
     marker_ary.clear();
+    visualization_msgs::Marker marker;
     for( int i=0 ; i<M.cols() ; i++ )
     {
-        visualization_msgs::Marker marker;
         marker.header.frame_id = "world";
         marker.header.stamp = ros::Time::now();
+        marker.header.seq = 0;
         marker.ns = ns; //"spheres";
-        marker.id = i+10000;
-        marker.header.seq = marker.id;
+        marker.id = i;
         marker.type = visualization_msgs::Marker::TEXT_VIEW_FACING;
         marker.action = visualization_msgs::Marker::ADD;
-        marker.scale.x = .05;
-        marker.scale.y = .05;
-        marker.scale.z = .05;
+        marker.scale.x = .1;
+        marker.scale.y = .1;
+        marker.scale.z = .1;
 
-        marker.color.r = 255;
-        marker.color.g = 255;
-        marker.color.b = 255;
+        marker.color.r = 1.0;
+        marker.color.g = 1.0;
+        marker.color.b = 1.0;
         marker.color.a = .9; // Don't forget to set the alpha!
 
         marker.text = to_string( i );
         marker.pose.position.x = M(0,i);
         marker.pose.position.y = M(1,i);
         marker.pose.position.z = M(2,i);
+        marker.pose.orientation.x = 0.;
+        marker.pose.orientation.y = 0.;
+        marker.pose.orientation.z = 0.;
+        marker.pose.orientation.w = 1.;
 
-        marker_ary.push_back( marker );
+        marker_ary.push_back( visualization_msgs::Marker(marker) );
     }
 
 }

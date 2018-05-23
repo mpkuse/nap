@@ -416,8 +416,7 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
     // The worker_qdd_processor() function
     ROS_ERROR( "geometry_node OK! set edge as EDGE_TYPE_LOOP_SUBTYPE_BUNDLE" );
 
-    e->setLoopEdgeSubtype(EDGE_TYPE_LOOP_SUBTYPE_BUNDLE);
-    loopClosureEdges.push_back( e );
+
 
     // Process this nap msg to produce pose from locally tracked dense features
 
@@ -426,18 +425,27 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
     // localBundle.multiviewTriangulate(); // this should triangulate multiview using (a) and (b)
                                         // (a) i_prev+5, i_prev+4, ... i_prev, i_prev-1, i_prev-2, ... i_prev-5
                                         // (b) i_curr, i_curr-1, i_curr-2, ...
+    if( localBundle.isValid_incoming_msg == false ) {
+        ROS_ERROR( "Ignore message because constructor failed" );
+        return;
+    }
+
+
+    e->setLoopEdgeSubtype(EDGE_TYPE_LOOP_SUBTYPE_BUNDLE);
+    loopClosureEdges.push_back( e );
+
+
     ROS_INFO( "Done setting bundle data");
     localBundle.randomViewTriangulate( 50, 0 );
     localBundle.randomViewTriangulate( 50, 1 );
 
-    // Debug computed info . 
+    // Debug computed info .
     localBundle.saveTriangulatedPoints();
     localBundle.publishTriangulatedPoints( pub_bundle  );
     ROS_INFO( "Done triangulating icurr and iprev");
 
     // localBundle.sayHi();
     // localBundle.crossPoseComputation();
-    // localBundle.crossPoseComputation3d2d();
     localBundle.crossRelPoseComputation3d2d();
     // localBundle.ceresDummy();
 
