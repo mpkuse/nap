@@ -49,6 +49,7 @@ using namespace Eigen;
 #include "PinholeCamera.h"
 #include "Node.h"
 #include "ColorLUT.h"
+#include "tic_toc.h"
 
 using namespace std;
 using namespace cv;
@@ -75,9 +76,9 @@ public:
 
 
   void ceresDummy();
-  void crossPoseComputation();
-  void crossPoseComputation3d2d();    //< Estimate global pose c_T_w, this gives optimization difficulties.
-  void crossRelPoseComputation3d2d(); //< Essentially like PNP. (will expand to multiple frames)
+  // void crossPoseComputation3d3d(); // align3d point clouds. point cloud of curr is pretty bad, resulting in bad alignment, So removed.
+  // void crossPoseComputation3d2d();    //< Estimate global pose c_T_w, this gives optimization difficulties. Function removed
+  Matrix4d crossRelPoseComputation3d2d(); //< Essentially like PNP. (will expand to multiple frames). Returns p_T_c
 
   void sayHi();
 
@@ -158,6 +159,10 @@ private:
 
   int n_ptClds;
   vector<int> _1set, _2set, _3set, _m1set; //list of nodes in each of the types (list of localids).
+  // -1 : Dense Match pair
+  // 1  : iprev+j
+  // 2  : iprev -j
+  // 3  : icurr - j
   int localidx_of_icurr, localidx_of_iprev;
 
   // node info (dense point matches)
@@ -210,7 +215,14 @@ private:
 
    int pair_0idx_of_node( int nx ); // looks at local_idx_of_pairs[2*i]
    int pair_1idx_of_node( int nx ); // looks at local_idx_of_pairs[2*i+1]
-
+   void push_back_uniq( vector<int>& A, int ele )
+   {
+       if( std::find( A.begin(), A.end(), ele ) == A.end()   )
+       {
+           //not found. So push_back()
+           A.push_back( ele );
+       }
+   }
 
 
 
@@ -259,8 +271,8 @@ private:
     Matrix4d gi_T_w( int locali );
 
     // idea roughly borrowed from pkg `pose_graph/utility/utility.h`
-    Vector3d LocalBundle::R2ypr( const Matrix3d& R);
-    Matrix3d LocalBundle::ypr2R( const Vector3d& ypr);
+    Vector3d R2ypr( const Matrix3d& R);
+    Matrix3d ypr2R( const Vector3d& ypr);
 
 
 };
@@ -532,60 +544,24 @@ private:
 class Align3d2d__4DOF {
 public:
   Align3d2d__4DOF( const Vector3d& _3d, const Vector2d& _2d, double pitch, double roll )
-          :_3d(_3d), _2d(_2d), pitch(pitch), roll(roll) {}
+          :_3d(_3d), _2d(_2d), pitch(pitch), roll(roll)
+          {
+            // Can use A() or B() with this.
+          }
+
+  Align3d2d__4DOF( const Vector3d& _3d, const Vector2d& _2d, const Matrix3d&  _rpy )
+          :_3d(_3d), _2d(_2d), rpy(_rpy)
+          {
+              // can use C() with this
+
+          }
+
 
   // w_T_c
   template <typename T>
   bool operator()( const T* const yaw, const T* const tran, T*e  ) const
   {
-
-    ////// function ypr2R ///////
-    // use yaw, pitch and roll to form a rotation Matrix<T,3,3>
-    Matrix<T,3,3> Rot;
-
-    T yy = yaw[0] / T(180.0) * T(M_PI); //yaw in radians
-    T pp = T(pitch) / T(180.0) * T(M_PI); //pitch in radians
-    T rr = T(roll) / T(180.0) * T(M_PI); //roll in radians
-
-    Matrix<T,3,3> Rz;
-    Rz << cos(yy), -sin(yy), T(0.),
-        sin(yy), cos(yy), T(0.),
-        T(0.), T(0.), T(1.);
-
-    Matrix<T,3,3> Ry;
-    Ry << cos(pp), T(0.), sin(pp),
-        T(0.), T(1.), T(0.),
-        -sin(pp), T(0.), cos(pp);
-
-    Matrix<T,3,3> Rx;
-    Rx << T(1.), T(0.), T(0.),
-        T(0.), cos(rr), -sin(rr),
-        T(0.), sin(rr), cos(rr);
-
-    Rot = Rz * Ry * Rx;
-
-    //////////// END ///////////
-    Matrix<T,3,1> t;
-    t<< tran[0], tran[1], tran[2];
-
-
-    Matrix<T,3,1> w_X; //3d co-ordinates in world ref-frame
-    w_X << T(_3d(0)), T(_3d(1)), T(_3d(2));
-
-    Matrix<T,2,1> unvn; //normalized undistorrted observed points
-    unvn << T(_2d(0)), T(_2d(1));
-
-    Matrix<T,3,1> c_X; //3d co-ordinates in camera ref-frame
-    c_X = Rot * w_X + t;
-
-    Matrix<T,2,1> error; // this variable is redundant. consider removal. TODO
-    error(0) = c_X(0) / c_X(2) - unvn(0);
-    error(1) = c_X(1) / c_X(2) - unvn(1);
-
-    e[0] = error(0);
-    e[1] = error(1);
-    return true;
-
+      return C( yaw, tran, e );
   }
 
   static ceres::CostFunction* Create( const VectorXd& __3d, const VectorXd& __2d, double __pitch, double __roll )
@@ -601,12 +577,190 @@ public:
     );
   }
 
+  static ceres::CostFunction* Create( const VectorXd& __3d, const VectorXd& __2d, const Matrix3d& __rpy )
+  {
+    Vector3d a;
+    a << __3d(0), __3d(1), __3d(2);
+
+    Vector2d b;
+    b << __2d(0), __2d(1);
+
+    return (
+      new ceres::AutoDiffCostFunction<Align3d2d__4DOF,2,1,3>( new Align3d2d__4DOF( a, b, __rpy ) )
+    );
+  }
+
+
 
 private:
   Vector3d _3d; //3d point in world co-ordinate
   Vector2d _2d; //undistorrted normalized observed points
   double pitch;
   double roll;
+
+  Matrix3d rpy;
+
+
+
+  // The simplest way minimize_{R,t} Proj( R * p_X + t ) - c_(u;v)
+  template <typename T>
+  bool A( const T* const yaw, const T* const tran, T* e ) const
+  {
+
+      /* This part moved to function ypr2R() of type T.
+      ////// function ypr2R ///////
+      // use yaw, pitch and roll to form a rotation Matrix<T,3,3>
+      Matrix<T,3,3> Rot;
+
+      T yy = yaw[0] / T(180.0) * T(M_PI); //yaw in radians
+      T pp = T(pitch) / T(180.0) * T(M_PI); //pitch in radians
+      T rr = T(roll) / T(180.0) * T(M_PI); //roll in radians
+
+      Matrix<T,3,3> Rz;
+      Rz << cos(yy), -sin(yy), T(0.),
+          sin(yy), cos(yy), T(0.),
+          T(0.), T(0.), T(1.);
+
+      Matrix<T,3,3> Ry;
+      Ry << cos(pp), T(0.), sin(pp),
+          T(0.), T(1.), T(0.),
+          -sin(pp), T(0.), cos(pp);
+
+      Matrix<T,3,3> Rx;
+      Rx << T(1.), T(0.), T(0.),
+          T(0.), cos(rr), -sin(rr),
+          T(0.), sin(rr), cos(rr);
+
+      Rot = Rz * Ry * Rx;
+
+      //////////// END ///////////
+      */
+
+      Matrix<T,3,3> Rot;
+      ypr2R( yaw[0], T(pitch), T(roll), Rot );
+
+      Matrix<T,3,1> t;
+      t<< tran[0], tran[1], tran[2];
+
+
+      Matrix<T,3,1> w_X; //3d co-ordinates in world ref-frame
+      w_X << T(_3d(0)), T(_3d(1)), T(_3d(2));
+
+      Matrix<T,2,1> unvn; //normalized undistorrted observed points
+      unvn << T(_2d(0)), T(_2d(1));
+
+      Matrix<T,3,1> c_X; //3d co-ordinates in camera ref-frame
+      c_X = Rot * w_X + t;
+
+      Matrix<T,2,1> error; // this variable is redundant. consider removal. TODO
+      error(0) = c_X(0) / c_X(2) - unvn(0);
+      error(1) = c_X(1) / c_X(2) - unvn(1);
+
+      e[0] = error(0);
+      e[1] = error(1);
+      return true;
+  }
+
+
+  // minimize_{R,t}  [X_cap;Y_cap]  - Z_cap * c_(u;v)
+  // where, [X_cap;Y_cap;Z_cap] = R * p_X + t
+  template <typename T>
+  bool B( const T* const yaw, const T* const tran, T* e ) const
+  {
+      Matrix<T,3,3> Rot;
+      ypr2R( yaw[0], T(pitch), T(roll), Rot );
+
+      Matrix<T,3,1> t;
+      t<< tran[0], tran[1], tran[2];
+
+
+      Matrix<T,3,1> w_X; //3d co-ordinates in world ref-frame
+      w_X << T(_3d(0)), T(_3d(1)), T(_3d(2));
+
+      Matrix<T,2,1> unvn; //normalized undistorrted observed points
+      unvn << T(_2d(0)), T(_2d(1));
+
+      Matrix<T,3,1> c_X; //3d co-ordinates in camera ref-frame
+      c_X = Rot * w_X + t;
+
+      Matrix<T,2,1> error; // this variable is redundant. consider removal. TODO
+      error(0) = c_X(0)  - unvn(0)*c_X(2);
+      error(1) = c_X(1)  - unvn(1)*c_X(2);
+
+      e[0] = error(0);
+      e[1] = error(1);
+      return true;
+  }
+
+
+  template <typename T>
+  bool C( const T* const yaw, const T* const tran, T* e ) const
+  {
+
+      ////// function ypr2R ///////
+      // use yaw, pitch and roll to form a rotation Matrix<T,3,3>
+      Matrix<T,3,3> Rot;
+
+      T yy = yaw[0] / T(180.0) * T(M_PI); //yaw in radians
+
+      Matrix<T,3,3> Rz;
+      Rz << cos(yy), -sin(yy), T(0.),
+          sin(yy), cos(yy), T(0.),
+          T(0.), T(0.), T(1.);
+
+          // pitch and roll already exist.
+      Rot = Rz * rpy.cast<T>();
+
+      //////////// END ///////////
+
+
+
+      Matrix<T,3,1> t;
+      t<< tran[0], tran[1], tran[2];
+
+
+      Matrix<T,3,1> w_X; //3d co-ordinates in world ref-frame
+      w_X << T(_3d(0)), T(_3d(1)), T(_3d(2));
+
+      Matrix<T,2,1> unvn; //normalized undistorrted observed points
+      unvn << T(_2d(0)), T(_2d(1));
+
+      Matrix<T,3,1> c_X; //3d co-ordinates in camera ref-frame
+      c_X = Rot * w_X + t;
+
+      Matrix<T,2,1> error; // this variable is redundant. consider removal. TODO
+      error(0) = c_X(0) / c_X(2) - unvn(0);
+      error(1) = c_X(1) / c_X(2) - unvn(1);
+
+      e[0] = error(0);
+      e[1] = error(1);
+      return true;
+  }
+
+  template <typename T>
+  void ypr2R( const T& inp_yaw, const T& inp_pitch, const T& inp_roll, Matrix<T,3,3>& R )
+  {
+      T yy = inp_yaw / T(180.0) * T(M_PI); //yaw in radians
+      T pp = inp_pitch / T(180.0) * T(M_PI); //pitch in radians
+      T rr = inp_roll / T(180.0) * T(M_PI); //roll in radians
+
+      Matrix<T,3,3> Rz;
+      Rz << cos(yy), -sin(yy), T(0.),
+          sin(yy), cos(yy), T(0.),
+          T(0.), T(0.), T(1.);
+
+      Matrix<T,3,3> Ry;
+      Ry << cos(pp), T(0.), sin(pp),
+          T(0.), T(1.), T(0.),
+          -sin(pp), T(0.), cos(pp);
+
+      Matrix<T,3,3> Rx;
+      Rx << T(1.), T(0.), T(0.),
+          T(0.), cos(rr), -sin(rr),
+          T(0.), sin(rr), cos(rr);
+
+      R = Rz * Ry * Rx;
+  }
 
 };
 

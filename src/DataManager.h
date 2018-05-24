@@ -79,6 +79,8 @@ using namespace std;
 #include "PinholeCamera.h"
 #include "LocalBundle.h"
 
+#include "tic_toc.h"
+
 // Debug enable/disable flags
 // #define _DEBUG_3WAY
 // #define _DEBUG_PNP

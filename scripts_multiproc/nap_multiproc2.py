@@ -889,16 +889,20 @@ def create_visualization_image_static( DF, im_alpha, ptset_alpha, idx_alpha, \
 
     _R, _C, _ = im_alpha.shape
 
-    # xcanvas_expanded = DF.plot_point_sets(im_alpha, ptset_alpha, im_beta, ptset_beta, mask=pset_mask )
-    xcanvas_expanded = DF.plot_dense_point_sets( im_alpha, ptset_alpha, im_beta, ptset_beta, mask=pset_mask, enable_text=True  )
+
+    if ptset_alpha is None or ptset_beta is None:
+        xcanvas_expanded = np.concatenate( (im_alpha, im_beta), axis=1 )
+    else:
+        # xcanvas_expanded = DF.plot_point_sets(im_alpha, ptset_alpha, im_beta, ptset_beta, mask=pset_mask )
+        xcanvas_expanded = DF.plot_dense_point_sets( im_alpha, ptset_alpha, im_beta, ptset_beta, mask=pset_mask, enable_text=True  )
 
 
-    status = np.zeros( (100, xcanvas_expanded.shape[1], 3), dtype='uint8' )
+    status = np.zeros( (200, xcanvas_expanded.shape[1], 3), dtype='uint8' )
     status = cv2.putText( status, '%d' %(idx_alpha), (10,30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 2 )
     status = cv2.putText( status, '%d' %(idx_beta), (_C+10,30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 2 )
 
     for i,m in enumerate(msg):
-        status = cv2.putText( status, m, (10,60+20*i), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 2 )
+        status = cv2.putText( status, m, (10,60+20*i), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 2 )
 
     xcanvas_expanded = np.concatenate( (xcanvas_expanded, status), axis=0 )
 
@@ -932,7 +936,10 @@ def create_visualization_image( DF, ch_alpha, ptset_alpha, ch_beta, ptset_beta, 
 ## Consumer of the Qdd queue. This queue contains verified candidates where you can
 ## perform re-triangulation. The nap_msg is created with op_mode28 and put into the
 ## shared queue Q_bundle_napmsg. This Q_bundle_napmsg is published in main thread.
-def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_raw, Q_bundle_napmsg ):
+##
+## Q_bundle_napmsg : Queue of nap msg. This queue is produced by this function and consumed by main-thread
+## Q_match_im_bundle : Debug image. This queue is produced by this thread and consumed by main-thread.
+def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_raw, Q_bundle_napmsg, Q_match_im_bundle ):
     THREAD_NAME = '%5d-worker_qdd_processor' %( os.getpid() )
 
     DF = DaisyFlow() #TODO May be have an argument to constructor of DaisyFlow to indicate how many daisy's to allocate
@@ -960,6 +967,14 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
         TRACKS.reset()
         TRACKS.i_curr = g[0]
         TRACKS.i_prev = g[1]
+
+        # Signal Start of Dense Computation. Make a debug image and put it into Q_match_im_bundle
+        if Q_match_im_bundle is not None:
+            __xcanvas = create_visualization_image_static( DF, S_thumbnails[i_curr].astype('uint8'), None, i_curr, \
+                                               S_thumbnails[i_prev].astype('uint8'), None, i_prev, pset_mask=None,\
+                                               msg=["Start Bundle Computation"] )
+            Q_match_im_bundle.put( __xcanvas )
+
 
 
         # HERE
@@ -1111,8 +1126,8 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
 
         # Step-4 : (optional) cross tracking
 
-
-        xprint( tcol.OKGREEN+'Daisy dense match and tracking done in %4.2f (ms)' %( 1000. * (time.time() - startLocalRetriangulation))+tcol.ENDC, THREAD_NAME )
+        bundle_feature_tracking_computation_time_ms = 1000. * (time.time() - startLocalRetriangulation)
+        xprint( tcol.OKGREEN+'Daisy dense match and tracking done in %4.2f (ms)' %( bundle_feature_tracking_computation_time_ms )+tcol.ENDC, THREAD_NAME )
 
         ####
         #### Step-5 : Package all this data into NapMsg::sensor_msgs/PointCloud[] bundle
@@ -1123,7 +1138,7 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
 
         # Verify data from the TRACKS.
         # Now lets look at just the data in feat_track.feature_list and feat_track.visibility_table
-        print 'pairs in TRACKS (_k0, _k1, AB_mask.sum()): '
+        print 'pairs in TRACKS (_k0, _k1, AB_mask.sum(), pair_type): '
         for _k in TRACKS.visibility_table.keys():
             imA = S_thumbnails[ _k[0] ]
             imB = S_thumbnails[ _k[1] ]
@@ -1131,16 +1146,22 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
             ptsB = TRACKS.features_list[ _k[1] ]
             AB_mask = TRACKS.visibility_table[ _k ]
             pair_type = TRACKS.pair_type[_k]
-            print _k[0], _k[1], AB_mask.sum()
+            print _k[0], _k[1], AB_mask.sum(), pair_type
 
+            if pair_type != -1: #only display images with pair_type==-1
+                continue
 
             # xcanvas_dbg = DF.plot_point_sets( imA, ptsA, imB, ptsB, mask=AB_mask )
-            disp = [ '#+expand_matches : %d' %(AB_mask.sum() ) ]
+            disp = [ '#+dense_matches : %d' %(AB_mask.sum() ),\
+                     'Done Bundle Feature Tracking in %4.2fms' %(bundle_feature_tracking_computation_time_ms),\
+                     '|%s|' %(str(TRACKS.set_type_1.keys()) ),\
+                     '|%s|' %( str(TRACKS.set_type_2.keys()) ),\
+                     '|%s| ' %(str(TRACKS.set_type_3.keys()) )
+                   ]
             xcanvas_dbg = create_visualization_image_static( DF,\
                     imA, ptsA, _k[0],   imB, ptsB, _k[1],  AB_mask, disp )
 
-            if pair_type != -1:
-                continue
+
             fname = output_dump_path+'/%d_%d_TRAC(Type=%d)_%d_%d.jpg' %( TRACKS.i_curr, TRACKS.i_prev, TRACKS.pair_type[_k] , _k[0], _k[1] )
             # fname = output_dump_path+'org_%d_%d.jpg' %( _k[0], _k[1] )
             xprint( 'Writing image debug : %s' %(fname), THREAD_NAME )
@@ -1149,7 +1170,11 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
             # cv2.waitKey(0)
 
 
-        # continue
+            # Signal that the tracking features locally is complete. Make a debug image and set it into Q_match_im_bundle
+            Q_match_im_bundle.put( xcanvas_dbg )
+
+
+
         # Create NapMsg with op_mode 28
         #napmsg.bundle # pointcloud
         #napmsg.visibility_table #image NxF. N: number of image-pairs (ie. visibility_table.keys()), F: number of base features
@@ -1198,17 +1223,20 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
         xprint( "put nap_msg.op_mode28 on Q_bundle_napmsg", THREAD_NAME )
 
 
+
         continue
 
 
     Qdd.close()
     Q_bundle_napmsg.close()
+    if Q_match_im_bundle is not None:
+        Q_match_im_bundle.close()
 
 
 # Attempt to get rid of the GeometricVerification class. Consumed Qd to produce Qdd
 # 2way matches and bundles. This is replacement for worker_cpu.
 def worker_bundle_cpu(  process_flags, Qd, Qdd, S_thumbnails, S_timestamp, S_lut_raw,\
-                        FF ):
+                        FF, Q_2way_napmsg, Q_match_im_canvas ):
 
     THREAD_NAME = '%5d-worker_bundle_cpu' %( os.getpid() )
     DF = DaisyFlow()
@@ -1296,7 +1324,31 @@ def worker_bundle_cpu(  process_flags, Qd, Qdd, S_thumbnails, S_timestamp, S_lut
 
         # Fill in Q_2way_napmsg
         #           ---""--- usual stuff, copy from nap_multiproc_node.py (basically fill in 2way nap msg)
-        # TODO
+        if( score >= 3.  or ( score > 2.0 and len(selected_curr_i) > 15 ) ):
+            # Step-1:
+            nap_msg = make_nap_msg( t_curr, t_prev, (0.6,1.0,0.6) )
+            nap_msg.op_mode = 20
+            nap_msg.t_curr = t_curr
+            nap_msg.t_prev = t_prev
+
+            # Step-2: Fill up nap-msg
+            for h in range( len(selected_curr_i) ):
+                _u = feat2d_curr_normed[ 0:2, selected_curr_i[h] ]
+                _U = feat3d_curr[0:3, selected_curr_i[h] ]
+                _g_idx = -100#feat2d_curr_global_idx[ selected_curr_i[h] ]
+                # nap_msg.curr will be 2X length, where nap_msg.prev will be X length.
+                nap_msg.curr.append( Point32(_u[0], _u[1], _g_idx) )
+                nap_msg.curr.append( Point32(_U[0], _U[1], _U[2])  )
+
+                _u = feat2d_prev_normed[ 0:2, selected_prev_i[h] ]
+                _g_idx = -100#feat2d_prev_global_idx[ selected_prev_i[h] ]
+                nap_msg.prev.append( Point32(_u[0], _u[1], _g_idx) )
+
+            # Step-3: Put the napmsg in the queue to be published by main-thread.
+            Q_2way_napmsg.put( nap_msg )
+
+
+
 
 
         # Fill in Qdd (queue to hold verified candidate worthy on dense local bundle adjustment.)
@@ -1316,23 +1368,31 @@ def worker_bundle_cpu(  process_flags, Qd, Qdd, S_thumbnails, S_timestamp, S_lut
             continue
 
 
+
+
+
         # Visualize as Image
-        pts0_filtered = np.transpose( np.int0(feat2d_curr[0:2,selected_curr_i]) )
-        pts1_filtered = np.transpose( np.int0(feat2d_prev[0:2,selected_prev_i]) )
-        xcanvas_2way = DF.plot_point_sets( DF.uim[0].astype('uint8'), pts0_filtered, DF.uim[1].astype('uint8'),  pts1_filtered)
+        if Q_match_im_canvas is not None:
 
-        # A status-image
-        dash_pane = np.zeros( ( 100, xcanvas_2way.shape[1], 3 ), dtype='uint8' )
-        dash_pane = cv2.putText( dash_pane, '%d' %(i_curr), (100,30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 2 )
-        dash_pane = cv2.putText( dash_pane, '%d' %(i_prev), (im_curr.shape[1]+100,30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 2 )
-        dash_pane = cv2.putText( dash_pane, 'Score: %4.2f, inp#feat2d: %d out#feat2d: %d' %(score, feat2d_curr.shape[1], len(selected_curr_i)), (10,70), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 2 )
-        xcanvas = np.concatenate( (xcanvas_2way,dash_pane),  axis=0  )
-        cv2.imshow( 'xcanvas', xcanvas )
-        # output_dump_path = '/home/mpkuse/Desktop/bundle_adj/dump/'
-        # print 'Writing file to folder: ', output_dump_path
-        # cv2.imwrite( '%s/%04d_%04d_xcanvas.png' %(output_dump_path, i_curr, i_prev), xcanvas )
+            pts0_filtered = np.transpose( np.int0(feat2d_curr[0:2,selected_curr_i]) )
+            pts1_filtered = np.transpose( np.int0(feat2d_prev[0:2,selected_prev_i]) )
+            xcanvas_2way = DF.plot_point_sets( DF.uim[0].astype('uint8'), pts0_filtered, DF.uim[1].astype('uint8'),  pts1_filtered)
 
-        cv2.waitKey(10)
+            # A status-image
+            dash_pane = np.zeros( ( 100, xcanvas_2way.shape[1], 3 ), dtype='uint8' )
+            dash_pane = cv2.putText( dash_pane, '%d' %(i_curr), (100,30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 2 )
+            dash_pane = cv2.putText( dash_pane, '%d' %(i_prev), (im_curr.shape[1]+100,30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 2 )
+            dash_pane = cv2.putText( dash_pane, 'Score: %4.2f, inp#feat2d: %d out#feat2d: %d' %(score, feat2d_curr.shape[1], len(selected_curr_i)), (10,70), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 2 )
+            xcanvas = np.concatenate( (xcanvas_2way,dash_pane),  axis=0  )
+
+            Q_match_im_canvas.put( xcanvas )
+
+            # cv2.imshow( 'xcanvas', xcanvas )
+            # output_dump_path = '/home/mpkuse/Desktop/bundle_adj/dump/'
+            # print 'Writing file to folder: ', output_dump_path
+            # cv2.imwrite( '%s/%04d_%04d_xcanvas.png' %(output_dump_path, i_curr, i_prev), xcanvas )
+
+            # cv2.waitKey(10)
 
 
 
@@ -1341,6 +1401,10 @@ def worker_bundle_cpu(  process_flags, Qd, Qdd, S_thumbnails, S_timestamp, S_lut
 
     Qd.close()
     Qdd.close()
+    Q_2way_napmsg.close()
+
+    if Q_match_im_canvas is not None:
+        Q_match_im_canvas.close()
 
 
 
@@ -1463,6 +1527,8 @@ if __name__ == "__main__":
     pub_match_im_canvas = rospy.Publisher( '/debug/featues2d_matching', Image, queue_size=10 )
     Q_match_im3way_canvas = Queue() # 3way matching
     pub_match_im3way_canvas = rospy.Publisher( '/debug/featues_matching_3way', Image, queue_size=10 )
+    Q_match_im_bundle = Queue()
+    pub_match_im_bundle_canvas = rospy.Publisher( '/debug/features_bundle', Image, queue_size=10 )
 
 
     # False colormap from Neural Network
@@ -1489,7 +1555,8 @@ if __name__ == "__main__":
                             process_flags,\
                             Qdd,\
                             S_thumbnails, S_timestamp, S_lut_raw,\
-                            Q_bundle_napmsg\
+                            Q_bundle_napmsg,\
+                            Q_match_im_bundle
                             )\
                         )
 
@@ -1518,7 +1585,8 @@ if __name__ == "__main__":
                                 S_thumbnails, \
                                 S_timestamp, \
                                 S_lut_raw, \
-                                FEAT_FACT_SEMAPHORES\
+                                FEAT_FACT_SEMAPHORES,\
+                                Q_2way_napmsg, Q_match_im_canvas
                             )\
                        )
         cpu_jobs.append( p_cpu )
@@ -1588,6 +1656,11 @@ if __name__ == "__main__":
 
         try:
             publish_image( pub_match_im3way_canvas, Q_match_im3way_canvas.get_nowait() )
+        except:
+            pass
+
+        try:
+            publish_image( pub_match_im_bundle_canvas, Q_match_im_bundle.get_nowait() )
         except:
             pass
 

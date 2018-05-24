@@ -832,20 +832,28 @@ LocalBundle::LocalBundle( const nap::NapMsg::ConstPtr& msg,
     switch(ttype)
     {
       case 1:
-        _1set.push_back( _i );
-        _1set.push_back( _j );
+        // _1set.push_back( _i );
+        // _1set.push_back( _j );
+        push_back_uniq( _1set, _i );
+        push_back_uniq( _1set, _j );
         break;
       case 2:
-        _2set.push_back( _i );
-        _2set.push_back( _j );
+        // _2set.push_back( _i );
+        // _2set.push_back( _j );
+        push_back_uniq( _2set, _i );
+        push_back_uniq( _2set, _j );
         break;
       case 3:
-        _3set.push_back( _i );
-        _3set.push_back( _j );
+        // _3set.push_back( _i );
+        // _3set.push_back( _j );
+        push_back_uniq( _3set, _i );
+        push_back_uniq( _3set, _j );
         break;
       case -1:
-        _m1set.push_back( _i );
-        _m1set.push_back( _j );
+        // _m1set.push_back( _i );
+        // _m1set.push_back( _j );
+        push_back_uniq( _m1set, _i );
+        push_back_uniq( _m1set, _j );
         localidx_of_icurr = _i;
         localidx_of_iprev = _j;
         break;
@@ -877,16 +885,36 @@ LocalBundle::LocalBundle( const nap::NapMsg::ConstPtr& msg,
 
 
   }
+
+  //
+  // Print Sets
   cout << "array lengths of : ";
   cout << "_m1set=" << _m1set.size()  << ";";
   cout << "_1set=" << _1set.size() << ";";
   cout << "_2set=" << _2set.size() << ";";
   cout << "_3set=" << _3set.size() << ";";
   cout << endl;
-  // assert( _m1set.size() == 2 );
-  // assert( _1set.size() > 2 );
-  // assert( _2set.size() > 2 );
-  // assert( _3set.size() > 2 );
+
+  cout << "_m1set: ";
+  for( int i=0 ; i<_m1set.size() ; i++ ) {
+      cout << _m1set[i] << ", ";
+  }  cout << endl;
+
+  cout << "_1set: ";
+  for( int i=0 ; i<_1set.size() ; i++ ) {
+      cout << _1set[i] << ", ";
+  }  cout << endl;
+  cout << "_2set: ";
+  for( int i=0 ; i<_2set.size() ; i++ ) {
+      cout << _2set[i] << ", ";
+  }  cout << endl;
+  cout << "_3set: ";
+  for( int i=0 ; i<_3set.size() ; i++ ) {
+      cout << _3set[i] << ", ";
+  }  cout << endl;
+
+
+
 
   if( ( _m1set.size() == 2 ) && ( _1set.size() > 2 ) && ( _2set.size() > 2 ) && ( _3set.size() > 2 ) )
   {
@@ -1629,7 +1657,7 @@ void LocalBundle::ceresDummy()
 
 }
 
-void LocalBundle::crossRelPoseComputation3d2d()
+Matrix4d LocalBundle::crossRelPoseComputation3d2d()
 {
   assert( isValid_iprev_X_iprev_triangulated );
   markObservedPointsOnCurrIm();
@@ -1651,7 +1679,7 @@ void LocalBundle::crossRelPoseComputation3d2d()
   // Initial Guess
   Matrix4d T_cap;
   T_cap = gi_T_gj( localidx_of_icurr, localidx_of_iprev );
-  // mark3dPointsOnCurrIm( T_cap * p_T_w(), "proj3dPointsOnCurr_itr0x" );
+  mark3dPointsOnCurrIm( T_cap * p_T_w(), "proj3dPointsOnCurr_itr0x" );
 
 
   double T_cap_ypr[10], T_cap_t[10];
@@ -1668,7 +1696,8 @@ void LocalBundle::crossRelPoseComputation3d2d()
   printMatrix1d( "T_cap_t", T_cap_t, 3 );
   cout << " ~~~~~ ~~~~~ ~~~~~ ~~~~~\n";
   //TODO use only pitch and roll from w_T_c. Start from zero init guess otherwise.
-
+  Vector3d _0_p_r; _0_p_r << 0.0, T_cap_ypr[1], T_cap_ypr[2];
+  Matrix3d _0_pitch_roll = ypr2R( _0_p_r );
 
 
   //
@@ -1694,11 +1723,12 @@ void LocalBundle::crossRelPoseComputation3d2d()
     // 4DOF loss
     ceres::CostFunction * cost_function = Align3d2d__4DOF::Create( this->iprev_X_iprev_triangulated.col(i),
                                                           unvn_undistorted[localidx_of_icurr].col(i),
-                                                        T_cap_ypr[1], T_cap_ypr[2] );
+                                                          _0_pitch_roll
+                                                      /*T_cap_ypr[1], T_cap_ypr[2]*/ );
 
     ceres::LossFunction *loss_function = NULL;
     // loss_function = new ceres::HuberLoss(.01);
-    loss_function = new ceres::CauchyLoss(.1);
+    loss_function = new ceres::CauchyLoss(.05);
 
     problem.AddResidualBlock( cost_function, loss_function, &T_cap_ypr[0], T_cap_t  );
 
@@ -1739,420 +1769,11 @@ void LocalBundle::crossRelPoseComputation3d2d()
   rawyprt_to_eigenmat( T_cap_ypr, T_cap_t, T_cap );
   mark3dPointsOnCurrIm( T_cap * p_T_w(), "proj3dPointsOnCurr_itr.final" );
 
-
-}
-
-
-void LocalBundle::crossPoseComputation3d2d()
-{
-  assert( isValid_w_X_iprev_triangulated );
-  assert( isValid_iprev_X_iprev_triangulated );
-
-  markObservedPointsOnCurrIm();
-  markObservedPointsOnPrevIm();
-
-  mark3dPointsOnPrevIm( gi_T_w(localidx_of_iprev), "projected3dPointsOnPrev" );
-
-  // 3d-2d align here.
-  // initially just do between the 3d points and undistorted-normalized-observed points on curr.
-
-  //
-  // Initial Guess
-  Matrix4d T_cap;// = Matrix4d::Identity();
-  gi_T_w(  localidx_of_icurr, T_cap );
-  mark3dPointsOnCurrIm( T_cap, "itr0" );
-  double T_cap_q[10], T_cap_t[10];
-  Vector3d T_cap_ypr = R2ypr( T_cap.topLeftCorner<3,3>() );
-  double T_cap_yaw = T_cap_ypr(0); double T_cap_pitch = T_cap_ypr(1); double T_cap_roll = T_cap_ypr(2);
-  eigenmat_to_raw( T_cap, T_cap_q, T_cap_t );
-  cout << "~~~ Initial Guess ~~~\n";
-  cout << "T_cap\n" << T_cap << endl;
-  cout << "T_cap_ypr:" << T_cap_ypr.transpose() << endl;
-  printMatrix1d( "T_cap_q", T_cap_q, 4 );
-  printMatrix1d( "T_cap_t", T_cap_t, 3 );
-  cout << "~~~~~~~~~~~~~~~~~~~~~\n";
-
-
-  //
-  // Setup the problem
-  ceres::Problem problem;
-  VectorXd curr_mask = visibility_mask_nodes.row( localidx_of_icurr );
-  assert( curr_mask.size() == this->w_X_iprev_triangulated.cols() );
-  assert( curr_mask.size() == this->unvn_undistorted[localidx_of_icurr].cols() );
-  for( int i=0 ; i< this->w_X_iprev_triangulated.cols() ; i++ )
-  {
-    if( curr_mask(i) == 0 ) { // this 3dpoint is not visible in this view
-      continue;
-    }
-
-    /* With general 6DOF loss
-    ceres::CostFunction * cost_function = Align3d2d::Create( this->w_X_iprev_triangulated.col(i),
-                                                          unvn_undistorted[localidx_of_icurr].col(i) );
-    problem.AddResidualBlock( cost_function, new ceres::HuberLoss(0.01), T_cap_q, T_cap_t  );
-    */
-
-
-    // 4DOF loss
-    ceres::CostFunction * cost_function = Align3d2d__4DOF::Create( this->w_X_iprev_triangulated.col(i),
-                                                          unvn_undistorted[localidx_of_icurr].col(i),
-                                                        T_cap_pitch, T_cap_roll );
-    // problem.AddResidualBlock( cost_function, new ceres::HuberLoss(1.), &T_cap_yaw, T_cap_t  );
-    problem.AddResidualBlock( cost_function, new ceres::CauchyLoss(.01), &T_cap_yaw, T_cap_t  );
-  }
-
-
-  //
-  // Local Parameterization (for 6DOF)
-  // ceres::LocalParameterization *quaternion_parameterization = new ceres::QuaternionParameterization;
-  // problem.SetParameterization( T_cap_q, quaternion_parameterization );
-
-  // 4DOF needs normalized step for yaw (not a euclidean step)
-  ceres::LocalParameterization* angle_local_parameterization = AngleLocalParameterization::Create();
-  problem.SetParameterization( &T_cap_yaw, angle_local_parameterization );
-
-
-
-  //
-  // Solve
-  ceres::Solver::Options options;
-  options.linear_solver_type = ceres::DENSE_QR;
-  options.minimizer_progress_to_stdout = false;
-  ceres::Solver::Summary summary;
-
-  //
-  // Callback
-  Align3d2d__4DOFCallback callback(&T_cap_yaw, T_cap_t);
-  callback.setConstants( &T_cap_pitch, &T_cap_roll );
-  callback.setData( this );
-  options.callbacks.push_back(&callback);
-  options.update_state_every_iteration = true;
-
-  ceres::Solve( options, &problem, &summary );
-
-  cout << summary.BriefReport() << endl;
-
-
-  //
-  // Retrive Result (6DOF)
-  /*
-  raw_to_eigenmat( T_cap_q, T_cap_t, T_cap );
-  */
-
-  // 4DOF
-  T_cap_ypr(0) = T_cap_yaw;
-  T_cap.topLeftCorner<3,3>() = ypr2R( T_cap_ypr );
-  T_cap(0,3) = T_cap_t[0];
-  T_cap(1,3) = T_cap_t[1];
-  T_cap(2,3) = T_cap_t[2];
-  mark3dPointsOnCurrIm( T_cap, "itr999" );
-  cout << "~~~ After Optimization ~~~\n";
-  cout << "T_cap\n" << T_cap << endl;
-  cout << "T_cap_ypr:" << R2ypr( T_cap.topLeftCorner<3,3>() ).transpose() << endl;
-  cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~\n";
-
-
-
-
-
-  // Visualize
-  /*
-  for( int v=0 ; v<n_ptClds ; v++ )
-  {
-    //plot observed points
-    cv::Mat outImg;
-    int node_gid = global_idx_of_nodes[v];
-    int node_napid = nap_idx_of_nodes[v];
-    cout << " node_lid="<< v;
-    cout << " node_gid="<< node_gid;
-    cout << " node_napid="<< node_napid << endl;
-
-    bool in_1set, in_2set, in_3set, in_m1set;
-    in_1set = ( std::find( begin(_1set), end(_1set), v ) != end(_1set) )? true: false;
-    in_2set = ( std::find( begin(_2set), end(_2set), v ) != end(_2set) )? true: false;
-    in_3set = ( std::find( begin(_3set), end(_3set), v ) != end(_3set) )? true: false;
-    in_m1set = ( std::find( begin(_m1set), end(_m1set), v ) != end(_m1set) )? true: false;
-    cout << "v occurs in (1set,2set,3set,m1set)=" << in_1set << " " << in_2set << " " << in_3set << " " << in_m1set << endl;
-    cout << "v occurs in ";
-    cout << " in_1set="<<in_1set;
-    cout << " in_2set="<<in_2set;
-    cout << " in_3set="<<in_3set;
-    cout << " in_m1set="<<in_m1set << endl;
-
-
-    string msg;
-    msg = "lid="+to_string( v) + "; gid="+to_string(node_gid) + "; nap_id="+to_string(node_napid);
-    plot_dense_point_sets( global_nodes[node_gid]->getImageRef(), uv[v], visibility_mask_nodes.row(v),
-                       true, true, msg, outImg );
-
-    // save
-    write_image( to_string(nap_idx_of_nodes[_m1set[0]])+"_"+to_string(nap_idx_of_nodes[_m1set[1]])+"___"+to_string(node_napid)+"_observed.png" , outImg );
-
-
-
-    // Reproject w_X_iprev_triangulated
-    Matrix4d w_T_gid;
-    global_nodes[node_gid]->getOriginalTransform(w_T_gid);//4x4
-
-    MatrixXd v_X;
-    v_X = w_T_gid.inverse() * w_X_iprev_triangulated;
-
-    MatrixXd reproj_pts;
-    camera.perspectiveProject3DPoints( v_X, reproj_pts);
-    plot_dense_point_sets( global_nodes[node_gid]->getImageRef(), reproj_pts, visibility_mask_nodes.row(v),
-                       true, true, msg, outImg );
-
-    // save
-    write_image( to_string(nap_idx_of_nodes[_m1set[0]])+"_"+to_string(nap_idx_of_nodes[_m1set[1]])+"___"+to_string(node_napid)+"_reproj_3diprev.png" , outImg );
-
-
-
-    if( in_3set && in_m1set ) //if in icurr-5 to icurr.
-    {
-      MatrixXd v_X;
-      v_X =   T_cap * w_X_iprev_triangulated;
-
-      MatrixXd reproj_pts;
-      camera.perspectiveProject3DPoints( v_X, reproj_pts);
-      plot_dense_point_sets( global_nodes[node_gid]->getImageRef(), reproj_pts, visibility_mask_nodes.row(v),
-                         true, true, msg, outImg );
-
-      // save
-      write_image( to_string(nap_idx_of_nodes[_m1set[0]])+"_"+to_string(nap_idx_of_nodes[_m1set[1]])+"___"+to_string(node_napid)+"_reproj_corrected_3diprev.png" , outImg );
-
-
-    }
-
-
-  }
-
-  */
-}
-
-/// Get pose between icurr and iprev by 3d-2d alignment. (non-linear least squares)
-/// [3d points] w_X_triang
-/// [2d points] unvn_undistorted[_3set[0]]
-void LocalBundle::crossPoseComputation()
-{
-  assert( isValid_w_X_iprev_triangulated );
-  //make use of this->w_X_iprev_triangulated 4xN matrix. Already w-divided.
-  assert( isValid_w_X_icurr_triangulated );
-  //make use of this->w_X_icurr_triangulated 4xN matrix. Already w-divided.
-
-  assert( this->w_X_iprev_triangulated.cols() == this->w_X_icurr_triangulated.cols() );
-
-  //
-  // Plot the 3d points and observed points on the images
-  // We now have access to the triangulated points
-
-
-  // loop on all nodes TODO
-  //    // plot observed points
-  //    // reproject w_X_iprev_triangulated  using VIO pose
-  //    // reproject w_X_icurr_triangulated  using VIO pose
-
-
-
-  /*
-  // Make Problem - Sample
-  ceres::Problem problem;
-  double x = 5.0;
-  ceres::CostFunction * cost_function = new ceres::AutoDiffCostFunction<DampleResidue, 1, 1>(new DampleResidue);
-  problem.AddResidualBlock( cost_function, NULL, &x);
-
-  // Solve
-  ceres::Solver::Options options;
-  options.linear_solver_type = ceres::DENSE_QR;
-  options.minimizer_progress_to_stdout = true;
-  ceres::Solver::Summary summary;
-  ceres::Solve( options, &problem, &summary );
-
-  cout << summary.BriefReport() << endl;
-  cout << "Optimized x : " << x << endl;
-  */
-
-
-  /*
-  // 3d-3d Alignment
-  ceres::Problem problem;
-  double p_R_c[9] = {1,0,0,  0,1,0,  0,0,1}; // Identity
-  double p_Tr_c[3] = {0,0,0};
-  printMatrix2d( "p_R_c init", p_R_c, 3,3 );
-  printMatrix1d( "p_Tr_c init", p_Tr_c, 3 );
-
-  // Make Problem
-  for( int i=0 ; i< this->w_X_iprev_triangulated.cols() ; i++ ) {
-      double p_X[3], c_Xd[3];
-      p_X[0] = this->w_X_iprev_triangulated(0,i);
-      p_X[1] = this->w_X_iprev_triangulated(1,i);
-      p_X[2] = this->w_X_iprev_triangulated(2,i);
-      c_Xd[0] = this->w_X_icurr_triangulated(0,i);
-      c_Xd[1] = this->w_X_icurr_triangulated(1,i);
-      c_Xd[2] = this->w_X_icurr_triangulated(2,i);
-      ceres::CostFunction * cost_function =
-        new ceres::AutoDiffCostFunction<Align3dPointsResidue, 3, 9, 3>( new Align3dPointsResidue(p_X, c_Xd) );
-
-      problem.AddResidualBlock( cost_function, NULL, p_R_c, p_Tr_c );
-      // problem.AddResidualBlock( cost_function, new CauchyLoss(0.5), p_R_c, p_Tr_c );
-  }
-
-  // Solve
-  ceres::Solver::Options options;
-  options.linear_solver_type = ceres::DENSE_QR;
-  options.minimizer_progress_to_stdout = true;
-  ceres::Solver::Summary summary;
-  ceres::Solve( options, &problem, &summary );
-
-  // cout << summary.BriefReport() << endl;
-  cout << summary.FullReport() << endl;
-  printMatrix2d( "p_R_c optimized", p_R_c, 3,3 );
-  printMatrix1d( "p_Tr_c optimized", p_Tr_c, 3 );
-  */
-
-
-
-
-  // remember the computed 3d points are in world co-ordinate frame, they need to be converted to icurr frame and iprev frame.
-  Matrix4d w_T_p, w_T_c;
-  global_nodes[ global_idx_of_nodes[localidx_of_icurr] ]->getOriginalTransform(w_T_c);
-  global_nodes[ global_idx_of_nodes[localidx_of_iprev] ]->getOriginalTransform(w_T_p);
-  cout << "CERES: curr: "<< localidx_of_icurr << " " <<  global_idx_of_nodes[localidx_of_icurr] << " "<< nap_idx_of_nodes[localidx_of_icurr] << endl;
-  cout << "CERES: prev: "<< localidx_of_iprev << " " <<  global_idx_of_nodes[localidx_of_iprev] << " "<< nap_idx_of_nodes[localidx_of_iprev] << endl;
-
-
-  MatrixXd X_pts, Xd_pts;
-  X_pts = w_T_p.inverse() *  this->w_X_iprev_triangulated;
-  Xd_pts = w_T_p.inverse() *  this->w_X_icurr_triangulated;
-  printMatrixInfo( "X_pts", X_pts );
-  printMatrixInfo( "Xd_pts", Xd_pts );
-
-
-  // Initial Guess
-  Matrix4d delta_pose = Matrix4d::Identity(); //set here watever you want later
-  double delta_pose_q[10], delta_pose_t[10];
-  eigenmat_to_raw( delta_pose, delta_pose_q, delta_pose_t );
-  cout << "delta_pose(init)\n" << delta_pose << endl;
-  printMatrix1d( "delta_pose_q(init)", delta_pose_q, 4 );
-  printMatrix1d( "delta_pose_t(init)", delta_pose_t, 3 );
-
-
-
-  //
-  // Setup the Residuals
-  ceres::Problem problem;
-  for( int i=0 ; i< this->w_X_iprev_triangulated.cols() ; i++ )// loop over each 3d point
-  {
-    ceres::CostFunction * cost_function = Align3dPointsResidueEigen::Create( X_pts.col(i), Xd_pts.col(i)  );
-    problem.AddResidualBlock( cost_function, new ceres::HuberLoss(1.0), delta_pose_q, delta_pose_t );
-  }
-
-  //
-  // Set q as a Quaternion Increment
-  ceres::LocalParameterization *quaternion_parameterization = new ceres::QuaternionParameterization;
-  problem.SetParameterization( delta_pose_q, quaternion_parameterization );
-
-  //
-  // Solve
-  ceres::Solver::Options options;
-  options.linear_solver_type = ceres::DENSE_QR;
-  options.minimizer_progress_to_stdout = true;
-  ceres::Solver::Summary summary;
-  ceres::Solve( options, &problem, &summary );
-
-  cout << summary.BriefReport() << endl;
-
-
-  //
-  // Retrive Result
-  raw_to_eigenmat(  delta_pose_q, delta_pose_t, delta_pose );
-  cout << "delta_pose(init)\n" << delta_pose << endl;
-  printMatrix1d( "delta_pose_q(final)", delta_pose_q, 4 );
-  printMatrix1d( "delta_pose_t(final)", delta_pose_t, 3 );
-
-
-
-
-
-  // visualize
-  // Plot the triangulated 3d points on all the available views.
-
-  for( int v=0 ; v<n_ptClds ; v++ )
-  {
-    //plot observed points
-    cv::Mat outImg;
-    int node_gid = global_idx_of_nodes[v];
-    int node_napid = nap_idx_of_nodes[v];
-    cout << " node_lid="<< v;
-    cout << " node_gid="<< node_gid;
-    cout << " node_napid="<< node_napid << endl;
-
-    bool in_1set, in_2set, in_3set, in_m1set;
-    in_1set = ( std::find( begin(_1set), end(_1set), v ) != end(_1set) )? true: false;
-    in_2set = ( std::find( begin(_2set), end(_2set), v ) != end(_2set) )? true: false;
-    in_3set = ( std::find( begin(_3set), end(_3set), v ) != end(_3set) )? true: false;
-    in_m1set = ( std::find( begin(_m1set), end(_m1set), v ) != end(_m1set) )? true: false;
-    cout << "v occurs in (1set,2set,3set,m1set)=" << in_1set << " " << in_2set << " " << in_3set << " " << in_m1set << endl;
-    cout << "v occurs in ";
-    cout << " in_1set="<<in_1set;
-    cout << " in_2set="<<in_2set;
-    cout << " in_3set="<<in_3set;
-    cout << " in_m1set="<<in_m1set << endl;
-
-
-    string msg;
-    msg = "lid="+to_string( v) + "; gid="+to_string(node_gid) + "; nap_id="+to_string(node_napid);
-    plot_dense_point_sets( global_nodes[node_gid]->getImageRef(), uv[v], visibility_mask_nodes.row(v),
-                       true, true, msg, outImg );
-
-    // save
-    write_image( to_string(nap_idx_of_nodes[_m1set[0]])+"_"+to_string(nap_idx_of_nodes[_m1set[1]])+"___"+to_string(node_napid)+"_observed.png" , outImg );
-
-
-
-    // Reproject w_X_iprev_triangulated
-    Matrix4d w_T_gid;
-    global_nodes[node_gid]->getOriginalTransform(w_T_gid);//4x4
-
-    MatrixXd v_X;
-    v_X = w_T_gid.inverse() * w_X_iprev_triangulated;
-
-    MatrixXd reproj_pts;
-    camera.perspectiveProject3DPoints( v_X, reproj_pts);
-    plot_dense_point_sets( global_nodes[node_gid]->getImageRef(), reproj_pts, visibility_mask_nodes.row(v),
-                       true, true, msg, outImg );
-
-    // save
-    write_image( to_string(nap_idx_of_nodes[_m1set[0]])+"_"+to_string(nap_idx_of_nodes[_m1set[1]])+"___"+to_string(node_napid)+"_reproj_3diprev.png" , outImg );
-
-
-
-    if( in_3set && in_m1set ) //if in icurr-5 to icurr.
-    {
-      Matrix4d w_T_prev;
-      global_nodes[ global_idx_of_nodes[localidx_of_iprev]  ]->getOriginalTransform(w_T_prev);
-
-      MatrixXd v_X;
-      v_X =   (w_T_prev * delta_pose).inverse() * w_X_iprev_triangulated;
-
-      MatrixXd reproj_pts;
-      camera.perspectiveProject3DPoints( v_X, reproj_pts);
-      plot_dense_point_sets( global_nodes[node_gid]->getImageRef(), reproj_pts, visibility_mask_nodes.row(v),
-                         true, true, msg, outImg );
-
-      // save
-      write_image( to_string(nap_idx_of_nodes[_m1set[0]])+"_"+to_string(nap_idx_of_nodes[_m1set[1]])+"___"+to_string(node_napid)+"_reproj_corrected_3diprev.png" , outImg );
-
-
-    }
-
-
-  }
-
-
-
+  Matrix4d to_return = T_cap.inverse();
+  return to_return;
 
 
 }
-
 
 
 /////////////////////// Image Marking //////////////////////////

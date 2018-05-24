@@ -363,7 +363,7 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
   // //////////////////
   // Pose computation with 3way matching
   // if( msg->n_sparse_matches < 200 && msg->curr.size() > 0 && msg->curr.size() == msg->prev.size() && msg->curr.size() == msg->curr_m.size()  )
-  if( msg->op_mode == 29 )
+  if( msg->op_mode == 29 ) // this is now out of use. op_mode28 superseeds this.
   {
     ROS_INFO( "Set closure-edge-subtype : EDGE_TYPE_LOOP_SUBTYPE_3WAY");
     e->setLoopEdgeSubtype(EDGE_TYPE_LOOP_SUBTYPE_3WAY);
@@ -421,39 +421,69 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
     // Process this nap msg to produce pose from locally tracked dense features
 
     // this->camera.printCameraInfo(1);
+    TicToc timing;
+
+    //
+    // Constructor
+    //
+    timing.tic();
     LocalBundle localBundle = LocalBundle( msg, this->nNodes, this->camera );
     // localBundle.multiviewTriangulate(); // this should triangulate multiview using (a) and (b)
                                         // (a) i_prev+5, i_prev+4, ... i_prev, i_prev-1, i_prev-2, ... i_prev-5
                                         // (b) i_curr, i_curr-1, i_curr-2, ...
     if( localBundle.isValid_incoming_msg == false ) {
-        ROS_ERROR( "Ignore message because constructor failed" );
+        ROS_ERROR( "[Not Error]Ignore message because constructor failed" );
         return;
     }
+    ROS_ERROR_STREAM( "[Not Error]Done setting bundle data in (ms):" << timing.toc() );
+
+
 
 
     e->setLoopEdgeSubtype(EDGE_TYPE_LOOP_SUBTYPE_BUNDLE);
     loopClosureEdges.push_back( e );
 
 
-    ROS_INFO( "Done setting bundle data");
-    localBundle.randomViewTriangulate( 50, 0 );
-    localBundle.randomViewTriangulate( 50, 1 );
+
+
+
+    //
+    // Triangulation
+    //
+    timing.tic();
+    localBundle.randomViewTriangulate( 50, 0 ); // 3d points from iprev-j to iprev+j
+    // localBundle.randomViewTriangulate( 50, 1 ); // 3d points from icurr-j to icurr
+    ROS_ERROR_STREAM( "[Not Error]Done triangulating iprev-j to iprev+j in (ms):" << timing.toc() );
+
 
     // Debug computed info .
     localBundle.saveTriangulatedPoints();
     localBundle.publishTriangulatedPoints( pub_bundle  );
     ROS_INFO( "Done triangulating icurr and iprev");
 
+
+    //
+    // Pose COmputation (Ceres)
+    //
+    timing.tic();
     // localBundle.sayHi();
     // localBundle.crossPoseComputation();
-    localBundle.crossRelPoseComputation3d2d();
+    Matrix4d p_T_c = localBundle.crossRelPoseComputation3d2d();
     // localBundle.ceresDummy();
 
     // publish
-    ROS_ERROR( "Bundle Processing OK. Done!");
+    ROS_ERROR_STREAM( "Bundle Processing OK. Done in (ms):" << timing.toc() );
+
+
+    // Re-publish with pose, op_mode:=30
+    int32_t mode = 30;
+    republish_nap( msg->c_timestamp, msg->prev_timestamp, p_T_c, mode );
 
     return;
   }
+
+
+
 
   ROS_ERROR( "in place_recog_callback: Error computing rel pose. Edge added without pose. This might be fatal!");
 

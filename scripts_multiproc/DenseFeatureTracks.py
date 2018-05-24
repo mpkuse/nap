@@ -168,10 +168,22 @@ class DenseFeatureTracks:
         # .
         visibility_table = {}
         pair_type = {}
+        set_type_m1 = {}
+        set_type_1 = {}
+        set_type_2 = {}
+        set_type_3 = {}
         for _k in self.raw_data.keys():
             visibility_table[_k] = self.raw_data[_k]['mask']
             pair_type[_k] = self.raw_data[_k]['TYPE']
 
+            if pair_type[_k] == -1 :
+                set_type_m1[_k] = True
+            if pair_type[_k] ==  1 :
+                set_type_1[_k] = True
+            if pair_type[_k] ==  2 :
+                set_type_2[_k] = True
+            if pair_type[_k] ==  3 :
+                set_type_3[_k] = True
 
 
         ###
@@ -189,3 +201,8 @@ class DenseFeatureTracks:
         self.visibility_table = visibility_table
         self.features_list = features_list
         self.pair_type = pair_type
+
+        self.set_type_m1 = set_type_m1
+        self.set_type_1 = set_type_1
+        self.set_type_2 = set_type_2
+        self.set_type_3 = set_type_3
