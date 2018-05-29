@@ -78,6 +78,7 @@ using namespace std;
 #include "Edge.h"
 #include "PinholeCamera.h"
 #include "LocalBundle.h"
+#include "Corvus.h"
 
 #include "tic_toc.h"
 

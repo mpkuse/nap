@@ -55,6 +55,9 @@ using namespace std;
 using namespace cv;
 
 
+//forward declaration of ceres classes
+class Align3d2d__4DOFCallback;
+
 class LocalBundle {
 
 public:
@@ -79,6 +82,7 @@ public:
   // void crossPoseComputation3d3d(); // align3d point clouds. point cloud of curr is pretty bad, resulting in bad alignment, So removed.
   // void crossPoseComputation3d2d();    //< Estimate global pose c_T_w, this gives optimization difficulties. Function removed
   Matrix4d crossRelPoseComputation3d2d(); //< Essentially like PNP. (will expand to multiple frames). Returns p_T_c
+  Matrix4d crossRelPoseJointOptimization3d2d(); //< similar to crossRelPoseJointOptimization3d2d() but has joint optimization to compute p_T_c, p_T_{c-1}, p_T_{c-2}, p_T_{c-3}, ...
 
   void sayHi();
 
@@ -95,10 +99,22 @@ public:
   // Write out data for debugging
   void saveTriangulatedPoints();
   void publishTriangulatedPoints( const ros::Publisher& pub ); // will publish marker. pub is init in DataManager::setVisualizationTopic()
+  void publishCameras( const ros::Publisher& pub ); //< will publish cameras which are in use for computing poses. ie. (iprev-j, iprev+j) U (icurr-j, icurr). Using their VIO poses
+  void publishCameras_cerescallbacks( const ros::Publisher& pub ); //< publish poses from vector_of_callbacks; ie. poses stored by ceres at each iterations
+
 
 private:
-  void LocalBundle::eigenpointcloud_2_ros_markermsg( const MatrixXd& M, visualization_msgs::Marker& marker, const string& ns );
-  void LocalBundle::eigenpointcloud_2_ros_markertextmsg( const MatrixXd& M, vector<visualization_msgs::Marker>& marker, const string& ns );
+    void init_camera_marker( visualization_msgs::Marker& marker );
+    void setpose_to_cameravisual( const Matrix4d& w_T_c, visualization_msgs::Marker& marker );
+    void setcolor_to_cameravisual( float r, float g, float b, visualization_msgs::Marker& marker  );
+
+    vector<Align3d2d__4DOFCallback> vector_of_callbacks;
+
+
+
+private:
+  void eigenpointcloud_2_ros_markermsg( const MatrixXd& M, visualization_msgs::Marker& marker, const string& ns );
+  void eigenpointcloud_2_ros_markertextmsg( const MatrixXd& M, vector<visualization_msgs::Marker>& marker, const string& ns );
 
 private:
   int find_indexof_node(  const vector<Node*>& global_nodes, ros::Time stamp );
@@ -155,6 +171,7 @@ private:
   string type2str(int type);
   void printMatrix2d( const string& msg, const double * D, int nRows, int nCols );
   void printMatrix1d( const string& msg, const double * D, int n  );
+  void prettyprintPoseMatrix( const Matrix4d& M );
 
 
   int n_ptClds;
@@ -406,6 +423,39 @@ private:
 
 };
 
+/* Not sure if this is worth. TODO. Try this later.
+class Align3d2dVectorized {
+public:
+    // p_X : triangulated points of iprev in iprev frame of reference. 4xN
+    //  u  : Observed points in another frame
+    Align3d2dVectorized( const MatrixXd& p_X, const MatrixXd& u ) :
+        p_X(p_X), u(u) {}
+
+    // w_T_c
+    template <typename T>
+    bool operator()( const T* const quat, const T* const tran, T*e  ) const
+    {
+        Quaternion<T> q( quat[0], quat[1], quat[2], quat[3] );//w,x,y,z
+        Matrix<T,4,1> t;
+        t<< tran[0], tran[1], tran[2], T(1.0);
+
+        Matrix<T,4,4> c_T_p;
+        c_T_p.topLeftCorner<3,3>() = q.toRotationMatrix();
+        c_T_p.col(3) = t;
+
+        Matrix
+        reprojection_residue.row(0) =  u.row(0) -  ( p_X.row(0).array() / p_X.row(2).array() ).matrix();
+        reprojection_residue.row(1) =  u.row(1) -  ( p_X.row(1).array() / p_X.row(2).array() ).matrix();
+
+    }
+
+
+private:
+    MatrixXd p_X, u;
+
+};
+
+*/
 
 class Align3d2d {
 public:
@@ -464,22 +514,46 @@ private:
 /// To watch the intermediate values while optimizing
 class Align3d2d__4DOFCallback: public ceres::IterationCallback{
 public:
-  Align3d2d__4DOFCallback(double * _yaw, double * _t )
+  Align3d2d__4DOFCallback(  )
   {
-    yaw = _yaw; t = _t;
+    pose_at_each_iteration.clear();
   }
-  void setConstants( double* _pitch, double * _roll )
+
+  setOptimizationVariables_quatertion_t( double * _q, double * _t )
   {
-    pitch = _pitch;
-    roll  = _roll;
+      quat = _q; t = _t;
+      use_quat_t = true;
   }
+
+  setOptimizationVariables_ypr_t( double * _ypr, double * _t )
+  {
+      ypr = ypr; t = _t;
+      use_ypr_t = true;
+  }
+
+  // void setConstants( double* _pitch, double * _roll )
+  // {
+  //   pitch = _pitch;
+  //   roll  = _roll;
+  // }
+
   void setData( LocalBundle* _b )
   {
     b = _b;
   }
 
+  void setGid( int _gid )
+  {
+      gid = _gid;
+  }
 
+  int getGid(  ) { return gid; }
 
+  vector<Matrix4d> pose_at_each_iteration;
+  vector<double>   loss_at_each_iteration;
+
+  // OLD - write out the image with this pose and projected points.
+  /*
   virtual ceres::CallbackReturnType operator()( const ceres::IterationSummary& summary )
   {
     cout << summary.iteration << "  cost=" << summary.cost << endl;
@@ -500,17 +574,74 @@ public:
 
     return ceres::SOLVER_CONTINUE;
   }
+  */
+
+  // Stores intermediate poses.
+  virtual ceres::CallbackReturnType operator()( const ceres::IterationSummary& summary )
+  {
+      if( use_ypr_t )
+      {
+          Vector3d ypr;
+          ypr << ypr[0], ypr[1], ypr[2];
+          Matrix4d T = Matrix4d::Identity();
+          T.topLeftCorner<3,3>() = ypr2R( ypr );
+          T(0,3) = t[0];
+          T(1,3) = t[1];
+          T(2,3) = t[2];
+
+          pose_at_each_iteration.push_back( T );
+          loss_at_each_iteration.push_back( summary.cost );
+        //   cout << gid << " " << summary.iteration ;
+        //   cout <<  " yaw,pitch,roll=" << ypr[0] << "," << ypr[1] << "," << ypr[2];
+        //   cout << "\tt="<< t[0] << " " << t[1] << " " << t[2] << endl;
+          return ceres::SOLVER_CONTINUE;
+      }
+
+      if( use_quat_t )
+      {
+          Quaterniond quaterion( quat[0], quat[1], quat[2], quat[3] );
+          Matrix4d T = Matrix4d::Identity();
+          T.topLeftCorner<3,3>() = quaterion.toRotationMatrix();
+
+          T(0,3) = t[0];
+          T(1,3) = t[1];
+          T(2,3) = t[2];
+          T(3,3) = 1.0;
+
+          pose_at_each_iteration.push_back( T );
+          loss_at_each_iteration.push_back( summary.cost );
+        //   cout << gid << " " << summary.iteration ;
+        //   cout << "q.w,q.x,q.y,q.z=" << quaterion.w() << " " << quaterion.x() << " " << quaterion.y() << " " << quaterion.z() << endl;
+          return ceres::SOLVER_CONTINUE;
+
+
+
+
+      }
+
+      cout << "Both use_quat_t and use_ypr_t are false. This is most definately not what you intended.\n";
+
+  }
+
+
 
 private:
   // optimization variables
-  double *yaw; //size=1
+  double *ypr; //size=1
   double *t;   //size=3
+  bool use_ypr_t = false;
+
+  // Quaternion
+  double *quat;
+  bool use_quat_t = false;
+
 
   // constants
-  double * pitch;
-  double * roll;
+  // double * pitch;
+  // double * roll;
 
   LocalBundle * b;
+  int gid;
   Matrix3d ypr2R( const Vector3d& ypr)
   {
     double y = ypr(0) / 180.0 * M_PI;
@@ -729,8 +860,12 @@ private:
       c_X = Rot * w_X + t;
 
       Matrix<T,2,1> error; // this variable is redundant. consider removal. TODO
-      error(0) = c_X(0) / c_X(2) - unvn(0);
-      error(1) = c_X(1) / c_X(2) - unvn(1);
+    //   error(0) = c_X(0) / c_X(2) - unvn(0);
+    //   error(1) = c_X(1) / c_X(2) - unvn(1);
+
+      error(0) = c_X(0)  - unvn(0) * c_X(2);
+      error(1) = c_X(1)  - unvn(1) * c_X(2);
+
 
       e[0] = error(0);
       e[1] = error(1);

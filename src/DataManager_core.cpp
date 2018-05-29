@@ -300,7 +300,7 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
   // }
 
 
-  ROS_INFO( "Received - NapMsg");
+  // ROS_INFO( "Received - NapMsg");
   // cout << msg->c_timestamp << " " << msg->prev_timestamp << endl;
 
   assert( this->camera.isValid() );
@@ -310,9 +310,9 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
   int i_curr = find_indexof_node(msg->c_timestamp);
   int i_prev = find_indexof_node(msg->prev_timestamp);
 
-  cout << i_curr << "<-->" << i_prev << endl;
-  cout <<  msg->c_timestamp-nNodes[0]->time_stamp << "<-->" << msg->prev_timestamp-nNodes[0]->time_stamp << endl;
-  cout << "Last Node timestamp : "<< nNodes.back()->time_stamp - nNodes[0]->time_stamp << endl;
+  // cout << i_curr << "<-->" << i_prev << endl;
+  // cout <<  msg->c_timestamp-nNodes[0]->time_stamp << "<-->" << msg->prev_timestamp-nNodes[0]->time_stamp << endl;
+  // cout << "Last Node timestamp : "<< nNodes.back()->time_stamp - nNodes[0]->time_stamp << endl;
   if( i_curr < 0 || i_prev < 0 )
     return;
 
@@ -325,7 +325,7 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
   // Relative Pose Computation     //
   ///////////////////////////////////
   // cout << "n_sparse_matches : " << msg->n_sparse_matches << endl;
-  cout << "co-ordinate match sizes : " << msg->curr.size() << " " << msg->prev.size() << " " << msg->curr_m.size() << endl;
+  // cout << "co-ordinate match sizes : " << msg->curr.size() << " " << msg->prev.size() << " " << msg->curr_m.size() << endl;
 
   // //////////////////
   //---- case-a : If 3way matching is empty : do ordinary way to compute relative pose. Borrow code from Qin. Basically using 3d points from odometry (wrt curr) and having known same points in prev do pnp
@@ -393,8 +393,6 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
     ROS_INFO( "Set closure-edge-subtype : EDGE_TYPE_LOOP_SUBTYPE_GUIDED");
 
     e->setLoopEdgeSubtype(EDGE_TYPE_LOOP_SUBTYPE_GUIDED);
-
-
     loopClosureEdges.push_back( e );
 
     // Re-publish op_mode:= 10 (as is)
@@ -408,9 +406,58 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
 
   }
 
+  if( msg->op_mode == 18 ) //this is like opmode20, but doing my own pnp.
+  {
+      ROS_INFO( "opmode18. Guided match has 3d points and 2d points for this loopmsg" );
+
+      // my own processing here to compute pose.
+
+      // Compute pose from 3d, 2d.
+      //TODO
+      cout << "+++++++++++++++++++++++++++++++++++++++++\n";
+      Corvus cor( msg, this->nNodes, this->camera );
+      if( !cor.isValid() )
+        return;
+
+
+
+
+    //   cor.publishPoints3d( pub_bundle );
+
+
+      //
+      // relative Pose computation
+      Matrix4d p_T_c = cor.computeRelPose_3dprev_2dcurr();
+      if( p_T_c.col(3).head(3).norm() > 2. ) //also if there is too much change in pitch and roll ==> estimation is probably wrong. 
+      {
+          cout << "Result from PNP doesnt look right!\n";
+          return;
+      }
+
+
+    //   cor.saveReprojectedImagesFromCeresCallbacks();
+      cor.publishCameraPoseFromCeresCallbacks(pub_bundle);
+
+
+
+
+
+      e->setLoopEdgeSubtype(EDGE_TYPE_LOOP_SUBTYPE_GUIDED);
+      loopClosureEdges.push_back( e );
+
+
+
+      // Publish pose as opmode30.
+      // Re-publish with pose, op_mode:=30
+      int32_t mode = 30;
+      republish_nap( msg->c_timestamp, msg->prev_timestamp, p_T_c, mode );
+
+      return ;
+  }
+
 
   // Indicates this napmsg contains bundle
-  if( msg->op_mode == 28 )
+  if( msg->op_mode == 28 && false )
   {
     // Contains dense features tracked for the bundle. See also nap/script_multiproc/nap_multiproc.py:worker_qdd_processor().
     // The worker_qdd_processor() function
@@ -457,8 +504,10 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
 
 
     // Debug computed info .
-    localBundle.saveTriangulatedPoints();
-    localBundle.publishTriangulatedPoints( pub_bundle  );
+    // localBundle.saveTriangulatedPoints();
+    // localBundle.publishTriangulatedPoints( pub_bundle  );
+    localBundle.publishCameras( pub_bundle );
+
     ROS_INFO( "Done triangulating icurr and iprev");
 
 
@@ -468,10 +517,17 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
     timing.tic();
     // localBundle.sayHi();
     // localBundle.crossPoseComputation();
-    Matrix4d p_T_c = localBundle.crossRelPoseComputation3d2d();
     // localBundle.ceresDummy();
 
-    // publish
+    Matrix4d p_T_c;
+    p_T_c = localBundle.crossRelPoseComputation3d2d(); // OK!
+
+    // p_T_c = localBundle.crossRelPoseJointOptimization3d2d(); // OK! but it needs more work, currently quite slow ~5 sec
+
+
+    // Look at what happened at each iteration
+    localBundle.publishCameras_cerescallbacks( pub_bundle );
+
     ROS_ERROR_STREAM( "Bundle Processing OK. Done in (ms):" << timing.toc() );
 
 

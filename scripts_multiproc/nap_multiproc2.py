@@ -1295,6 +1295,7 @@ def worker_bundle_cpu(  process_flags, Qd, Qdd, S_thumbnails, S_timestamp, S_lut
         feat2d_prev = np.dot( FF['K'], feature_factory.features[feat2d_prev_idx ] )
 
         feat3d_curr = FF['point3d'][feat2d_curr_idx]
+        feat3d_prev = FF['point3d'][feat2d_prev_idx] # This is added may,28,2018. (for opmode 18)
 
         xprint( 'feat2d_curr.shape: '+ str( feat2d_curr.shape ) , THREAD_NAME )
         xprint( 'feat2d_prev.shape: '+ str( feat2d_prev.shape ) , THREAD_NAME )
@@ -1363,10 +1364,40 @@ def worker_bundle_cpu(  process_flags, Qd, Qdd, S_thumbnails, S_timestamp, S_lut
             else:
                 xprint( tcol.OKGREEN+'Score is sufficiently high but something similar to this candidate is already processed'+tcol.ENDC, THREAD_NAME )
 
+        #            ****  OPMODE18 ****
+        # Fill in nap_msg with **opmode18**. This mode gives the 3d points from the tracked features.
+        # and the tracked points in normalized co-ordinates.
+        if( score >= 3.  or ( score > 2.0 and len(selected_curr_i) > 15 ) ):
+            # Step-1:
+            nap_msg = make_nap_msg( t_curr, t_prev, (0.6,1.0,0.6) )
+            nap_msg.op_mode = 18
+            nap_msg.t_curr = t_curr
+            nap_msg.t_prev = t_prev
+
+            # Step-2: Fill up nap-msg
+            for h in range( len(selected_curr_i) ):
+                _u = feat2d_curr_normed[ 0:2, selected_curr_i[h] ]
+                _U = feat3d_curr[0:3, selected_curr_i[h] ]
+                _g_idx = -180#feat2d_curr_global_idx[ selected_curr_i[h] ]
+                # nap_msg.curr will be 2X length, where nap_msg.prev will be X length.
+                nap_msg.curr.append( Point32(_u[0], _u[1], _g_idx) )
+                nap_msg.curr.append( Point32(_U[0], _U[1], _U[2])  )
+
+
+                _u = feat2d_prev_normed[ 0:2, selected_prev_i[h] ]
+                _U = feat3d_prev[0:3, selected_prev_i[h] ]
+                _g_idx = -180#feat2d_prev_global_idx[ selected_prev_i[h] ]
+                nap_msg.prev.append( Point32(_u[0], _u[1], _g_idx) )
+                nap_msg.prev.append( Point32(_U[0], _U[1], _U[2])  )
+
+            # Step-3: Put the napmsg in the queue to be published by main-thread.
+            Q_2way_napmsg.put( nap_msg )
+
 
         if score < 2.5:
             continue
 
+        # done with rules.
 
 
 

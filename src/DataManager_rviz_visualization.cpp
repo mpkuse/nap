@@ -147,6 +147,9 @@ void DataManager::publish_pose_graph_nodes()
 
 void DataManager::publish_pose_graph_nodes_original_poses()
 {
+  bool enable_camera_visual_at_each_pose = false;
+  bool enable_spheres_at_each_pose = true;
+  bool enable_text_at_each_pose = true;
   visualization_msgs::Marker marker;
   marker.header.frame_id = "world";
   marker.header.stamp = ros::Time::now();
@@ -173,16 +176,17 @@ void DataManager::publish_pose_graph_nodes_original_poses()
     marker.ns = "spheres";
     Matrix4d original_pose;
     n->getOriginalTransform(original_pose);
+    Quaterniond original_pose_quaternion = Quaterniond( original_pose.topLeftCorner<3,3>() );
     marker.pose.position.x = original_pose(0,3); //-20.;
     marker.pose.position.y = original_pose(1,3);
     marker.pose.position.z = original_pose(2,3);
-    marker.pose.orientation.x = 0.;
-    marker.pose.orientation.y = 0.;
-    marker.pose.orientation.z = 0.;
-    marker.pose.orientation.w = 1.;
+    marker.pose.orientation.x = original_pose_quaternion.x(); //0.;
+    marker.pose.orientation.y = original_pose_quaternion.y(); //0.;
+    marker.pose.orientation.z = original_pose_quaternion.z(); //0.;
+    marker.pose.orientation.w = original_pose_quaternion.w(); //1.;
     marker.color.r = 1.0; marker.color.g = 0.5; marker.color.b = 0.0;
     marker.scale.x = .05;marker.scale.y = .05;marker.scale.z = .05;
-    pub_pgraph_org.publish( marker );
+    if( enable_spheres_at_each_pose) pub_pgraph_org.publish( marker );
 
     // Publish Text
     marker.type = visualization_msgs::Marker::TEXT_VIEW_FACING;
@@ -190,9 +194,8 @@ void DataManager::publish_pose_graph_nodes_original_poses()
     marker.ns = "text_label";
     marker.scale.z = .03;
 
-    // pink color text if node doesnt contain images
-    if( n->getImageRef().data == NULL )
-    { marker.color.r = 1.0;  marker.color.g = .4;  marker.color.b = .4; }
+    if( !n->valid_image() )
+    { marker.color.r = 1.0;  marker.color.g = .4;  marker.color.b = .4; } //pink
     else
     { marker.color.r = 1.0;  marker.color.g = 1.0;  marker.color.b = 1.0; } //text in white color
     // marker.text = std::to_string(i)+std::string(":")+std::to_string(n->ptCld.cols())+std::string(":")+((n->getImageRef().data)?"I":"~I");
@@ -203,7 +206,63 @@ void DataManager::publish_pose_graph_nodes_original_poses()
     // buffer << i << ":" << n->time_stamp - nNodes[0]->time_stamp << ":" << n->time_image- nNodes[0]->time_stamp  ;
     marker.text = buffer.str();
     // marker.text = std::to_string(i)+std::string(":")+std::to_string( n->time_stamp );
-    pub_pgraph_org.publish( marker );
+    if( enable_text_at_each_pose) pub_pgraph_org.publish( marker );
+
+
+    if( enable_camera_visual_at_each_pose )
+    {
+        // Visual for Camera
+        marker.type = visualization_msgs::Marker::LINE_LIST;
+        marker.id = i;
+        marker.ns = "camerapose_visual";
+
+        marker.scale.x = 0.005; //width of line-segments
+
+        float __vcam_width = 0.07;
+        float __vcam_height = 0.04;
+        float __z = 0.05;
+
+        marker.points.clear();
+        geometry_msgs::Point pt;
+        pt.x = 0; pt.y=0; pt.z=0;
+        marker.points.push_back( pt );
+        pt.x = __vcam_width; pt.y=__vcam_height; pt.z=__z;
+        marker.points.push_back( pt );
+        pt.x = 0; pt.y=0; pt.z=0;
+        marker.points.push_back( pt );
+        pt.x = -__vcam_width; pt.y=__vcam_height; pt.z=__z;
+        marker.points.push_back( pt );
+        pt.x = 0; pt.y=0; pt.z=0;
+        marker.points.push_back( pt );
+        pt.x = __vcam_width; pt.y=-__vcam_height; pt.z=__z;
+        marker.points.push_back( pt );
+        pt.x = 0; pt.y=0; pt.z=0;
+        marker.points.push_back( pt );
+        pt.x = -__vcam_width; pt.y=-__vcam_height; pt.z=__z;
+        marker.points.push_back( pt );
+
+        pt.x = __vcam_width; pt.y=__vcam_height; pt.z=__z;
+        marker.points.push_back( pt );
+        pt.x = -__vcam_width; pt.y=__vcam_height; pt.z=__z;
+        marker.points.push_back( pt );
+        pt.x = -__vcam_width; pt.y=__vcam_height; pt.z=__z;
+        marker.points.push_back( pt );
+        pt.x = -__vcam_width; pt.y=-__vcam_height; pt.z=__z;
+        marker.points.push_back( pt );
+        pt.x = -__vcam_width; pt.y=-__vcam_height; pt.z=__z;
+        marker.points.push_back( pt );
+        pt.x = __vcam_width; pt.y=-__vcam_height; pt.z=__z;
+        marker.points.push_back( pt );
+        pt.x = __vcam_width; pt.y=-__vcam_height; pt.z=__z;
+        marker.points.push_back( pt );
+        pt.x = __vcam_width; pt.y=__vcam_height; pt.z=__z;
+        marker.points.push_back( pt );
+        pub_pgraph_org.publish( marker );
+    }
+
+
+
+
   }
 }
 
