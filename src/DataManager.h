@@ -61,7 +61,7 @@
 #include <nap/NapMsg.h>
 
 
-
+#include <Eigen/Core>
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
 using namespace Eigen;
@@ -142,12 +142,13 @@ public:
   void publish_pose_graph_nodes(); //< Publishes all nNodes
   void publish_pose_graph_nodes_original_poses(); // Publish into pub_pgraph_org
   void publish_pose_graph_edges( const std::vector<Edge*>& x_edges ); //< publishes the given edge set
+  void publish_node_pointcloud();
 
 
   // ////////////////////////////   //
   //  Relative Pose Computation     //
   // ////////////////////////////   //
-
+  // These functions have been removed. Mark for removal.
   void pose_from_2way_matching( const nap::NapMsg::ConstPtr& msg, Matrix4d& p_T_c );
   void pose_from_3way_matching( const nap::NapMsg::ConstPtr& msg, Matrix4d& p_T_c );
 
@@ -158,6 +159,7 @@ public:
   //  - Indented to be called by new thread.      //
   //  - This function wont return                 //
   // //////////////////////////////////////////// //
+  // These functions have been removed. Mark for removal.
   void ceres_main();
   void doOptimization();
 
@@ -306,12 +308,35 @@ private:
   ros::Publisher pub_pgraph; //< Visualization Marker handle, nodes will have curr pose
   ros::Publisher pub_pgraph_org; //< Publishes Original (unoptimized pose graph)
   ros::Publisher pub_bundle; //< Info related to bundle (opmode28)
+  ros::Publisher pub_3dpoints; //< Analysis of 3d points.
 
   PinholeCamera camera; //< Camera Intrinsics. See corresponding class
 
+
+
+  // Publishing helpers
+  void eigenpointcloud_2_ros_markermsg( const MatrixXd& M, visualization_msgs::Marker& marker, const string& ns );
+  void eigenpointcloud_2_ros_markertextmsg( const MatrixXd& M,
+                    vector<visualization_msgs::Marker>& marker_ary, const string& ns );
+
+  void printMatrixInfo( const string& msg, const MatrixXd& M );
+
+
+  // Utils
+  void write_image( string fname, const cv::Mat& img);
+  template <typename Derived>
+  void write_EigenMatrix(const string& filename, const MatrixBase<Derived>& a);
+  void write_Matrix2d( const string& filename, const double * D, int nRows, int nCols );
+  void write_Matrix1d( const string& filename, const double * D, int n  );
+  void plot_point_on_image( const cv::Mat& im, const MatrixXd& pts, const VectorXd& mask,
+            const cv::Scalar& color, bool annotate, bool enable_status_image,
+            const string& msg ,
+            cv::Mat& dst );
+
+
 };
 
-
+/*
 
 
 #include "Node.h"
@@ -449,3 +474,4 @@ private:
   Vector3d X;
   Vector2d x;
 };
+*/

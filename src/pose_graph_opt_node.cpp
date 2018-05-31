@@ -138,9 +138,9 @@ int main(int argc, char ** argv )
 
 
   // 3d points
-  // string point_cloud_topic = string( "/vins_estimator/point_cloud_no_loop" );
-  // ROS_INFO( "Subscribed to %s", point_cloud_topic.c_str() );
-  // ros::Subscriber sub_pcl_topic = nh.subscribe( point_cloud_topic, 1000, &DataManager::point_cloud_callback, &dataManager );
+  string point_cloud_topic = string( "/vins_estimator/keyframe_point" );
+  ROS_INFO( "Subscribed to %s", point_cloud_topic.c_str() );
+  ros::Subscriber sub_pcl_topic = nh.subscribe( point_cloud_topic, 1000, &DataManager::point_cloud_callback, &dataManager );
 
 #if defined _DEBUG_BUNDLE
 

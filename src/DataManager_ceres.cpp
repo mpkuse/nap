@@ -1,6 +1,6 @@
 #include "DataManager.h"
 
-
+/*
 // FUnctions for pose graph optimization with ceres
 #define print_ceres( msg ) cout << "[CERES]"; msg ;
 
@@ -98,3 +98,4 @@ void DataManager::doOptimization()
   print_ceres( cout << "END_OPT")
 
 }
+*/

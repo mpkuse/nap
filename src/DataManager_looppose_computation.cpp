@@ -1,3 +1,4 @@
+/*
 #include "DataManager.h"
 
 // Functions for computation of relative pose
@@ -432,7 +433,7 @@ void DataManager::triangulate_points( int ix_curr, const cv::Mat& mat_pts_curr,
 
 
 }
-
+*/
 /*
 void DataManager::estimatePnPPose( const cv::Mat& c_3dpts, const cv::Mat& pts2d,
                       Matrix4d& im_T_c  )
@@ -501,7 +502,7 @@ void DataManager::estimatePnPPose( const cv::Mat& c_3dpts, const cv::Mat& pts2d,
 
 }
 */
-
+/*
 // pts2d : undist_normed_prev
 // returns, number of inliers
 int DataManager::estimatePnPPose_opencv( const cv::Mat& c_3dpts, const cv::Mat& pts2d,
@@ -895,3 +896,4 @@ string DataManager::matrix4d_to_string( const Matrix4d& M )
 
   return to_return;
 }
+*/

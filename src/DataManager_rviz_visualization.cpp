@@ -8,6 +8,7 @@ void DataManager::publish_once()
   publish_pose_graph_nodes_original_poses();
   publish_pose_graph_edges( this->odometryEdges );
   publish_pose_graph_edges( this->loopClosureEdges );
+  publish_node_pointcloud();
 }
 
 
@@ -357,6 +358,47 @@ void DataManager::publish_pose_graph_edges( const std::vector<Edge*>& x_edges )
 
 
 
+void DataManager::publish_node_pointcloud()
+{
+    int nvalid=0;
+    for( int i=nNodes.size()-10 ; i < nNodes.size() ; i++ )
+    {
+        if( ! nNodes[i]->valid_3dpts() )
+            continue;
+        nvalid++;
+
+
+        MatrixXd w_Q = nNodes[i]->getPointCloud();
+        cout << i << " ";
+        printMatrixInfo( "w_Q", w_Q );
+
+        // Make a marker msg.
+        visualization_msgs::Marker marker;
+        eigenpointcloud_2_ros_markermsg( w_Q,  marker, "raw_3dpoints" );
+        marker.id = i;
+
+        pub_3dpoints.publish( marker );
+
+
+        // Project
+        Matrix4d w_T_cam;
+        nNodes[i]->getOriginalTransform( w_T_cam );
+        MatrixXd cam_Q = w_T_cam.inverse() * w_Q;
+
+        MatrixXd cam_u;
+        camera.perspectiveProject3DPoints( cam_Q , cam_u );
+
+        cv::Mat dst;
+        assert( nNodes[i]->valid_image() );
+        plot_point_on_image( nNodes[i]->getImageRef(), cam_u, VectorXd::Ones(cam_u.cols()),
+                    cv::Scalar(255,255,0), true, true, "", dst );
+
+        write_image( to_string(i)+".png", dst  );
+
+    }
+    cout << "nvalid=" << nvalid << " of " << nNodes.size() << endl;
+}
+
 void DataManager::plot_3way_match( const cv::Mat& curr_im, const cv::Mat& mat_pts_curr,
                       const cv::Mat& prev_im, const cv::Mat& mat_pts_prev,
                       const cv::Mat& curr_m_im, const cv::Mat& mat_pts_curr_m,
@@ -525,4 +567,91 @@ void DataManager::plot_point_sets( const cv::Mat& im, const cv::Mat& pts_set, cv
     cv::putText( dst, to_s, pt, cv::FONT_HERSHEY_COMPLEX_SMALL, 0.3, cv::Scalar(255,255,255) - color  );
 
   }
+}
+
+
+
+/////////////////////////////ROS Publishing helpers ///////////////////////////////
+void DataManager::eigenpointcloud_2_ros_markermsg( const MatrixXd& M, visualization_msgs::Marker& marker, const string& ns )
+{
+    assert( M.rows()==3 || M.rows() == 4 );
+    marker.header.frame_id = "world";
+    marker.header.stamp = ros::Time::now();
+    marker.header.seq = 0;
+    marker.ns = ns; //"spheres";
+    marker.id = 0;
+    marker.type = visualization_msgs::Marker::POINTS;
+    marker.action = visualization_msgs::Marker::ADD;
+    marker.scale.x = .05;
+    marker.scale.y = .05;
+    marker.scale.z = 1.05;
+
+    marker.color.r = .8;
+    marker.color.g = .8;
+    marker.color.b = 0;
+    marker.color.a = .9; // Don't forget to set the alpha!
+
+    for( int i=0 ; i<M.cols() ; i++ )
+    {
+        geometry_msgs::Point pt;
+        if( M.rows() == 3 )
+        {
+            pt.x = M(0,i);
+            pt.y = M(1,i);
+            pt.z = M(2,i);
+        }
+        else
+        {
+            pt.x = M(0,i) / M(3,i);
+            pt.y = M(1,i) / M(3,i);
+            pt.z = M(2,i) / M(3,i);
+        }
+
+        marker.points.push_back( pt );
+    }
+
+}
+
+void DataManager::eigenpointcloud_2_ros_markertextmsg( const MatrixXd& M,
+    vector<visualization_msgs::Marker>& marker_ary, const string& ns )
+{
+    marker_ary.clear();
+    visualization_msgs::Marker marker;
+    assert( M.rows()==3 || M.rows() == 4 );
+    for( int i=0 ; i<M.cols() ; i++ )
+    {
+        marker.header.frame_id = "world";
+        marker.header.stamp = ros::Time::now();
+        marker.header.seq = 0;
+        marker.ns = ns; //"spheres";
+        marker.id = i;
+        marker.type = visualization_msgs::Marker::TEXT_VIEW_FACING;
+        marker.action = visualization_msgs::Marker::ADD;
+        marker.scale.x = .1;
+        marker.scale.y = .1;
+        marker.scale.z = .1;
+
+        marker.color.r = 1.0;
+        marker.color.g = 1.0;
+        marker.color.b = 1.0;
+        marker.color.a = .9; // Don't forget to set the alpha!
+
+        marker.text = to_string( i );
+        marker.pose.position.x = M(0,i);
+        marker.pose.position.y = M(1,i);
+        marker.pose.position.z = M(2,i);
+        marker.pose.orientation.x = 0.;
+        marker.pose.orientation.y = 0.;
+        marker.pose.orientation.z = 0.;
+        marker.pose.orientation.w = 1.;
+
+        marker_ary.push_back( visualization_msgs::Marker(marker) );
+    }
+
+}
+
+
+void DataManager::printMatrixInfo( const string& msg, const MatrixXd& M )
+{
+  cout << msg << ":" << "rows=" << M.rows() << ", cols=" << M.cols() << endl;
 }

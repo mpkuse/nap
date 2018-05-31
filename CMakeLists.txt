@@ -78,6 +78,7 @@ add_executable( pose_graph_opt_node
                     src/DataManager_rviz_visualization.cpp
                     src/DataManager_looppose_computation.cpp
                     src/DataManager_ceres.cpp
+                    src/DataManager_utils.cpp
                     src/LocalBundle.cpp
                     src/Corvus.cpp
                     src/ColorLUT.cpp

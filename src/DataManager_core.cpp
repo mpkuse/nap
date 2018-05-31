@@ -33,6 +33,9 @@ void DataManager::setVisualizationTopic( string rviz_topic )
   pub_pgraph_org = nh.advertise<visualization_msgs::Marker>( (rviz_topic+string("_original")).c_str(), 0 );
 
   pub_bundle = nh.advertise<visualization_msgs::Marker>( (rviz_topic+string("_bundle_opmode28")).c_str(), 0 );
+
+  pub_3dpoints = nh.advertise<visualization_msgs::Marker>( (rviz_topic+string("_3dpoints_analysis")).c_str(), 0 );
+
 }
 
 
@@ -204,8 +207,8 @@ void DataManager::tracked_features_callback( const sensor_msgs::PointCloudConstP
 void DataManager::point_cloud_callback( const sensor_msgs::PointCloudConstPtr& msg )
 {
   int i_ = find_indexof_node(msg->header.stamp);
-  cout << "stamp3d : " << msg->header.stamp << endl;
-  ROS_INFO( "Received3d:: PointCloud: %d. nUnclaimed: %d", i_, (int)unclaimed_pt_cld.size() );
+  // cout << "stamp3d : " << msg->header.stamp << endl;
+  // ROS_WARN( "Received3d:: PointCloud: %d. nUnclaimed: %d", i_, (int)unclaimed_pt_cld.size() );
 
   if( i_ < 0 )
   {
@@ -351,8 +354,8 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
     e->setLoopEdgeSubtype(EDGE_TYPE_LOOP_SUBTYPE_BASIC);
 
     // TODO: Put Qin Tong's code here. ie. rel pose computation when we have sufficient number of matches
-    Matrix4d p_T_c;
-    this->pose_from_2way_matching(msg, p_T_c );
+    // Matrix4d p_T_c;
+    // this->pose_from_2way_matching(msg, p_T_c );
 
 
     // Set the computed pose into edge
@@ -376,6 +379,7 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
   // //////////////////
   // Pose computation with 3way matching
   // if( msg->n_sparse_matches < 200 && msg->curr.size() > 0 && msg->curr.size() == msg->prev.size() && msg->curr.size() == msg->curr_m.size()  )
+  /*
   if( msg->op_mode == 29 ) // this is now out of use. op_mode28 superseeds this.
   {
     ROS_INFO( "Set closure-edge-subtype : EDGE_TYPE_LOOP_SUBTYPE_3WAY");
@@ -398,7 +402,7 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
 
     return;
   }
-
+  */
 
   if( msg->op_mode == 20 )
   {
@@ -741,7 +745,6 @@ void DataManager::flush_unclaimed_pt_cld()
       nNodes[i_]->setPointCloud(t, e);
     }
   }
-
 }
 void DataManager::flush_unclaimed_2d_feat()
 {
