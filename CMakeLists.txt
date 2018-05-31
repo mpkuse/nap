@@ -76,8 +76,8 @@ add_executable( pose_graph_opt_node
                     src/PinholeCamera.cpp
                     src/DataManager_core.cpp
                     src/DataManager_rviz_visualization.cpp
-                    src/DataManager_looppose_computation.cpp
-                    src/DataManager_ceres.cpp
+                    #src/DataManager_looppose_computation.cpp #remove this later
+                    #src/DataManager_ceres.cpp #remove this later
                     src/DataManager_utils.cpp
                     src/LocalBundle.cpp
                     src/Corvus.cpp

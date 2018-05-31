@@ -8,7 +8,7 @@ void DataManager::publish_once()
   publish_pose_graph_nodes_original_poses();
   publish_pose_graph_edges( this->odometryEdges );
   publish_pose_graph_edges( this->loopClosureEdges );
-  publish_node_pointcloud();
+  // publish_node_pointcloud();
 }
 
 
