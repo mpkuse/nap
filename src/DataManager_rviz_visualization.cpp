@@ -367,17 +367,30 @@ void DataManager::publish_node_pointcloud()
             continue;
         nvalid++;
 
+        MatrixXd w_Q;
+        w_Q = nNodes[i]->getPointCloud();
 
-        MatrixXd w_Q = nNodes[i]->getPointCloud();
+        VectorXi globalid_Q;
+        globalid_Q = nNodes[i]->getPointCloudGlobalIds();
+
+        // marking for each point. Only for plooting
+        vector<string> globalid_Q_str;
+        for( int u=0; u<globalid_Q.size() ; u++ )
+            globalid_Q_str.push_back( to_string(globalid_Q(u)) );
+
+        assert( w_Q.cols() == globalid_Q.size() && w_Q.cols() > 0  );
+
+
         cout << i << " ";
         printMatrixInfo( "w_Q", w_Q );
+        cout << "globalid_Q.size() : " << globalid_Q.size() << endl;
 
         // Make a marker msg.
         visualization_msgs::Marker marker;
         eigenpointcloud_2_ros_markermsg( w_Q,  marker, "raw_3dpoints" );
         marker.id = i;
-
         pub_3dpoints.publish( marker );
+
 
 
         // Project
@@ -390,10 +403,15 @@ void DataManager::publish_node_pointcloud()
 
         cv::Mat dst;
         assert( nNodes[i]->valid_image() );
-        plot_point_on_image( nNodes[i]->getImageRef(), cam_u, VectorXd::Ones(cam_u.cols()),
-                    cv::Scalar(255,255,0), true, true, "", dst );
+        cv::Scalar pt_color(0,255,0);
 
+        plot_point_on_image( nNodes[i]->getImageRef(), cam_u, VectorXd::Ones(cam_u.cols()),
+                    pt_color, true, false, "", dst );
         write_image( to_string(i)+".png", dst  );
+
+        plot_point_on_image( nNodes[i]->getImageRef(), cam_u, VectorXd::Ones(cam_u.cols()),
+                    pt_color, globalid_Q_str, false, "", dst );
+        write_image( to_string(i)+"_globalid.png", dst  );
 
     }
     cout << "nvalid=" << nvalid << " of " << nNodes.size() << endl;
@@ -524,7 +542,8 @@ DataManager::split( std::string const& original, char separator )
     return results;
 }
 
-void DataManager::plot_point_sets( const cv::Mat& im, const MatrixXd& pts_set, cv::Mat& dst, const cv::Scalar& color, const string& msg )
+void DataManager::plot_point_sets( const cv::Mat& im, const MatrixXd& pts_set, cv::Mat& dst,
+                                        const cv::Scalar& color, const string& msg )
 {
   MatrixXf pts_set_float;
   pts_set_float = pts_set.cast<float>();

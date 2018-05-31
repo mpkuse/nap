@@ -208,31 +208,61 @@ void DataManager::point_cloud_callback( const sensor_msgs::PointCloudConstPtr& m
 {
   int i_ = find_indexof_node(msg->header.stamp);
   // cout << "stamp3d : " << msg->header.stamp << endl;
-  // ROS_WARN( "Received3d:: PointCloud: %d. nUnclaimed: %d", i_, (int)unclaimed_pt_cld.size() );
+  // ROS_WARN( "Received3d:: PointCloud: %d. nUnclaimed: %d,%d,%d", i_, (int)unclaimed_pt_cld.size(), (int)unclaimed_pt_cld_time.size(), (int)unclaimed_pt_cld_globalid.size() );
+  // assert( msg->channels.size() == msg->points.size() && msg->points.size() > 0  );
 
   if( i_ < 0 )
   {
-    // 1. msg->points to eigen matrix
+    // 1.1 msg->points to eigen matrix
     // Matrix<double,3,Dynamic> ptCld;
-    MatrixXd ptCld;
-    ptCld = MatrixXd::Zero(4,msg->points.size());
+    MatrixXd _ptCld;
+    assert( msg->points.size() > 0  );
+    _ptCld = MatrixXd::Zero(4,msg->points.size());
     for( int i=0 ; i<msg->points.size() ; i++ )
     {
-      ptCld(0,i) = msg->points[i].x;
-      ptCld(1,i) = msg->points[i].y;
-      ptCld(2,i) = msg->points[i].z;
-      ptCld(3,i) = 1.0;
+      _ptCld(0,i) = msg->points[i].x;
+      _ptCld(1,i) = msg->points[i].y;
+      _ptCld(2,i) = msg->points[i].z;
+      _ptCld(3,i) = 1.0;
     }
 
+
+    {// In the commit `6d1bb531d02fc37187b966da8245a4f47b1d6ba3` of vins_testbed.
+    // IN previous versions there were only 4 channels.
+    // there will be 5 channels. ch[0]: un, ch[1]: vn,  ch[2]: u, ch[3]: v.  ch[4]: globalid of the feature.
+    // cout << "\tpoints.size() : "<< msg->points.size(); // this will be N (say 92)
+    // cout << "\tchannels.size() : "<< msg->channels.size(); //this will be N (say 92)
+    // cout << "\tchannels[0].size() : "<< msg->channels[0].values.size(); //this will be 5.
+    // cout << "\n";
+    }
+
+    // 1.2 msg->channels
+    assert( msg->channels.size() == msg->points.size() && msg->channels[0].values.size() == 5 );
+    VectorXi _ptCld_id = VectorXi::Constant( msg->points.size(), -1 );
+    for( int i=0 ; i<msg->channels.size() ; i++ )
+    {
+        _ptCld_id(i) = (int)msg->channels[i].values[4];
+    }
+
+
     // 2. Put this eigen matrix to queue
-    unclaimed_pt_cld.push( ptCld );
+    unclaimed_pt_cld.push( _ptCld );
     unclaimed_pt_cld_time.push( msg->header.stamp );
+    unclaimed_pt_cld_globalid.push( _ptCld_id );
     flush_unclaimed_pt_cld();
   }
   else
   {
     // Corresponding node exist
-    nNodes[i_]->setPointCloud( msg->header.stamp, msg->points );
+    // nNodes[i_]->setPointCloud( msg->header.stamp, msg->points );
+    nNodes[i_]->setPointCloud( msg->header.stamp, msg->points, msg->channels ); //also stores the global id of each of the 3d points
+
+    {
+    // cout << "\tOKpoints.size() : "<< msg->points.size();
+    // cout << "\tOKchannels.size() : "<< msg->channels.size();
+    // cout << "\tOKchannels[0].size() : "<< msg->channels[0].values.size();
+    // cout << "\n";
+    }
 
   }
 
@@ -723,7 +753,7 @@ void DataManager::flush_unclaimed_im()
 
 void DataManager::flush_unclaimed_pt_cld()
 {
-  ROS_WARN( "PtCld %d, %d", (int)unclaimed_pt_cld.size(), (int)unclaimed_pt_cld_time.size() );
+  ROS_WARN( "flush_unclaimed_pt_cld(): PtCld %d, %d, %d", (int)unclaimed_pt_cld.size(), (int)unclaimed_pt_cld_time.size(), (int)unclaimed_pt_cld_globalid.size() );
   int M = max(20,(int)unclaimed_pt_cld.size()); // Potential BUG. If not found, the ptcld is pushed at the end, where you will never get to as you see only first 20 elements!
   for( int i=0 ; i<M ; i++ )
   {
@@ -731,18 +761,23 @@ void DataManager::flush_unclaimed_pt_cld()
     MatrixXd e;
     e = unclaimed_pt_cld.front();
     ros::Time t = ros::Time( unclaimed_pt_cld_time.front() );
+    VectorXi e_globalid;
+    e_globalid = unclaimed_pt_cld_globalid.front();
     unclaimed_pt_cld.pop();
     unclaimed_pt_cld_time.pop();
+    unclaimed_pt_cld_globalid.pop();
     int i_ = find_indexof_node(t);
     if( i_ < 0 )
     {
       //still not found, push back again
       unclaimed_pt_cld.push( e );
       unclaimed_pt_cld_time.push( t );
+      unclaimed_pt_cld_globalid.push( e_globalid );
     }
     else
     {
-      nNodes[i_]->setPointCloud(t, e);
+    //   nNodes[i_]->setPointCloud(t, e );
+      nNodes[i_]->setPointCloud(t, e, e_globalid );
     }
   }
 }

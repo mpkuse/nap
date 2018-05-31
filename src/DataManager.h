@@ -200,6 +200,7 @@ private:
 
   // std::queue<Matrix<double,3,Dynamic>> unclaimed_pt_cld;
   std::queue<MatrixXd> unclaimed_pt_cld;
+  std::queue< VectorXi  > unclaimed_pt_cld_globalid;
   std::queue<ros::Time> unclaimed_pt_cld_time;
   void flush_unclaimed_pt_cld();
 
@@ -328,11 +329,17 @@ private:
   void write_EigenMatrix(const string& filename, const MatrixBase<Derived>& a);
   void write_Matrix2d( const string& filename, const double * D, int nRows, int nCols );
   void write_Matrix1d( const string& filename, const double * D, int n  );
+
+  // Plots a point set and marks the index. optionally can append a status image
   void plot_point_on_image( const cv::Mat& im, const MatrixXd& pts, const VectorXd& mask,
             const cv::Scalar& color, bool annotate, bool enable_status_image,
             const string& msg ,
             cv::Mat& dst );
 
+  void plot_point_on_image( const cv::Mat& im, const MatrixXd& pts, const VectorXd& mask,
+          const cv::Scalar& color, vector<string> annotate, bool enable_status_image,
+          const string& msg ,
+          cv::Mat& dst );
 
 };
 

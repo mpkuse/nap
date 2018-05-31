@@ -126,3 +126,54 @@ void DataManager::plot_point_on_image( const cv::Mat& im, const MatrixXd& pts, c
 
 
 }
+
+
+
+void DataManager::plot_point_on_image( const cv::Mat& im, const MatrixXd& pts, const VectorXd& mask,
+            const cv::Scalar& color, vector<string> annotate, bool enable_status_image,
+            const string& msg ,
+            cv::Mat& dst )
+{
+  assert( pts.rows() == 2 || pts.rows() == 3 );
+  assert( mask.size() == pts.cols() );
+  assert( pts.cols() == annotate.size() );
+
+  cv::Mat outImg = im.clone();
+
+  int count = 0 ;
+  for( int kl=0 ; kl<pts.cols() ; kl++ )
+  {
+    if( mask(kl) == 0 )
+      continue;
+
+      count++;
+
+      cv::Point2d A( pts(0,kl), pts(1,kl) );
+      cv::circle( outImg, A, 2, color, -1 );
+
+
+      cv::putText( outImg, annotate[kl], A, cv::FONT_HERSHEY_SIMPLEX, 0.3, color, 1 );
+  }
+
+  if( !enable_status_image ) {
+      dst = outImg;
+      return;
+  }
+
+
+  // Make status image
+  cv::Mat status = cv::Mat(100, outImg.cols, CV_8UC3, cv::Scalar(0,0,0) );
+  string s = "Plotted "+to_string(count)+" of "+to_string(mask.size());
+
+
+
+  cv::putText( status, s.c_str(), cv::Point(10,30), cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255,255,255), 2 );
+
+
+  if( msg.length() > 0 )
+    cv::putText( status, msg.c_str(), cv::Point(10,70), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255,255,255), 2 );
+
+  cv::vconcat( outImg, status, dst );
+
+
+}

@@ -58,9 +58,46 @@ void Node::getOriginalTransform(Matrix4d& M)
 }
 
 ////////////// 3d points
-void Node::setPointCloud( ros::Time time, const vector<geometry_msgs::Point32> & points )
+// setting point clouds without globalids. mark for removal
+// void Node::setPointCloud( ros::Time time, const vector<geometry_msgs::Point32> & points )
+// {
+//   // ptCld = Matrix<double,3,Dynamic>(3,points.size());
+//   ptCld = MatrixXd::Zero(4,points.size());
+//   for( int i=0 ; i<points.size() ; i++ )
+//   {
+//     ptCld(0,i) = points[i].x;
+//     ptCld(1,i) = points[i].y;
+//     ptCld(2,i) = points[i].z;
+//     ptCld(3,i) = 1.0;
+//   }
+//   this->time_pcl = ros::Time(time);
+//   m_3dpts = true;
+// }
+
+// setting point clouds without globalids. Mark for removal
+// void Node::setPointCloud( ros::Time time, const Matrix<double,3,Dynamic>& e )
+// void Node::setPointCloud( ros::Time time, const MatrixXd& e )
+// {
+//   // ptCld = Matrix<double,3,Dynamic>( e );
+//   this->ptCld = MatrixXd( e );
+//   this->time_pcl = ros::Time(time);
+//   m_3dpts = true;
+// }
+
+void Node::setPointCloud( ros::Time time, const MatrixXd& e, const VectorXi& e_globalid )
+{
+  // ptCld = Matrix<double,3,Dynamic>( e );
+  this->ptCld = MatrixXd( e );
+  this->ptCld_id = VectorXi( e_globalid ); m_3dpts_globalid = true;
+  this->time_pcl = ros::Time(time);
+  m_3dpts = true;
+}
+
+void Node::setPointCloud( ros::Time time, const vector<geometry_msgs::Point32> & points,
+                const vector<sensor_msgs::ChannelFloat32>& channels )
 {
   // ptCld = Matrix<double,3,Dynamic>(3,points.size());
+  assert( points.size() > 0 );
   ptCld = MatrixXd::Zero(4,points.size());
   for( int i=0 ; i<points.size() ; i++ )
   {
@@ -71,16 +108,23 @@ void Node::setPointCloud( ros::Time time, const vector<geometry_msgs::Point32> &
   }
   this->time_pcl = ros::Time(time);
   m_3dpts = true;
+
+
+  // Collect global ids from channels
+  assert( channels.size() == points.size() && channels[0].values.size() == 5 );
+  // cout << "\tchannels.size() : "<< channels.size(); //this will be N (say 92) same as points.size()
+  // cout << "\tchannels[0].size() : "<< channels[0].values.size(); //this will be 5.
+  ptCld_id = VectorXi::Constant( points.size(), -1 );
+  assert( channels[0].values[4] == (int)channels[0].values[4] ); //making sure it is an integer
+  for( int i=0 ; i<channels.size() ; i++ )
+  {
+      ptCld_id(i) = (int)channels[i].values[4];
+  }
+  m_3dpts_globalid = true;
+
 }
 
-// void Node::setPointCloud( ros::Time time, const Matrix<double,3,Dynamic>& e )
-void Node::setPointCloud( ros::Time time, const MatrixXd& e )
-{
-  // ptCld = Matrix<double,3,Dynamic>( e );
-  ptCld = MatrixXd( e );
-  this->time_pcl = ros::Time(time);
-  m_3dpts = true;
-}
+
 
 const MatrixXd& Node::getPointCloud( )
 // const Matrix<double,3,Dynamic>& Node::getPointCloud( )
@@ -88,18 +132,25 @@ const MatrixXd& Node::getPointCloud( )
   return ptCld;
 }
 
-
-void Node::getPointCloudHomogeneous( MatrixXd& M )
+const VectorXi& Node::getPointCloudGlobalIds()
 {
-  M = MatrixXd(4, ptCld.cols() );
-  for( int i=0 ; i<ptCld.cols() ; i++ )
-  {
-    M(0,i) = ptCld(0,i);
-    M(1,i) = ptCld(1,i);
-    M(2,i) = ptCld(2,i);
-    M(3,i) = 1.0;
-  }
+    return ptCld_id;
 }
+
+
+// const MatrixXd& Node::getPoi
+
+// void Node::getPointCloudHomogeneous( MatrixXd& M ) //mark for removal
+// {
+//   M = MatrixXd(4, ptCld.cols() );
+//   for( int i=0 ; i<ptCld.cols() ; i++ )
+//   {
+//     M(0,i) = ptCld(0,i);
+//     M(1,i) = ptCld(1,i);
+//     M(2,i) = ptCld(2,i);
+//     M(3,i) = 1.0;
+//   }
+// }
 
 ////////////// 2d tracked features
 void Node::setFeatures2dHomogeneous( ros::Time time, const vector<geometry_msgs::Point32> & points )
@@ -165,9 +216,9 @@ void Node::write_debug_xml( char * fname )
 {
   cv::FileStorage fs( fname, cv::FileStorage::WRITE );
 
-  // 3d pts
+  // 3d pts //this is all probably wrong. Currently not in use so ignore. If you want to use. Just assert everything here.
   MatrixXd c_M; //4xN
-  getPointCloudHomogeneous(c_M);
+  c_M = getPointCloud();
 
   cv::Mat c_M_mat;
   cv::eigen2cv( c_M, c_M_mat );

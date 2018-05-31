@@ -40,6 +40,7 @@
 #include <geometry_msgs/Point.h>
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
+#include <sensor_msgs/ChannelFloat32.h>
 
 #include <nap/NapMsg.h>
 
@@ -77,15 +78,18 @@ public:
   void getOriginalTransform(Matrix4d& M);
 
   // 3d point cloud
-  // Matrix<double,3,Dynamic> ptCld; //TODO: Consider making this private
   MatrixXd ptCld; //TODO: Consider making this private
-  bool m_3dpts;//TODO: Consider making this private
-  void setPointCloud( ros::Time time, const vector<geometry_msgs::Point32> & points );
-  // void setPointCloud( ros::Time time, const Matrix<double,3,Dynamic>& e );
-  void setPointCloud( ros::Time time, const MatrixXd& e );
-  // const Matrix<double,3,Dynamic>& getPointCloud( );
+  VectorXi ptCld_id;
+  bool m_3dpts=false, m_3dpts_globalid=false;//TODO: Consider making this private
+  // void setPointCloud( ros::Time time, const vector<geometry_msgs::Point32> & points ); //mark for removal
+  // void setPointCloud( ros::Time time, const MatrixXd& e ); //mark for removal
+
+  void setPointCloud( ros::Time time, const vector<geometry_msgs::Point32> & points, const vector<sensor_msgs::ChannelFloat32>& channels );
+  void setPointCloud( ros::Time time, const MatrixXd& e, const VectorXi& e_globalid );
+
   const MatrixXd& getPointCloud( );
-  void getPointCloudHomogeneous( MatrixXd& M );
+  const VectorXi& Node::getPointCloudGlobalIds();
+  // void getPointCloudHomogeneous( MatrixXd& M );  //consider removal. Not in use. Points are now by default in homogeneous co-ordinates
 
 
   // 2d features (tracked)
@@ -99,6 +103,7 @@ public:
   int getn3dpts()      { return ptCld.cols(); }
   int getn2dfeat()     { return feat2d.cols(); }
   bool valid_3dpts()   { return m_3dpts; }
+  bool valid_3dpts_globalid()   { return m_3dpts_globalid; }
   bool valid_2dfeats() { return m_2dfeats; }
 
 
