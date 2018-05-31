@@ -210,13 +210,15 @@ void DataManager::point_cloud_callback( const sensor_msgs::PointCloudConstPtr& m
   if( i_ < 0 )
   {
     // 1. msg->points to eigen matrix
-    Matrix<double,3,Dynamic> ptCld;
-    ptCld = Matrix<double,3,Dynamic>(3,msg->points.size());
+    // Matrix<double,3,Dynamic> ptCld;
+    MatrixXd ptCld;
+    ptCld = MatrixXd::Zero(4,msg->points.size());
     for( int i=0 ; i<msg->points.size() ; i++ )
     {
       ptCld(0,i) = msg->points[i].x;
       ptCld(1,i) = msg->points[i].y;
       ptCld(2,i) = msg->points[i].z;
+      ptCld(3,i) = 1.0;
     }
 
     // 2. Put this eigen matrix to queue
@@ -286,21 +288,8 @@ void DataManager::camera_pose_callback( const nav_msgs::Odometry::ConstPtr msg )
 
 void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
 {
-  // if( loopClosureEdges.size() == 10 )
-  // {
-  //   lock_enable_ceres.lock();
-  //   enable_ceres = true;
-  //   lock_enable_ceres.unlock();
-  // }
-  // else
-  // {
-  //   lock_enable_ceres.lock();
-  //   enable_ceres = false;
-  //   lock_enable_ceres.unlock();
-  // }
 
-
-  // ROS_INFO( "Received - NapMsg");
+  // ROS_INFO_STREAM( "Received - NapMsg - " << msg->op_mode  );
   // cout << msg->c_timestamp << " " << msg->prev_timestamp << endl;
 
   assert( this->camera.isValid() );
@@ -314,7 +303,31 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
   // cout <<  msg->c_timestamp-nNodes[0]->time_stamp << "<-->" << msg->prev_timestamp-nNodes[0]->time_stamp << endl;
   // cout << "Last Node timestamp : "<< nNodes.back()->time_stamp - nNodes[0]->time_stamp << endl;
   if( i_curr < 0 || i_prev < 0 )
-    return;
+  {
+      ROS_WARN( "cannot find nodes pointed by napmsg, ignore this nap-msg");
+      return;
+  }
+
+
+  vector<int> enabled_opmode;
+  // enabled_opmode.push_back(10);
+  // enabled_opmode.push_back(29);
+  // enabled_opmode.push_back(20);
+  enabled_opmode.push_back(18);
+  enabled_opmode.push_back(28);
+
+  if( std::find(enabled_opmode.begin(), enabled_opmode.end(),  (int)msg->op_mode  ) != enabled_opmode.end() )
+  {
+      // found the item
+      // OK! let this be processed.
+      ROS_INFO( "Process napmsg (op_mode=%d)", msg->op_mode );
+  }
+  else
+  {
+      ROS_INFO( "Ignore napmsg (op_mode=%d) as commanded by flags", msg->op_mode );
+      return;
+  }
+
 
   //
   // make a loop closure edge
@@ -408,6 +421,7 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
 
   if( msg->op_mode == 18 ) //this is like opmode20, but doing my own pnp.
   {
+
       ROS_INFO( "opmode18. Guided match has 3d points and 2d points for this loopmsg" );
 
       // my own processing here to compute pose.
@@ -415,28 +429,41 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
       // Compute pose from 3d, 2d.
       //TODO
       cout << "+++++++++++++++++++++++++++++++++++++++++\n";
+      TicToc timing;
+
+      timing.tic();
       Corvus cor( msg, this->nNodes, this->camera );
+      cout << "Constructor done in (ms): "<< timing.toc() << endl;
       if( !cor.isValid() )
         return;
 
 
 
-
-    //   cor.publishPoints3d( pub_bundle );
+      #if CORVUS_DEBUG_LVL >= 1
+      cor.publishPoints3d( pub_bundle );
+      #endif
 
 
       //
       // relative Pose computation
-      Matrix4d p_T_c = cor.computeRelPose_3dprev_2dcurr();
-      if( p_T_c.col(3).head(3).norm() > 2. ) //also if there is too much change in pitch and roll ==> estimation is probably wrong. 
+      timing.tic();
+      Matrix4d p_T_c;
+      bool status = cor.computeRelPose_3dprev_2dcurr(p_T_c);
+      if( status == false )
       {
-          cout << "Result from PNP doesnt look right!\n";
+          cout << "Status : Reject\n";
+          cout << "computeRelPose_3dprev_2dcurr() done in (ms): "<< timing.toc() << endl;
           return;
       }
 
+      cout << "computeRelPose_3dprev_2dcurr() done in (ms): "<< timing.toc() << endl;
 
-    //   cor.saveReprojectedImagesFromCeresCallbacks();
+
+
+      #if CORVUS_DEBUG_LVL >= 2
+      cor.saveReprojectedImagesFromCeresCallbacks();
       cor.publishCameraPoseFromCeresCallbacks(pub_bundle);
+      #endif
 
 
 
@@ -457,11 +484,13 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
 
 
   // Indicates this napmsg contains bundle
-  if( msg->op_mode == 28 && false )
+  if( msg->op_mode == 28  )
   {
+
+
     // Contains dense features tracked for the bundle. See also nap/script_multiproc/nap_multiproc.py:worker_qdd_processor().
     // The worker_qdd_processor() function
-    ROS_ERROR( "geometry_node OK! set edge as EDGE_TYPE_LOOP_SUBTYPE_BUNDLE" );
+    ROS_ERROR( "[Not Error]geometry_node OK! set edge as EDGE_TYPE_LOOP_SUBTYPE_BUNDLE" );
 
 
 
@@ -475,9 +504,7 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
     //
     timing.tic();
     LocalBundle localBundle = LocalBundle( msg, this->nNodes, this->camera );
-    // localBundle.multiviewTriangulate(); // this should triangulate multiview using (a) and (b)
-                                        // (a) i_prev+5, i_prev+4, ... i_prev, i_prev-1, i_prev-2, ... i_prev-5
-                                        // (b) i_curr, i_curr-1, i_curr-2, ...
+
     if( localBundle.isValid_incoming_msg == false ) {
         ROS_ERROR( "[Not Error]Ignore message because constructor failed" );
         return;
@@ -503,10 +530,16 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
     ROS_ERROR_STREAM( "[Not Error]Done triangulating iprev-j to iprev+j in (ms):" << timing.toc() );
 
 
+
     // Debug computed info .
-    // localBundle.saveTriangulatedPoints();
-    // localBundle.publishTriangulatedPoints( pub_bundle  );
+    #if LOCALBUNDLE_DEBUG_LVL >= 2
+    localBundle.saveTriangulatedPoints(); //saves the triangulated points to .txt files.
+    #endif
+
+    #if LOCALBUNDLE_DEBUG_LVL >= 1
+    localBundle.publishTriangulatedPoints( pub_bundle  );
     localBundle.publishCameras( pub_bundle );
+    #endif
 
     ROS_INFO( "Done triangulating icurr and iprev");
 
@@ -525,10 +558,13 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
     // p_T_c = localBundle.crossRelPoseJointOptimization3d2d(); // OK! but it needs more work, currently quite slow ~5 sec
 
 
-    // Look at what happened at each iteration
-    localBundle.publishCameras_cerescallbacks( pub_bundle );
 
-    ROS_ERROR_STREAM( "Bundle Processing OK. Done in (ms):" << timing.toc() );
+    // Look at what happened at each iteration
+    #if LOCALBUNDLE_DEBUG_LVL >= 2
+    localBundle.publishCameras_cerescallbacks( pub_bundle, true ); //use `false` with crossRelPoseJointOptimization3d2d()
+    #endif
+
+    ROS_ERROR_STREAM( "[Not Error]crossRelPoseComputation3d2d() OK. Done in (ms):" << timing.toc() );
 
 
     // Re-publish with pose, op_mode:=30
@@ -687,7 +723,8 @@ void DataManager::flush_unclaimed_pt_cld()
   int M = max(20,(int)unclaimed_pt_cld.size()); // Potential BUG. If not found, the ptcld is pushed at the end, where you will never get to as you see only first 20 elements!
   for( int i=0 ; i<M ; i++ )
   {
-    Matrix<double,3,Dynamic> e;
+    // Matrix<double,3,Dynamic> e;
+    MatrixXd e;
     e = unclaimed_pt_cld.front();
     ros::Time t = ros::Time( unclaimed_pt_cld_time.front() );
     unclaimed_pt_cld.pop();

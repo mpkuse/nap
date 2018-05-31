@@ -60,25 +60,30 @@ void Node::getOriginalTransform(Matrix4d& M)
 ////////////// 3d points
 void Node::setPointCloud( ros::Time time, const vector<geometry_msgs::Point32> & points )
 {
-  ptCld = Matrix<double,3,Dynamic>(3,points.size());
+  // ptCld = Matrix<double,3,Dynamic>(3,points.size());
+  ptCld = MatrixXd::Zero(4,points.size());
   for( int i=0 ; i<points.size() ; i++ )
   {
     ptCld(0,i) = points[i].x;
     ptCld(1,i) = points[i].y;
     ptCld(2,i) = points[i].z;
+    ptCld(3,i) = 1.0;
   }
   this->time_pcl = ros::Time(time);
   m_3dpts = true;
 }
 
-void Node::setPointCloud( ros::Time time, const Matrix<double,3,Dynamic>& e )
+// void Node::setPointCloud( ros::Time time, const Matrix<double,3,Dynamic>& e )
+void Node::setPointCloud( ros::Time time, const MatrixXd& e )
 {
-  ptCld = Matrix<double,3,Dynamic>( e );
+  // ptCld = Matrix<double,3,Dynamic>( e );
+  ptCld = MatrixXd( e );
   this->time_pcl = ros::Time(time);
   m_3dpts = true;
 }
 
-const Matrix<double,3,Dynamic>& Node::getPointCloud( )
+const MatrixXd& Node::getPointCloud( )
+// const Matrix<double,3,Dynamic>& Node::getPointCloud( )
 {
   return ptCld;
 }

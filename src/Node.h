@@ -77,11 +77,14 @@ public:
   void getOriginalTransform(Matrix4d& M);
 
   // 3d point cloud
-  Matrix<double,3,Dynamic> ptCld; //TODO: Consider making this private
+  // Matrix<double,3,Dynamic> ptCld; //TODO: Consider making this private
+  MatrixXd ptCld; //TODO: Consider making this private
   bool m_3dpts;//TODO: Consider making this private
   void setPointCloud( ros::Time time, const vector<geometry_msgs::Point32> & points );
-  void setPointCloud( ros::Time time, const Matrix<double,3,Dynamic>& e );
-  const Matrix<double,3,Dynamic>& getPointCloud( );
+  // void setPointCloud( ros::Time time, const Matrix<double,3,Dynamic>& e );
+  void setPointCloud( ros::Time time, const MatrixXd& e );
+  // const Matrix<double,3,Dynamic>& getPointCloud( );
+  const MatrixXd& getPointCloud( );
   void getPointCloudHomogeneous( MatrixXd& M );
 
 

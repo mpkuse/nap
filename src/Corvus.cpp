@@ -128,7 +128,7 @@ void Corvus::publishPoints3d( const ros::Publisher& pub )
 ////////////////// Real stuff ///////////////////////////////////
 
 //< compute pose using 3d points from previous and 2d points from curr.
-Matrix4d Corvus::computeRelPose_3dprev_2dcurr( )
+bool Corvus::computeRelPose_3dprev_2dcurr( Matrix4d& to_return_p_T_c )
 {
     assert( isValid() );
     cout << "Corvus::computeRelPose_3dprev_2dcurr()\n";
@@ -194,7 +194,7 @@ Matrix4d Corvus::computeRelPose_3dprev_2dcurr( )
     #endif
     ceres::Solver::Summary summary;
 
-    #if CORVUS_DEBUG_LVL > 1
+    #if CORVUS_DEBUG_LVL >= 2
     //
     // Callback
     Align3d2d__4DOFCallback callback;
@@ -212,15 +212,29 @@ Matrix4d Corvus::computeRelPose_3dprev_2dcurr( )
     //
     // Retrive Optimized Pose
     raw_to_eigenmat( c_T_p_quat, c_T_p_trans, c_T_p );
+    to_return_p_T_c = c_T_p.inverse();
+
+
+
+
+    //  - Decide if this pose is acceptable.
+    // Instead of returning pose, return status where, this pose is acceptable on not.
+    // The pose can be written to input argument.
+
+    bool status = false;
+    if( c_T_p.col(3).head(3).norm() < 2. ) {
+        cout << "[Accept]: c_T_p.col(3).head(3).norm() < 2.\n";
+        status = true;
+    }
+
 
 
     //
     // Process callback and write info to disk
-
     #if CORVUS_DEBUG_LVL > 0
     char __caption_string[500];
     // sprintf( __caption_string, "IsSolutionUsable=%d, cost0=%4.4f, final=%4.4f", summary.IsSolutionUsable(), summary.initial_cost(), summary.final_cost() );
-    sprintf( __caption_string, "IsSolutionUsable=%d, cost0=%4.4f, final=%4.4f", (int)summary.IsSolutionUsable(), (float)summary.initial_cost,  summary.final_cost );
+    sprintf( __caption_string, "IsSolutionUsable=%d, cost0=%4.4f, cost%d=%4.4f. %s", (int)summary.IsSolutionUsable(), (float)summary.initial_cost,  summary.num_successful_steps, summary.final_cost, (status)?"Acceptable":"Reject" );
 
     string __c_T_p_prettyprint;
     prettyprintPoseMatrix( c_T_p, __c_T_p_prettyprint );
@@ -233,9 +247,7 @@ Matrix4d Corvus::computeRelPose_3dprev_2dcurr( )
     #endif
 
 
-    Matrix4d p_T_c = c_T_p.inverse();
-    return p_T_c;
-
+    return status;
 
 }
 
@@ -406,7 +418,7 @@ void Corvus::plot_point_sets( const cv::Mat& imA, const MatrixXd& ptsA, int idxA
   if( msg.length() > 0 ) { // ':' separated. Each will go in new line
       std::vector<std::string> msg_tokens = split(msg, ':');
       for( int h=0 ; h<msg_tokens.size() ; h++ )
-          cv::putText( status, msg_tokens[h].c_str(), cv::Point(10,80+20*h), cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(255,255,255), 2 );
+          cv::putText( status, msg_tokens[h].c_str(), cv::Point(10,80+20*h), cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(255,255,255), 1.5 );
   }
 
   cv::vconcat( outImg, status, dst );
@@ -774,8 +786,13 @@ void Corvus::prettyprintPoseMatrix( const Matrix4d& M, string& return_string )
   // cout << "YPR      : " << R2ypr(  M.topLeftCorner<3,3>() ).transpose() << "; ";
   // cout << "Tx,Ty,Tz : " << M(0,3) << ", " << M(1,3) << ", " << M(2,3) << endl;
 
-  return_string = "YPR=("+to_string(ypr(0))+","+to_string(ypr(1))+","+to_string(ypr(2))+")";
-    return_string += "  TxTyTz=("+ to_string(M(0,3))+","+ to_string(M(1,3))+","+ to_string(M(2,3))+")";
+  // return_string = "YPR=("+to_string(ypr(0))+","+to_string(ypr(1))+","+to_string(ypr(2))+")";
+  // return_string += "  TxTyTz=("+ to_string(M(0,3))+","+ to_string(M(1,3))+","+ to_string(M(2,3))+")";
+
+  char __tmp[200];
+  snprintf( __tmp, 200, "YPR=(%4.2f,%4.2f,%4.2f)  TxTyTz=(%4.2f,%4.2f,%4.2f)",  ypr(0), ypr(1), ypr(2), M(0,3), M(1,3), M(2,3) );
+  return_string = string( __tmp );
+
 }
 
 

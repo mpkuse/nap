@@ -63,8 +63,8 @@ using namespace cv;
 // 0 : No debugging or minimal debugging info
 // 1 : Some images written
 // 2 : Most of images written
-// 3 : Lot of text written
-#define CORVUS_DEBUG_LVL 2
+// 3 : Lot of text written in addition to lots of images.
+#define CORVUS_DEBUG_LVL 1
 
 
 class Corvus
@@ -81,7 +81,7 @@ public:
 
 
     // Pose Computation
-    Matrix4d computeRelPose_3dprev_2dcurr(); //< compute pose using 3d points from previous and 2d points from curr.
+    bool computeRelPose_3dprev_2dcurr(Matrix4d& to_return_p_T_c ); //< compute pose using 3d points from previous and 2d points from curr.
 
     void sayHi();
 private:

@@ -54,6 +54,11 @@ using namespace Eigen;
 using namespace std;
 using namespace cv;
 
+// 0 : Only print some messages. No writing data to disk
+// 1 : Write only comprehensive data to disk. and publish some basic data
+// 2 : Write ceres poses at each iteration to disk along with reprojection images.
+#define LOCALBUNDLE_DEBUG_LVL 1
+
 
 //forward declaration of ceres classes
 class Align3d2d__4DOFCallback;
@@ -65,8 +70,6 @@ public:
   bool isValid_incoming_msg;
 
 
-  // this was for unit test. Remove this if not needed.
-  void multiviewTriangulate();
 
 
   // Picks 2 random views from the set of images. Triangulates those points and stores the
@@ -87,10 +90,10 @@ public:
   void sayHi();
 
   // Given a pose c_T_w, project the 3d points on curr and write image to disk.
-  void mark3dPointsOnCurrIm( const Matrix4d& c_T_w, const string& fname_prefix  );
+  void mark3dPointsOnCurrIm( const Matrix4d& c_T_w, const string& fname_prefix, const string& msg=string("No Additional Msg")  );
   void markObservedPointsOnCurrIm();
 
-  void mark3dPointsOnPrevIm( const Matrix4d& p_T_w, const string& fname_prefix );
+  void mark3dPointsOnPrevIm( const Matrix4d& p_T_w, const string& fname_prefix, const string& msg=string("No Additional Msg") );
   void markObservedPointsOnPrevIm();
 
   Matrix4d p_T_w() { return gi_T_w(localidx_of_iprev); }
@@ -100,7 +103,7 @@ public:
   void saveTriangulatedPoints();
   void publishTriangulatedPoints( const ros::Publisher& pub ); // will publish marker. pub is init in DataManager::setVisualizationTopic()
   void publishCameras( const ros::Publisher& pub ); //< will publish cameras which are in use for computing poses. ie. (iprev-j, iprev+j) U (icurr-j, icurr). Using their VIO poses
-  void publishCameras_cerescallbacks( const ros::Publisher& pub ); //< publish poses from vector_of_callbacks; ie. poses stored by ceres at each iterations
+  void publishCameras_cerescallbacks( const ros::Publisher& pub, bool write_images ); //< publish poses from vector_of_callbacks; ie. poses stored by ceres at each iterations
 
 
 private:
@@ -172,6 +175,7 @@ private:
   void printMatrix2d( const string& msg, const double * D, int nRows, int nCols );
   void printMatrix1d( const string& msg, const double * D, int n  );
   void prettyprintPoseMatrix( const Matrix4d& M );
+  void prettyprintPoseMatrix( const Matrix4d& M, string& return_string );
 
 
   int n_ptClds;
@@ -290,6 +294,25 @@ private:
     // idea roughly borrowed from pkg `pose_graph/utility/utility.h`
     Vector3d R2ypr( const Matrix3d& R);
     Matrix3d ypr2R( const Vector3d& ypr);
+
+
+
+    // other helpers
+    template<typename Out>
+    void split(const std::string &s, char delim, Out result) {
+        std::stringstream ss(s);
+        std::string item;
+        while (std::getline(ss, item, delim)) {
+            *(result++) = item;
+        }
+    }
+
+    std::vector<std::string> split(const std::string &s, char delim) {
+        std::vector<std::string> elems;
+        split(s, delim, std::back_inserter(elems));
+        return elems;
+    }
+
 
 
 };
@@ -470,15 +493,22 @@ public:
     Matrix<T,3,1> t;
     t<< tran[0], tran[1], tran[2];
 
+    Matrix<T,4,4> G; //the transform, made up of q, t
+    G << q.toRotationMatrix() , t , T(0.0), T(0.0), T(0.0), T(1.0);
 
-    Matrix<T,3,1> w_X; //3d co-ordinates in world ref-frame
-    w_X << T(_3d(0)), T(_3d(1)), T(_3d(2));
+
+    // Matrix<T,3,1> w_X; //3d co-ordinates in world ref-frame
+    // w_X << T(_3d(0)), T(_3d(1)), T(_3d(2));
+    Matrix<T,4,1> w_X; //3d co-ordinates in world ref-frame
+    w_X << T(_3d(0)), T(_3d(1)), T(_3d(2)), T(1.0);
 
     Matrix<T,2,1> unvn; //normalized undistorrted observed points
     unvn << T(_2d(0)), T(_2d(1));
 
-    Matrix<T,3,1> c_X; //3d co-ordinates in camera ref-frame
-    c_X = q.toRotationMatrix() * w_X + t;
+    // Matrix<T,3,1> c_X; //3d co-ordinates in camera ref-frame
+    // c_X = q.toRotationMatrix() * w_X + t;
+    Matrix<T,4,1> c_X;
+    c_X = G * w_X;
 
     Matrix<T,2,1> error; // this variable is redundant. consider removal. TODO
     error(0) = c_X(0) / c_X(2) - unvn(0);
@@ -495,11 +525,12 @@ public:
     Vector3d a;
     a << __3d(0), __3d(1), __3d(2);
 
+
     Vector2d b;
     b << __2d(0), __2d(1);
 
     return (
-      new ceres::AutoDiffCostFunction<Align3d2d,2,4,3>( new Align3d2d( a, b) )
+       new ceres::AutoDiffCostFunction<Align3d2d,2,4,3>( new Align3d2d( a, b) )
     );
   }
 
@@ -509,6 +540,69 @@ private:
   Vector2d _2d; //undistorrted normalized observed points
 
 };
+
+
+class Align3dHomogeneous2d {
+public:
+  Align3dHomogeneous2d( const Vector4d& _3d, const Vector2d& _2d )
+          :_3d(_3d), _2d(_2d) {}
+
+  // w_T_c
+  template <typename T>
+  bool operator()( const T* const quat, const T* const tran, T*e  ) const
+  {
+    Quaternion<T> q( quat[0], quat[1], quat[2], quat[3] );//w,x,y,z
+    Matrix<T,3,1> t;
+    t<< tran[0], tran[1], tran[2];
+
+    Matrix<T,4,4> G; //the transform, made up of q, t
+    G << q.toRotationMatrix() , t , T(0.0), T(0.0), T(0.0), T(1.0);
+
+
+    // Matrix<T,3,1> w_X; //3d co-ordinates in world ref-frame
+    // w_X << T(_3d(0)), T(_3d(1)), T(_3d(2));
+    Matrix<T,4,1> w_X; //3d co-ordinates in world ref-frame
+    w_X << T(_3d(0)), T(_3d(1)), T(_3d(2)), T(_3d(3));
+
+    Matrix<T,2,1> unvn; //normalized undistorrted observed points
+    unvn << T(_2d(0)), T(_2d(1));
+
+    // Matrix<T,3,1> c_X; //3d co-ordinates in camera ref-frame
+    // c_X = q.toRotationMatrix() * w_X + t;
+    Matrix<T,4,1> c_X;
+    c_X = G * w_X;
+
+    Matrix<T,2,1> error; // this variable is redundant. consider removal. TODO
+    error(0) = c_X(0) / c_X(2) - unvn(0);
+    error(1) = c_X(1) / c_X(2) - unvn(1);
+
+    e[0] = error(0);
+    e[1] = error(1);
+    return true;
+
+  }
+
+  static ceres::CostFunction* Create( const VectorXd& __3d, const VectorXd& __2d )
+  {
+    Vector4d a;
+    a << __3d(0), __3d(1), __3d(2), __3d(3);
+
+
+    Vector2d b;
+    b << __2d(0), __2d(1);
+
+    return (
+       new ceres::AutoDiffCostFunction<Align3dHomogeneous2d,2,4,3>( new Align3dHomogeneous2d( a, b) )
+    );
+  }
+
+
+private:
+  Vector4d _3d; //3d point in world co-ordinate (homogeneous)
+  Vector2d _2d; //undistorrted normalized observed points
+
+};
+
 
 
 /// To watch the intermediate values while optimizing

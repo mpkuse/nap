@@ -196,7 +196,8 @@ private:
   std::queue<ros::Time> unclaimed_napmap_time;
   void flush_unclaimed_napmap();
 
-  std::queue<Matrix<double,3,Dynamic>> unclaimed_pt_cld;
+  // std::queue<Matrix<double,3,Dynamic>> unclaimed_pt_cld;
+  std::queue<MatrixXd> unclaimed_pt_cld;
   std::queue<ros::Time> unclaimed_pt_cld_time;
   void flush_unclaimed_pt_cld();
 

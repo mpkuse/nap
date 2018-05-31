@@ -175,11 +175,19 @@ int LocalBundle::pair_1idx_of_node( int nx )
   return -1;
 }
 
-// #define randomViewTriangulate_debug( msg )  msg ;
-#define randomViewTriangulate_debug( msg )  ;
 
+#if LOCALBUNDLE_DEBUG_LVL >= 3
+#define randomViewTriangulate_debug( msg )  msg ;
+#else
+#define randomViewTriangulate_debug( msg )  ;
+#endif
+
+
+#if LOCALBUNDLE_DEBUG_LVL >= 2
 #define randomViewTriangulate_debug1(msg ) msg;
+#else
 #define randomViewTriangulate_debug1(msg ) ;
+#endif
 
 void LocalBundle::randomViewTriangulate(int max_itr, int flag )
 {
@@ -447,6 +455,7 @@ void LocalBundle::randomViewTriangulate(int max_itr, int flag )
   w_X_triang.row(1).array() /= w_X_triang.row(3).array();
   w_X_triang.row(2).array() /= w_X_triang.row(3).array();
   w_X_triang.row(3).array() /= w_X_triang.row(3).array();
+  // NOTE: Now the w_X_triang will be in homogeneous co-ordinates in general. ie. it will have a w component.
 
   if( flag == 0 )
   {
@@ -563,7 +572,7 @@ void LocalBundle::setcolor_to_cameravisual( float r, float g, float b, visualiza
 }
 
 
-void LocalBundle::publishCameras_cerescallbacks( const ros::Publisher& pub )
+void LocalBundle::publishCameras_cerescallbacks( const ros::Publisher& pub, bool write_images )
 {
     //uses vector_of_callbacks;
     if( vector_of_callbacks.size() == 0 ) {
@@ -579,36 +588,7 @@ void LocalBundle::publishCameras_cerescallbacks( const ros::Publisher& pub )
     cout << "vector_of_callbacks.size() : "<< vector_of_callbacks.size() << endl;
     cout << "vector_of_callbacks[0].pose_at_each_iteration.size() : " << vector_of_callbacks[0].pose_at_each_iteration.size() << endl;
 
-    /*
-    Matrix4d w_T_p = w_T_gi( localidx_of_iprev );
-    int id = 0;
 
-    for( int i=0 ; i< _3set.size() ; i++ ) // i is localid of items in _3set, ie. idx of icurr-j
-    {
-        if( _3set[i] != localidx_of_icurr ) //for now only visualize icurr.
-            continue;
-
-        Align3d2d__4DOFCallback Q = vector_of_callbacks[i]; // Q represents 1 pose
-        for( int k=0 ; k<Q.pose_at_each_iteration.size() ; k++ ) //k is the iteration number
-        {
-            Matrix4d ci_T_p = Q.pose_at_each_iteration[k];
-            Matrix4d w_T_ci = w_T_p * ci_T_p.inverse();
-
-
-            setpose_to_cameravisual( w_T_ci, base_camera_visual );
-
-            float __r = (float)k / Q.pose_at_each_iteration.size();
-            setcolor_to_cameravisual( __r, .0, .0, base_camera_visual ); //sky blue
-
-            base_camera_visual.id = id++;
-            pub.publish( base_camera_visual );
-
-
-
-        }
-
-    }
-    */
 
     Matrix4d w_T_p = w_T_gi( localidx_of_iprev );
     int id = 0;
@@ -634,8 +614,10 @@ void LocalBundle::publishCameras_cerescallbacks( const ros::Publisher& pub )
         {
 
             Matrix4d ci_T_p = Q.pose_at_each_iteration[k]; //pose at kth iteration
-            // cout << k << "("<< Q.loss_at_each_iteration[k] << ") ";
-            // prettyprintPoseMatrix( ci_T_p );
+            #if LOCALBUNDLE_DEBUG_LVL >= 3
+            cout << k << "("<< Q.loss_at_each_iteration[k] << ") ";
+            prettyprintPoseMatrix( ci_T_p );
+            #endif
 
             Matrix4d w_T_ci = Matrix4d::Identity();
             w_T_ci = w_T_p * ci_T_p.inverse();
@@ -647,8 +629,14 @@ void LocalBundle::publishCameras_cerescallbacks( const ros::Publisher& pub )
             base_camera_visual.id = id++;
             pub.publish( base_camera_visual );
 
-            // TODO: Ingeneral, use gid to write an image overlay correctly.
-            mark3dPointsOnCurrIm( ci_T_p * p_T_w(), "proj3dPointsOnCurr_itr"+to_string(k) );
+            if( write_images )
+            {
+                // TODO: Ingeneral, use gid to write an image overlay correctly.
+                string ____prettypose_string;
+                prettyprintPoseMatrix( ci_T_p, ____prettypose_string  );
+                mark3dPointsOnCurrIm( ci_T_p * p_T_w(), "proj3dPointsOnCurr_itr"+to_string(k), "c_T_p "+____prettypose_string );
+            }
+
 
 
             geometry_msgs::Point pt_t;
@@ -753,7 +741,7 @@ void LocalBundle::publishTriangulatedPoints(  const ros::Publisher& pub )
         VectorXd _d = iprev_X_iprev_triangulated.col(i);
         double d = sqrt( _d(0)*_d(0) + _d(1)*_d(1) + _d(2)*_d(2) );
 
-        bool is_behind = ( _d(2) < 0 )?true:false;
+        bool is_behind = ( _d(2)/_d(3) < 0 )?true:false;
         bool good_ = ( reprojection_residue.col(i).norm() < 0.1 )?true:false;
 
 
@@ -858,99 +846,6 @@ void LocalBundle::saveTriangulatedPoints()
 }
 
 
-void LocalBundle::multiviewTriangulate()
-{
-  cout << "LocalBundle::multiviewTriangulate()\n";
-
-  // in this function we assume that all the data is ready.
-  // will make use of uv, uv_undistorted, global_idx_of_pairs, local_idx_of_pairs etc
-  assert( n_pairs > 0 );
-  assert( uv.size() == uv_undistorted.size() );
-  assert( 2*n_pairs == global_idx_of_pairs.size() );
-  assert( 2*n_pairs == local_idx_of_pairs.size() );
-  assert( n_pairs   == pair_type.size() );
-  assert( n_pairs   == visibility_mask.rows() );
-
-
-  // lets work with pairs, type=1
-  int __i = 0; //ith pair
-  vector<MatrixXd> _w_3d_pts;
-  for( int __i=0 ; __i < n_pairs ; __i++) // you can also use other items for triangulation. YOu just need to AND the masks
-  {
-  cout << " Pair#" << __i << ";" <<
-          "type=" << pair_type[__i] << ";" <<
-          "global_idx(" << global_idx_of_pairs[2*__i] << "," << global_idx_of_pairs[2*__i+1] << ");" <<
-          "local__idx(" << local_idx_of_pairs[2*__i] << "," << local_idx_of_pairs[2*__i+1] << ");" <<
-          "nap_idx_of_pairs(" << nap_idx_of_pairs[2*__i] << "," << nap_idx_of_pairs[2*__i+1] << ");" <<
-          endl;
-
-  int g0 = global_idx_of_pairs[2*__i];
-  int g1 = global_idx_of_pairs[2*__i+1];
-  int l0 = local_idx_of_pairs[2*__i];
-  int l1 = local_idx_of_pairs[2*__i+1];
-  int n0 = nap_idx_of_pairs[2*__i];
-  int n1 = nap_idx_of_pairs[2*__i+1];
-
-  Matrix4d w_T_g0;
-  global_nodes[g0]->getOriginalTransform(w_T_g0);
-  Matrix4d w_T_g1;
-  global_nodes[g1]->getOriginalTransform(w_T_g1);
-
-
-
-  MatrixXd _w_3d; // a 4xN matrix will be return. Think about exactly which
-                // co-ordinate system you want this to be in. World co-ordinate makes most sense.
-  triangulate_points( g0, uv_undistorted[ l0 ],   g1, uv_undistorted[ l1 ],    _w_3d);
-  printMatrixInfo( "_w_3d", _w_3d );
-  cout << "_w_3d\n" << _w_3d.block( 0,0, _w_3d.rows(), 5)  << endl;
-
-  _w_3d_pts.push_back( _w_3d );
-
-  }
-
-/*
-  assert( global_nodes[global_idx_of_pairs[2*__i]]->valid_image() );
-  cv::Mat _tmp = global_nodes[g0]->getImageRef();
-  MatrixXd _tmp_uv = uv[l0];
-  cv::Mat outImg;
-  plot_point_sets( _tmp, _tmp_uv, visibility_mask.row(l0), cv::Scalar(0,69,255), true, "MSG", outImg );
-  write_image( to_string(g0)+".png", outImg );
-
-
-  //
-  //
-  MatrixXd _g0_3d;
-  _g0_3d = w_T_g0.inverse() * _w_3d;
-  MatrixXd _g0_2d;
-  camera.perspectiveProject3DPoints( _g0_3d, _g0_2d );
-  printMatrixInfo( "_g0_2d", _g0_2d );
-  cout << "_g0_2d\n" << _g0_2d.block( 0,0, _g0_2d.rows(), 5)  << endl;
-  plot_point_sets( _tmp, _g0_2d, visibility_mask.row(l0), cv::Scalar(0,169,0), true, "MSG", outImg );
-  write_image( to_string(g0)+"_reproj.png", outImg );
-
-
-
-
-
-  _tmp = global_nodes[g1]->getImageRef();
-  _tmp_uv = uv[l1];
-  plot_point_sets( _tmp, _tmp_uv, visibility_mask.row(l1), cv::Scalar(0,69,255), true, "MSG", outImg );
-  write_image( to_string(g1)+".png", outImg );
-
-
-  //
-  //
-  MatrixXd _g1_3d;
-  _g1_3d = w_T_g1.inverse() * _w_3d;
-  MatrixXd _g1_2d;
-  camera.perspectiveProject3DPoints( _g1_3d, _g1_2d );
-  printMatrixInfo( "_g1_2d", _g1_2d );
-  cout << "_g1_2d\n" << _g1_2d.block( 0,0, _g1_2d.rows(), 5)  << endl;
-  plot_point_sets( _tmp, _g1_2d, visibility_mask.row(l1), cv::Scalar(0,255,0), true, "MSG", outImg );
-  write_image( to_string(g1)+"_reproj.png", outImg );
-*/
-
-}
 
 LocalBundle::LocalBundle( const nap::NapMsg::ConstPtr& msg,
               const vector<Node*>& global_nodes, const PinholeCamera& camera  )
@@ -1331,20 +1226,27 @@ void LocalBundle::plot_dense_point_sets( const cv::Mat& im, const MatrixXd& pts,
 
 
   // Make status image
-  cv::Mat status = cv::Mat(100, outImg.cols, CV_8UC3, cv::Scalar(0,0,0) );
+  cv::Mat status = cv::Mat(150, outImg.cols, CV_8UC3, cv::Scalar(0,0,0) );
   string s = "Plotted "+to_string(count)+" of "+to_string(mask.size());
 
 
   if( !enable_status_image ) {
-    cv::putText( outImg, s.c_str(), cv::Point(10,30), cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(0,0,255), 2 );
+    // cv::putText( outImg, s.c_str(), cv::Point(10,30), cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(0,0,255), 2 );
+    dst = outImg;
     return;
   }
 
   cv::putText( status, s.c_str(), cv::Point(10,30), cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255,255,255), 2 );
 
 
-  if( msg.length() > 0 )
-    cv::putText( status, msg.c_str(), cv::Point(10,70), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255,255,255), 2 );
+  // if( msg.length() > 0 )
+    // cv::putText( status, msg.c_str(), cv::Point(10,50), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255,255,255), 2 );
+
+  if( msg.length() > 0 ) { // ':' separated. Each will go in new line
+        std::vector<std::string> msg_tokens = split(msg, ':');
+        for( int h=0 ; h<msg_tokens.size() ; h++ )
+            cv::putText( status, msg_tokens[h].c_str(), cv::Point(10,50+20*h), cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(255,255,255), 1.5 );
+  }
 
   cv::vconcat( outImg, status, dst );
 
@@ -1576,6 +1478,21 @@ void LocalBundle::prettyprintPoseMatrix( const Matrix4d& M )
   cout << "Tx,Ty,Tz : " << M(0,3) << ", " << M(1,3) << ", " << M(2,3) << endl;
 }
 
+void LocalBundle::prettyprintPoseMatrix( const Matrix4d& M, string& return_string )
+{
+   Vector3d ypr;
+   ypr = R2ypr(  M.topLeftCorner<3,3>()  );
+  // cout << "YPR      : " << R2ypr(  M.topLeftCorner<3,3>() ).transpose() << "; ";
+  // cout << "Tx,Ty,Tz : " << M(0,3) << ", " << M(1,3) << ", " << M(2,3) << endl;
+
+  // return_string = "YPR=("+to_string(ypr(0))+","+to_string(ypr(1))+","+to_string(ypr(2))+")";
+  // return_string += "  TxTyTz=("+ to_string(M(0,3))+","+ to_string(M(1,3))+","+ to_string(M(2,3))+")";
+
+  char __tmp[200];
+  snprintf( __tmp, 200, ":YPR=(%4.2f,%4.2f,%4.2f)  :TxTyTz=(%4.2f,%4.2f,%4.2f)",  ypr(0), ypr(1), ypr(2), M(0,3), M(1,3), M(2,3) );
+  return_string = string( __tmp );
+}
+
 void LocalBundle::robust_triangulation(  const vector<pair<int,int> >& vector_of_pairs, /* local indices pair */
                            const vector<Matrix4d>& w_T_c1,
                            const vector<Matrix4d>& w_T_c2,
@@ -1610,7 +1527,7 @@ void LocalBundle::robust_triangulation(  const vector<pair<int,int> >& vector_of
 
   /////////////// Analysis of the visibility of each of the features ///////////////////
   // set #if 1 to print info on triangulation, ie. baseline etc.
-  #if 0
+  #if LOCALBUNDLE_DEBUG_LVL >= 1
   cout << "\033[1;35m";
 
   // uses mask vector.
@@ -1638,6 +1555,12 @@ void LocalBundle::robust_triangulation(  const vector<pair<int,int> >& vector_of
       __gdkeny = __gdkeny + baseline_distance * mask[i];
 
   }
+  cout << "\033[0m\n";
+
+  #endif
+
+  #if LOCALBUNDLE_DEBUG_LVL >= 2
+  cout << "\033[1;35m";
 
   for( int i=0; i<__xtnmih.size() ; i+=5  )
   {
@@ -1669,7 +1592,8 @@ void LocalBundle::robust_triangulation(  const vector<pair<int,int> >& vector_of
   assert( _2_unvn_undistorted[0].rows() == 2 || _2_unvn_undistorted[0].rows() == 3 );
 
 
-  cout << "There are total of "<< n_pts << " points to triangulate from " << n_samples << " view-pairs\n";
+  cout << "There are total of "<< n_pts << " points to triangulate from " << n_samples << " view-pairs.\n";
+  cout << "foreach of the "<< n_pts << " points svd() can yield 3d point having known where it was imaged. See chp12 on Triangulation in Hartley-Zizzerman book.\n";
 
   int pt_id = 0; //later loop for every point. Be careful with mask of this pair at this point.
   for( int pt_id=0 ; pt_id < n_pts ; pt_id++)
@@ -1909,9 +1833,12 @@ void LocalBundle::ceresDummy()
 Matrix4d LocalBundle::crossRelPoseComputation3d2d()
 {
   assert( isValid_iprev_X_iprev_triangulated );
+
+  #if LOCALBUNDLE_DEBUG_LVL >= 1
   markObservedPointsOnCurrIm();
   markObservedPointsOnPrevIm();
   mark3dPointsOnPrevIm( gi_T_w(localidx_of_iprev), "proj3dPointsOnPrev" );
+  #endif
 
 
   // will use 3d points from iprev-5 to iprev+5 in ref-frame of iprev, ie. iprev_X_iprev_triang.
@@ -1926,29 +1853,40 @@ Matrix4d LocalBundle::crossRelPoseComputation3d2d()
 
   //
   // Initial Guess
+  cout << "~~~~~ Initial Guess c_T_p ~~~~~\n";
   Matrix4d T_cap;
   T_cap = gi_T_gj( localidx_of_icurr, localidx_of_iprev );
-  // mark3dPointsOnCurrIm( T_cap * p_T_w(), "proj3dPointsOnCurr_itr0x" );
+  prettyprintPoseMatrix( T_cap );
 
-
-  // double T_cap_ypr[10], T_cap_t[10];
+  // nullout yaw, tx,ty,tz
+  cout << "nullout y,tx,ty,tz\n";
+  double T_cap_ypr[10];
   double T_cap_quaternion[10], T_cap_t[10];
-  // eigenmat_to_rawyprt( T_cap, T_cap_ypr, T_cap_t);
+  eigenmat_to_rawyprt( T_cap, T_cap_ypr, T_cap_t );
+  T_cap_ypr[0] = 0;
+  T_cap_ypr[1] = 0;T_cap_ypr[2] = 0; //start with identity.
+  T_cap_t[0] = 0;T_cap_t[1] = 0;T_cap_t[2] = 0;
+  rawyprt_to_eigenmat(  T_cap_ypr, T_cap_t, T_cap );
+
+
   eigenmat_to_raw( T_cap, T_cap_quaternion, T_cap_t );
-  cout << "~~~~~ Initial Guess ~~~~~\n";
   cout << "T_cap:\n"<< T_cap << endl;
   printMatrix1d( "T_cap_quaternion",T_cap_quaternion, 3 );
   printMatrix1d( "T_cap_t", T_cap_t, 3 );
+  prettyprintPoseMatrix( T_cap );
+  #if LOCALBUNDLE_DEBUG_LVL >= 1
+  string ___prettypose_string;
+  prettyprintPoseMatrix( T_cap, ___prettypose_string  );
+  mark3dPointsOnCurrIm( T_cap * p_T_w(), "proj3dPointsOnCurr_itr.initial", "c_T_p "+___prettypose_string );
+  #endif
 
-  // cout << "nullout y,tx,ty,tz\n";
-  // T_cap_ypr[0] = 0;
-  // T_cap_t[0] = 0;T_cap_t[1] = 0;T_cap_t[2] = 0;
+
+
+
   // printMatrix1d( "T_cap_ypr",T_cap_ypr, 3 );
   // printMatrix1d( "T_cap_t", T_cap_t, 3 );
   cout << " ~~~~~ ~~~~~ ~~~~~ ~~~~~\n";
-  //TODO use only pitch and roll from w_T_c. Start from zero init guess otherwise.
-  // Vector3d _0_p_r; _0_p_r << 0.0, T_cap_ypr[1], T_cap_ypr[2];
-  // Matrix3d _0_pitch_roll = ypr2R( _0_p_r );
+
 
 
   //
@@ -1965,7 +1903,7 @@ Matrix4d LocalBundle::crossRelPoseComputation3d2d()
 
 
     // Only use good 3d points which are in the front.
-    bool is_behind = ( (iprev_X_iprev_triangulated(2,i) ) < 0 )?true:false;
+    bool is_behind = ( (iprev_X_iprev_triangulated(2,i)/iprev_X_iprev_triangulated(3,i) ) < 0 )?true:false;
     bool good_ = ( reprojection_residue.col(i).norm() < 0.4 )?true:false;
     if( !is_behind && good_ ) {} else{ continue ;}
 
@@ -1978,7 +1916,10 @@ Matrix4d LocalBundle::crossRelPoseComputation3d2d()
                                                       /*T_cap_ypr[1], T_cap_ypr[2]*/ //);
 
     // 6DOF loss
-    ceres::CostFunction * cost_function = Align3d2d::Create( this->iprev_X_iprev_triangulated.col(i),
+    // ceres::CostFunction * cost_function = Align3d2d::Create( this->iprev_X_iprev_triangulated.col(i),
+                                                        // unvn_undistorted[localidx_of_icurr].col(i) );
+
+    ceres::CostFunction * cost_function = Align3dHomogeneous2d::Create( this->iprev_X_iprev_triangulated.col(i),
                                                         unvn_undistorted[localidx_of_icurr].col(i) );
 
 
@@ -2007,7 +1948,8 @@ Matrix4d LocalBundle::crossRelPoseComputation3d2d()
   //
   // Solve
   ceres::Solver::Options options;
-  options.linear_solver_type = ceres::DENSE_QR;
+  // options.linear_solver_type = ceres::DENSE_QR;
+  options.linear_solver_type = ceres::DENSE_SCHUR;
   options.minimizer_progress_to_stdout = false;
   // options.use_nonmonotonic_steps = true;
   // options.minimizer_type = ceres::LINE_SEARCH;
@@ -2015,17 +1957,22 @@ Matrix4d LocalBundle::crossRelPoseComputation3d2d()
 
   //
   // Callback
+  #if LOCALBUNDLE_DEBUG_LVL >= 2
   Align3d2d__4DOFCallback callback;
   callback.setOptimizationVariables_quatertion_t( T_cap_quaternion, T_cap_t );
   // callback.setData( this );
   callback.setGid( global_idx_of_nodes[ localidx_of_icurr ] );
   options.callbacks.push_back(&callback);
   options.update_state_every_iteration = true;
+  #endif
 
   ceres::Solve( options, &problem, &summary );
 
   cout << summary.BriefReport() << endl;
+
+  #if LOCALBUNDLE_DEBUG_LVL >= 2
   vector_of_callbacks.push_back( callback );
+  #endif
 
 
 
@@ -2033,10 +1980,25 @@ Matrix4d LocalBundle::crossRelPoseComputation3d2d()
   // Retrive optimized pose. This will be c_Tcap_p
   // rawyprt_to_eigenmat( T_cap_ypr, T_cap_t, T_cap );
   raw_to_eigenmat( T_cap_quaternion, T_cap_t, T_cap );
-  mark3dPointsOnCurrIm( T_cap * p_T_w(), "proj3dPointsOnCurr_itr.final" );
+
+  cout << "Final pose for c_T_p:\n";
+  prettyprintPoseMatrix( T_cap );
+
+  #if LOCALBUNDLE_DEBUG_LVL >= 1
+  string ___jks_prettypose_string;
+  prettyprintPoseMatrix( T_cap, ___jks_prettypose_string  );
+
+  string __cost_string = "e_0="+to_string(summary.initial_cost)+"   e_" + to_string(summary.num_successful_steps) + "="+to_string(summary.final_cost)+"  #etrms="+to_string(nresidual_terms);
+  mark3dPointsOnCurrIm( T_cap * p_T_w(), "proj3dPointsOnCurr_itr.final", "c_T_p "+___jks_prettypose_string+":"+__cost_string );
+  #endif
 
   Matrix4d to_return = T_cap.inverse();
   return to_return;
+
+
+  // TODO - Decide if this pose is acceptable.
+  // Instead of returning pose, return status where, this pose is acceptable on not.
+  // The pose can be written to input argument.
 
 
 }
@@ -2290,7 +2252,7 @@ Matrix4d LocalBundle::crossRelPoseJointOptimization3d2d()
 }
 
 /////////////////////// Image Marking //////////////////////////
-void LocalBundle::mark3dPointsOnCurrIm( const Matrix4d& cx_T_w, const string& fname_prefix  )
+void LocalBundle::mark3dPointsOnCurrIm( const Matrix4d& cx_T_w, const string& fname_prefix, const string & msg  )
 {
   assert( isValid_w_X_iprev_triangulated );
   int this_local_id = localidx_of_icurr;
@@ -2305,16 +2267,17 @@ void LocalBundle::mark3dPointsOnCurrIm( const Matrix4d& cx_T_w, const string& fn
   camera.perspectiveProject3DPoints( v_X, reproj_pts );
 
   cv::Mat outImg;
-  string msg = "lid="+to_string( this_local_id) + "; gid="+to_string(this_global_id) + "; nap_id="+to_string(this_nap_id);
+  string fullmsg = "lid="+to_string( this_local_id) + "; gid="+to_string(this_global_id) + "; nap_id="+to_string(this_nap_id);
+  fullmsg += ":" + msg;
   plot_dense_point_sets( global_nodes[this_global_id]->getImageRef(), reproj_pts, visibility_mask_nodes.row(localidx_of_icurr),
-                     true, true, msg, outImg );
+                     true, true, fullmsg, outImg );
 
 
   write_image( to_string(nap_idx_of_nodes[ localidx_of_icurr ])+"_"+to_string(nap_idx_of_nodes[localidx_of_iprev])+"___"+to_string(this_nap_id)+"_"+fname_prefix+".png" , outImg );
 
 }
 
-void LocalBundle::mark3dPointsOnPrevIm( const Matrix4d& px_T_w, const string& fname_prefix )
+void LocalBundle::mark3dPointsOnPrevIm( const Matrix4d& px_T_w, const string& fname_prefix, const string& msg )
 {
   assert( isValid_w_X_iprev_triangulated );
   int this_local_id = localidx_of_iprev;
@@ -2329,9 +2292,10 @@ void LocalBundle::mark3dPointsOnPrevIm( const Matrix4d& px_T_w, const string& fn
   camera.perspectiveProject3DPoints( v_X, reproj_pts );
 
   cv::Mat outImg;
-  string msg = "lid="+to_string( this_local_id) + "; gid="+to_string(this_global_id) + "; nap_id="+to_string(this_nap_id);
+  string fullmsg = "lid="+to_string( this_local_id) + "; gid="+to_string(this_global_id) + "; nap_id="+to_string(this_nap_id);
+  fullmsg += ":" + msg;
   plot_dense_point_sets( global_nodes[this_global_id]->getImageRef(), reproj_pts, visibility_mask_nodes.row(this_local_id),
-                     true, true, msg, outImg );
+                     true, true, fullmsg, outImg );
 
 
   write_image( to_string(nap_idx_of_nodes[ localidx_of_icurr ])+"_"+to_string(nap_idx_of_nodes[localidx_of_iprev])+"___"+to_string(this_nap_id)+"_"+fname_prefix+".png" , outImg );
@@ -2400,9 +2364,19 @@ void LocalBundle::eigenpointcloud_2_ros_markermsg( const MatrixXd& M, visualizat
     for( int i=0 ; i<M.cols() ; i++ )
     {
         geometry_msgs::Point pt;
-        pt.x = M(0,i);
-        pt.y = M(1,i);
-        pt.z = M(2,i);
+        if( M.rows() == 3 )
+        {
+            pt.x = M(0,i);
+            pt.y = M(1,i);
+            pt.z = M(2,i);
+        }
+        else
+        {
+            pt.x = M(0,i) / M(3,i);
+            pt.y = M(1,i) / M(3,i);
+            pt.z = M(2,i) / M(3,i);
+        }
+
         marker.points.push_back( pt );
     }
 
