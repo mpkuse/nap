@@ -83,6 +83,7 @@ add_executable( pose_graph_opt_node
                     src/Corvus.cpp
                     src/ColorLUT.cpp
                     src/cnpy.cpp
+                    #src/SolvePoseGraph.cpp
               )
 
 target_link_libraries( ls_pose_graph_opt ${CERES_LIBRARIES}  ${catkin_LIBRARIES} )

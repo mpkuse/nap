@@ -63,6 +63,8 @@ using namespace std;
 #include "PinholeCamera.h"
 #include "DataManager.h"
 
+// #include "SolvePoseGraph.h"
+
 namespace Color {
     enum Code {
         FG_RED      = 31,
@@ -178,8 +180,14 @@ int main(int argc, char ** argv )
   std::cout<< Color::green <<  "Pose Graph Optimization Node by mpkuse!" << Color::def << endl;
 
 
-  // Setup ceres thread
-  // std::thread ceres_th( &DataManager::ceres_main, &dataManager );
+
+  //
+  // Setup thread for solving the pose graph slam. Uses std::thread
+  // SolvePoseGraph solve(dataManager );
+  // solve.setFileOut( "/dev/pts/18" );
+  // std::thread solver_thread( &SolvePoseGraph::sayHi, solve );
+
+
 
 
 
@@ -194,10 +202,11 @@ int main(int argc, char ** argv )
   }
   // dataManager.bool_publish_all = false;
 
-  // ceres_th.join();
 
+  // solver_thread.join();
 
 
   //---------DONE
+  cout << "//---------Done";
   return 0;
 }

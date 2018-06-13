@@ -167,7 +167,7 @@ public:
   bool enable_ceres;
   mutex lock_enable_ceres;
 
-
+  const vector<Node*>& getNodesRef() { return nNodes; }
 
 private:
 

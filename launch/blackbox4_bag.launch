@@ -113,11 +113,16 @@
        <param name="vins_folder" type="string" value="$(arg vins_path)" />
     </node>
 
+    <!-- 4DOF pose graph -->
     <node name="pose_graph" pkg="pose_graph" type="pose_graph" output="log">
       <param name="config_file" type="string" value="$(arg config_path)" />
       <param name="visualization_shift_x" type="int" value="0" />
       <param name="visualization_shift_y" type="int" value="0" />
       <param name="skip_cnt" type="int" value="0" />
+    </node>
+
+    <!-- 6DOF pose graph -->
+    <node name="keyframe_pose_graph_slam" pkg="solve_keyframe_pose_graph" type="keyframe_pose_graph_slam" output="log">
     </node>
 
 <!-- ##### END VINS ##### -->
@@ -148,7 +153,7 @@
       </node>
 
 
-      <!-- DBOW node -->
+      <!-- DBOW node by mpkuse -->
        <!-- <node name="dbow_node" pkg="nap" type="dbow3_naive" output="screen">
         <remap to="$(arg bag_color_im_topic)" from="/color_image_inp" />
         <remap from="/colocation_dbow" to="/colocation" />
@@ -166,11 +171,11 @@
 
 
 
-<!-- ##########################################################
-     ##### Geometry Node / Custom Pose Graph Optimization #####
-     ##########################################################
+<!-- ###########################
+     ##### Geometry Node   #####
+     ###########################
             subscribes to `vins/camera_pose`, `3d_point_cloud`, `napMsg`  -->
-    <node name="pgraph_opt" pkg="nap" type="pose_graph_opt_node" output="screen">
+    <node name="pgraph_opt" pkg="nap" type="pose_graph_opt_node" output="log">
         <param name="config_file" type="string" value="$(arg config_path)" />
         <!-- Commentout next line to remove the places-feedback-->
         <!-- <remap from="/colocation_chatter" to="/colocation" /> -->
@@ -180,9 +185,9 @@
 
 
 
-<!--  #########################
-      ##### Visualization #####
-      ######################### -->
+<!--  ################
+      ##### RVIZ #####
+      ################ -->
 
     <!-- Qin Tong's Visualization -->
     <!--<node name="rvizvisualisation" pkg="rviz" type="rviz" output="log" args="-d $(find vins_estimator)/../config/vins_rviz_config.rviz" />-->
@@ -211,15 +216,25 @@
   </node>
   -->
 
+
+<!-- ##################################
+     ##### Augmented Reality (AR) #####
+     ################################## -->
+
     <!-- AR Node with interactive markers. Multiple obj can be specified as ';' separated value -->
     <arg name="ar_obj_list" default="cube.obj" />
     <arg name="ar_mesh_scaling_list" default=".5" />
     <arg name="ar_controls_scaling_list" default="1.5" />
     <arg name="ar_mesh_initial_positions_list" default="-8,-1,-0.5" />
 
-    <node pkg="ar_demo" type="ar_demo_node2" name="ar_demo_node" output="log">
-      <remap from="~image_raw" to="/pg_17302081/image" doc="input image"/>
-      <remap from="~camera_path" to="/pose_graph/pose_graph_camera_path"/>
+    <arg name="ar_input_camera_image" default="/pg_17302081/image" doc="video feed"/>
+    <arg name="camera_navmsg_path" default="/pose_graph/pose_graph_camera_path" doc="4DOF. If using this make sure pose_graph node is runnning" />
+    <!-- <arg name="camera_navmsg_path" default="/keyframe_pose_graph_slam/opt_path" doc="6DOF. If using this make sure solve_posegraph_opt node is running" /> -->
+
+
+    <node pkg="ar_demo" type="ar_demo_node2" name="ar_demo_node" output="screen">
+      <remap from="~image_raw" to="$(arg ar_input_camera_image)" doc="input image"/>
+      <remap from="~camera_path" to="$(arg camera_navmsg_path)"/>
       <remap from="~object_mesh_pose" to="/interactive_marker_server/object_mesh_pose"/>
 
       <param name="calib_file" type="string" value="$(arg config_path)"/>

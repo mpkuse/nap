@@ -512,6 +512,7 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
       // Re-publish with pose, op_mode:=30
       int32_t mode = 30;
       republish_nap( msg->c_timestamp, msg->prev_timestamp, p_T_c, mode );
+      //TODO: Also add to msg goodness. This can denote the weight
 
       return ;
   }
@@ -604,6 +605,7 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
     // Re-publish with pose, op_mode:=30
     int32_t mode = 30;
     republish_nap( msg->c_timestamp, msg->prev_timestamp, p_T_c, mode );
+    //TODO: Also add to msg goodness. This can denote the weight
 
     return;
   }

@@ -149,7 +149,7 @@ void DataManager::publish_pose_graph_nodes()
 void DataManager::publish_pose_graph_nodes_original_poses()
 {
   bool enable_camera_visual_at_each_pose = false;
-  bool enable_spheres_at_each_pose = true;
+  bool enable_spheres_at_each_pose = false;
   bool enable_text_at_each_pose = true;
   visualization_msgs::Marker marker;
   marker.header.frame_id = "world";
