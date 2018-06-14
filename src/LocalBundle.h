@@ -52,7 +52,7 @@ using namespace Eigen;
 #include "tic_toc.h"
 
 using namespace std;
-using namespace cv;
+// using namespace cv; //don't do using namespace std; On some versions of opencv there is cv::Node which conflicts with my class Node. 
 
 // 0 : Only print some messages. No writing data to disk
 // 1 : Write only comprehensive data to disk. and publish some basic data
