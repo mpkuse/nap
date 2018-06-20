@@ -1112,7 +1112,7 @@ LocalBundle::LocalBundle( const nap::NapMsg::ConstPtr& msg,
 #define write_image_debug( msg ) ;
 void LocalBundle::write_image( string fname, const cv::Mat& img)
 {
-    string base = string("/home/mpkuse/Desktop/bundle_adj/dump/org_");
+    string base = string("/home/mpkuse/Desktop/bundle_adj/dump/localbundle_");
     write_image_debug( cout << "Writing file: "<< base << fname << endl );
     cv::imwrite( (base+fname).c_str(), img );
 }

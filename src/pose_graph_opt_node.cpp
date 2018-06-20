@@ -63,6 +63,7 @@ using namespace std;
 #include "PinholeCamera.h"
 #include "DataManager.h"
 
+#include "cnpy.h"
 // #include "SolvePoseGraph.h"
 
 namespace Color {
@@ -97,6 +98,62 @@ void print_matrix( string msg, const Eigen::Ref<const MatrixXd>& M, const Eigen:
 {
   cout << msg<< M.rows() << "_" << M.cols() << "=\n" << M.format(fmt) << endl;
 
+}
+
+// Writes the data to file (debug)
+void write_nodes_debug_data( const string& base_path, const DataManager&  dataManager )
+{
+    cout << "nap/pose_graph_opt_node (geometry node)/write_nodes_debug_data\n";
+
+    vector<Node*> all_nodes = dataManager.getNodesRef();
+    cout << "Total Nodes: " << all_nodes.size() << endl;
+
+
+    vector<unsigned int> shape;
+    int N = all_nodes.size();
+    shape={1};
+    cnpy::npz_save( base_path+"/vins_3d_points.npz", "N", &N, &shape[0], 1, "w" );
+
+    for( int i=0 ; i<all_nodes.size() ; i++ ) //loop over every node
+    {
+        MatrixXd w_X = all_nodes[i]->getPointCloud(); // 4xN
+        VectorXi id_w_X = all_nodes[i]->getPointCloudGlobalIds(); // N
+        cout << "w_X.shape="<<w_X.rows() << " " << w_X.cols() << "; id_size"<< id_w_X.size() << endl;
+
+        if( id_w_X.size() == 0 )
+            continue;
+
+
+
+        // remeber that eigen stores raw data in col major format and not the usual row major format.
+        // shape = { w_X.rows(), w_X.cols() };
+        shape = { w_X.cols(), w_X.rows() }; // this is not a bug. Careful when using Eigen::data().
+        cnpy::npz_save( base_path+"/vins_3d_points.npz", "wvio_X"+to_string(i), w_X.data(), &shape[0], 2, "a" );
+
+        shape = { id_w_X.size() };
+        cnpy::npz_save( base_path+"/vins_3d_points.npz", "id_w_X"+to_string(i), id_w_X.data(), &shape[0], 1, "a" );
+
+    }
+
+
+
+    //
+    // Print First and Last Matrixces for verification.
+    {
+    MatrixXd w_X = all_nodes[0]->getPointCloud(); // 4xN
+    VectorXi id_w_X = all_nodes[0]->getPointCloudGlobalIds(); // N
+    cout << "wvio_X0\n" << w_X.transpose() << endl;
+    cout << "id_w_X\n" << id_w_X << endl;
+
+    int N = all_nodes.size()/2;
+    cout << "N="<< N << endl;
+    w_X = all_nodes[N]->getPointCloud(); // 4xN
+    id_w_X = all_nodes[N]->getPointCloudGlobalIds(); // N
+    cout << "wvio_X"<< N << "\n" << w_X.transpose() << endl;
+    cout << "id_w_X"<< N << "\n" << id_w_X << endl;
+    }
+
+    cout << "Done with `write_nodes_debug_data`\n";
 }
 
 int main(int argc, char ** argv )
@@ -201,6 +258,7 @@ int main(int argc, char ** argv )
     loop_rate.sleep();
   }
   // dataManager.bool_publish_all = false;
+  write_nodes_debug_data( "/home/mpkuse/Desktop/bundle_adj/pose_graph_analyis", dataManager );
 
 
   // solver_thread.join();

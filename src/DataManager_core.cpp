@@ -453,9 +453,9 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
 
   }
 
-  if( msg->op_mode == 18 ) //this is like opmode20, but doing my own pnp.
+  if( msg->op_mode == 18  ) //this is like opmode20, but doing my own pnp.
   {
-
+    //   return;
       ROS_INFO( "opmode18. Guided match has 3d points and 2d points for this loopmsg" );
 
       // my own processing here to compute pose.
@@ -511,7 +511,7 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
       // Publish pose as opmode30.
       // Re-publish with pose, op_mode:=30
       int32_t mode = 30;
-      republish_nap( msg->c_timestamp, msg->prev_timestamp, p_T_c, mode );
+      republish_nap( msg->c_timestamp, msg->prev_timestamp, p_T_c, mode, 0.18 );
       //TODO: Also add to msg goodness. This can denote the weight
 
       return ;
@@ -604,7 +604,7 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
 
     // Re-publish with pose, op_mode:=30
     int32_t mode = 30;
-    republish_nap( msg->c_timestamp, msg->prev_timestamp, p_T_c, mode );
+    republish_nap( msg->c_timestamp, msg->prev_timestamp, p_T_c, mode, 0.28 );
     //TODO: Also add to msg goodness. This can denote the weight
 
     return;
@@ -623,13 +623,14 @@ void DataManager::republish_nap( const nap::NapMsg::ConstPtr& msg )
   pub_chatter_colocation.publish( *msg );
 }
 
-void DataManager::republish_nap( const ros::Time& t_c, const ros::Time& t_p, const Matrix4d& p_T_c, int32_t op_mode )
+void DataManager::republish_nap( const ros::Time& t_c, const ros::Time& t_p, const Matrix4d& p_T_c, int32_t op_mode, float goodness )
 {
   nap::NapMsg msg;
 
   msg.c_timestamp = t_c;
   msg.prev_timestamp = t_p;
   msg.op_mode = op_mode;
+  msg.goodness = goodness;
 
   // if op_mode is 30 means that pose p_T_c was computed from 3-way matching
   if( op_mode == 30 )

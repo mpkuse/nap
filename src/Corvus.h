@@ -58,7 +58,7 @@ using namespace Eigen;
 #include "LocalBundle.h"
 
 using namespace std;
-// using namespace cv;  //don't do using namespace std; On some versions of opencv there is cv::Node which conflicts with my class Node. 
+// using namespace cv;  //don't do using namespace std; On some versions of opencv there is cv::Node which conflicts with my class Node.
 
 // 0 : No debugging or minimal debugging info
 // 1 : Some images written

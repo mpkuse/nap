@@ -175,7 +175,7 @@ private:
     // Republish                                       //
     // /////////////////////////////////////////////// //
     ros::Publisher pub_chatter_colocation;
-    void republish_nap( const ros::Time& t_c, const ros::Time& t_p, const Matrix4d& p_T_c, int32_t op_mode );
+    void republish_nap( const ros::Time& t_c, const ros::Time& t_p, const Matrix4d& p_T_c, int32_t op_mode, float goodness=0.001 );
     void republish_nap( const nap::NapMsg::ConstPtr& msg );
 
   //
