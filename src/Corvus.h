@@ -56,6 +56,7 @@ using namespace Eigen;
 #include "tic_toc.h"
 
 #include "LocalBundle.h"
+#include "Feature3dInvertedIndex.h"
 
 using namespace std;
 // using namespace cv;  //don't do using namespace std; On some versions of opencv there is cv::Node which conflicts with my class Node.
@@ -70,8 +71,9 @@ using namespace std;
 class Corvus
 {
 public:
-    // Corvus();
+    Corvus() {} ;
     Corvus( const nap::NapMsg::ConstPtr& msg, const vector<Node*>& global_nodes, const PinholeCamera& camera );
+    Corvus( const Feature3dInvertedIndex  * tfidf, const nap::NapMsg::ConstPtr& msg, const vector<Node*>& global_nodes, const PinholeCamera& camera );
     bool isValid() { return is_data_set; }
 
     // Publish and Debug
@@ -81,7 +83,9 @@ public:
 
 
     // Pose Computation
-    bool computeRelPose_3dprev_2dcurr(Matrix4d& to_return_p_T_c ); //< compute pose using 3d points from previous and 2d points from curr.
+    bool computeRelPose_3dprev_2dcurr(Matrix4d& to_return_p_T_c, ceres::Solver::Summary& summary ); //< compute pose using 3d points from previous and 2d points from curr.
+    bool computeRelPose_2dprev_3dcurr( Matrix4d& to_return_p_T_c, ceres::Solver::Summary& summary ); //< compute pose using 3d points from current and 2d points from prev.
+
 
     void sayHi();
 private:
@@ -100,6 +104,12 @@ private:
 
 
 
+    // Create an image [ C| P ]. Mark the 3d points of curr ie. w_C onto both images
+    // [[     PI(c_T_w * w_C)  ||    PI(p_T_c * c_T_w * w_C)    ]]
+    void saveReprojectedPoints__w_C( const Matrix4d& p_T_c, const string& fname_suffix, const string image_caption_msg = string( "No Caption" ));
+
+
+
     vector<Align3d2d__4DOFCallback> vector_of_callbacks;
 
 
@@ -114,7 +124,7 @@ private:
     const vector<Node*> global_nodes;
 
 
-    int globalidx_of_curr, globalidx_of_prev;
+    int globalidx_of_curr, globalidx_of_prev; //< this is global node index
 
     // 3d points
     MatrixXd w_prev, w_curr;
@@ -122,6 +132,10 @@ private:
     // 2d points (normalized image co-ordinates)
     MatrixXd unvn_prev, unvn_curr; //< note here that unvn_* is received in the msg and uv_* are infered from unvn_
     MatrixXd uv_prev, uv_curr;
+
+    // global idx of w_prev and w_curr
+    VectorXi gidx_of_curr, gidx_of_prev; //< this is global id of each of the features.
+    bool is_gidx_set = false;
 
     bool is_data_set = false;
 

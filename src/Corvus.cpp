@@ -10,6 +10,152 @@ void Corvus::sayHi()
     cout << "Corvus::sayHi()\n";
 }
 
+// Constructor crafted for opmode17. In this mode there are also global_idx of the point features. These
+// can be used to get better values of 3d points for pnp.
+Corvus::Corvus( const Feature3dInvertedIndex  * tfidf, const nap::NapMsg::ConstPtr& msg, const vector<Node*>& global_nodes, const PinholeCamera& camera )
+{
+    cout << "Corvus()  ";
+    cout << "Opmode: " <<  msg->op_mode << endl;
+    cout << "curr.size, prev.size: " << msg->curr.size() << " " << msg->prev.size() << endl;
+    // cout << "curr.timestamp, prev.timestamp: " << msg->c_timestamp << " " << msg->prev_timestamp << endl;
+
+
+    // msg->curr : u, U, u, U ... (projected points interspaced with its 3d point)
+    // msg->prev : same as msg->curr but for points in prev.
+
+    assert( msg->curr.size() % 2 == 0 && msg->prev.size()%2 == 0 );
+
+    // Setup camera and global_nodes
+    this->global_nodes = global_nodes;
+    this->camera = camera;
+    // this->camera.printCameraInfo(0);
+
+
+    // Lookup c_timestamp and prev_timestamp in global_nodes
+    this->globalidx_of_curr = find_indexof_node( this->global_nodes, msg->c_timestamp );
+    this->globalidx_of_prev = find_indexof_node( this->global_nodes, msg->prev_timestamp );
+    cout << "globalidx_of_curr,globalidx_of_prev: " << globalidx_of_curr << " " << globalidx_of_prev << endl;
+    assert( this->globalidx_of_curr >= 0 && this->globalidx_of_prev >= 0 );
+
+
+    assert( msg->curr.size() == msg->prev.size() );
+
+    // Collect tracked points and 2d points of curr
+    w_curr = MatrixXd::Zero( 4, msg->curr.size()/2 );
+    unvn_curr = MatrixXd::Zero( 3, msg->curr.size()/2 );
+    gidx_of_curr = VectorXi::Zero( msg->curr.size()/2 );
+    for( int i=0 ; i< msg->curr.size()/2 ; i++ )
+    {
+        geometry_msgs::Point32 u = msg->curr[2*i];
+        geometry_msgs::Point32 U = msg->curr[2*i+1];
+
+        w_curr( 0, i ) = U.x; //TODO. Need not read 3d points. Instead query the inverted index to get the good 3d points.
+        w_curr( 1, i ) = U.y;
+        w_curr( 2, i ) = U.z;
+        w_curr( 3, i ) = 1.0;
+        unvn_curr( 0, i ) = u.x;
+        unvn_curr( 1, i ) = u.y;
+        unvn_curr( 2, i ) = 1.0;
+
+        // assert( u.z == -180 );
+        gidx_of_curr(i) = u.z;
+
+
+        // Using TFIDF
+        Vector4d M_curr, V_curr;
+        bool status_curr = tfidf->query_feature_mean(  gidx_of_curr(i) , M_curr );
+        bool status_curr_V = tfidf->query_feature_var(  gidx_of_curr(i) , V_curr );
+        assert( status_curr && status_curr_V );
+        w_curr.col(i) = M_curr;
+
+    }
+
+
+    // Collect tracked points and 2d points of prev
+    w_prev = MatrixXd::Zero( 4, msg->curr.size()/2 );
+    unvn_prev = MatrixXd::Zero( 3, msg->curr.size()/2 );
+    gidx_of_prev = VectorXi::Zero( msg->curr.size()/2 );
+    for( int i=0 ; i< msg->prev.size()/2 ; i++ )
+    {
+        geometry_msgs::Point32 u = msg->prev[2*i];
+        geometry_msgs::Point32 U = msg->prev[2*i+1];
+
+        w_prev( 0, i ) = U.x; //TODO. Need not read 3d points. Instead query the inverted index to get the good 3d points.
+        w_prev( 1, i ) = U.y;
+        w_prev( 2, i ) = U.z;
+        w_prev( 3, i ) = 1.0;
+        unvn_prev( 0, i ) = u.x;
+        unvn_prev( 1, i ) = u.y;
+        unvn_prev( 2, i ) = 1.0;
+
+        // assert( u.z == -180 );
+        gidx_of_prev(i) = u.z;
+
+
+        // Using TFIDF
+        Vector4d M_prev, V_prev;
+        bool status_prev = tfidf->query_feature_mean(  gidx_of_prev(i) , M_prev );
+        bool status_prev_V = tfidf->query_feature_var(  gidx_of_curr(i) , V_prev );
+        assert( status_prev & status_prev_V );
+        w_prev.col(i) = M_prev;
+
+    }
+
+    is_data_set = true;
+    is_gidx_set = true;
+
+
+
+    // Print 3d 3d points from curr and prev
+    #if CORVUS_DEBUG_LVL >= 3
+    {
+        int n_matched_pts = gidx_of_prev.size();
+        for( int i=0 ; i< n_matched_pts ; i++ )
+        {
+            cout << "i="<< i << "  "<<  gidx_of_curr(i) << " <---> " << gidx_of_prev(i) << endl;
+            cout << "\tw_curr: "<< w_curr(0,i) << "," << w_curr(1,i) << "," << w_curr(2,i) << "," << w_curr(3,i) << ";";
+            Vector4d M_curr, V_curr;
+            bool status_curr = tfidf->query_feature_mean(  gidx_of_curr(i) , M_curr );
+            bool status_curr_V = tfidf->query_feature_var(  gidx_of_curr(i) , V_curr );
+            assert( status_curr && status_curr_V );
+            cout << "\tM_curr: " << M_curr(0) << "," << M_curr(1) << "," <<M_curr(2) << "," <<M_curr(3) << ";";
+            cout << "\tV_curr: " << V_curr(0) << "," << V_curr(1) << "," <<V_curr(2) << "," <<V_curr(3) << ";";
+
+
+            cout << endl;
+            cout << "\tw_prev: "<< w_prev(0,i) << "," << w_prev(1,i) << "," << w_prev(2,i) << "," << w_prev(3,i) << ";";
+            Vector4d M_prev, V_prev;
+            bool status_prev = tfidf->query_feature_mean(  gidx_of_prev(i) , M_prev );
+            bool status_prev_V = tfidf->query_feature_var(  gidx_of_curr(i) , V_prev );
+            assert( status_prev & status_prev_V );
+            cout << "\tM_prev: " << M_prev(0) << "," << M_prev(1) << "," <<M_prev(2) << "," <<M_prev(3) << ";";
+            cout << "\tV_prev: " << V_prev(0) << "," << V_prev(1) << "," <<V_prev(2) << "," <<V_prev(3) << ";";
+
+
+            cout << endl;
+
+            // cout << "i="<< i << "   ";
+            // cout << "(" << gidx_of_curr(i) <<  ") ";
+            // cout << "XYZ: "<< w_curr(0,i) << "," << w_curr(1,i) << "," << w_curr(2,i) << "," << w_curr(3,i) << ";";
+            // cout << "<-->";
+            // cout << "(" << gidx_of_prev(i) <<  ") ";
+            // cout << "XYZ: "<< w_prev(0,i) << "," << w_prev(1,i) << "," << w_prev(2,i) << "," << w_prev(3,i) << ";";
+            // cout << endl;
+        }
+
+    }
+    #endif
+
+
+
+    this->camera.normalizedImCords_2_imageCords( unvn_curr, uv_curr );
+    this->camera.normalizedImCords_2_imageCords( unvn_prev, uv_prev );
+    cout << "Done Corvus() with TFIDF\n";
+}
+
+
+
+// Original Constructor (opmode 18)
 Corvus::Corvus( const nap::NapMsg::ConstPtr& msg, const vector<Node*>& global_nodes, const PinholeCamera& camera )
 {
     cout << "Corvus()  ";
@@ -128,10 +274,10 @@ void Corvus::publishPoints3d( const ros::Publisher& pub )
 ////////////////// Real stuff ///////////////////////////////////
 
 //< compute pose using 3d points from previous and 2d points from curr.
-bool Corvus::computeRelPose_3dprev_2dcurr( Matrix4d& to_return_p_T_c )
+bool Corvus::computeRelPose_3dprev_2dcurr( Matrix4d& to_return_p_T_c, ceres::Solver::Summary& summary )
 {
     assert( isValid() );
-    cout << "Corvus::computeRelPose_3dprev_2dcurr()\n";
+    cout << "\nCorvus::computeRelPose_3dprev_2dcurr()\n";
 
     MatrixXd p_prev =  w_T_gid(globalidx_of_prev).inverse() *  w_prev;
     // also use unvn_curr
@@ -192,7 +338,7 @@ bool Corvus::computeRelPose_3dprev_2dcurr( Matrix4d& to_return_p_T_c )
     #if CORVUS_DEBUG_LVL > 4
     options.minimizer_progress_to_stdout = true;
     #endif
-    ceres::Solver::Summary summary;
+    // ceres::Solver::Summary summary; // This was removed because it is better to return the summary. This is done as an referemce argument to this function
 
     #if CORVUS_DEBUG_LVL >= 2
     //
@@ -234,7 +380,7 @@ bool Corvus::computeRelPose_3dprev_2dcurr( Matrix4d& to_return_p_T_c )
     #if CORVUS_DEBUG_LVL > 0
     char __caption_string[500];
     // sprintf( __caption_string, "IsSolutionUsable=%d, cost0=%4.4f, final=%4.4f", summary.IsSolutionUsable(), summary.initial_cost(), summary.final_cost() );
-    sprintf( __caption_string, "IsSolutionUsable=%d, cost0=%4.4f, cost%d=%4.4f. %s", (int)summary.IsSolutionUsable(), (float)summary.initial_cost,  summary.num_successful_steps, summary.final_cost, (status)?"Acceptable":"Reject" );
+    sprintf( __caption_string, "total_time_msec=%4.2f, cost0=%4.4f, cost%d=%4.4f. %s", 1000.*summary.total_time_in_seconds, (float)summary.initial_cost,  summary.num_successful_steps, summary.final_cost, (status)?"Acceptable":"Reject" );
 
     string __c_T_p_prettyprint;
     prettyprintPoseMatrix( c_T_p, __c_T_p_prettyprint );
@@ -250,6 +396,135 @@ bool Corvus::computeRelPose_3dprev_2dcurr( Matrix4d& to_return_p_T_c )
     return status;
 
 }
+
+
+
+// This uses 3d points from curr and 2d points from previous. This was added later (on 21st June, 2018)
+bool Corvus::computeRelPose_2dprev_3dcurr( Matrix4d& to_return_p_T_c, ceres::Solver::Summary& summary )
+{
+    assert( isValid() );
+    cout << "\nCorvus::computeRelPose_2dprev_3dcurr()\n";
+
+    MatrixXd c_curr =  w_T_gid(globalidx_of_curr).inverse() *  w_curr; // 3d points of curr in curr's frame-of-ref
+    // also use unvn_curr
+
+
+
+    //
+    // Initial Guess
+    Matrix4d p_T_c;
+    p_T_c = w_T_gid( globalidx_of_prev ).inverse() * w_T_gid( globalidx_of_curr );
+
+    double p_T_c_quat[10], p_T_c_trans[10], p_T_c_ypr[10];
+    // convert to yprt for nullout
+    eigenmat_to_rawyprt( p_T_c, p_T_c_ypr, p_T_c_trans );
+    // nullout translation.
+    p_T_c_trans[0] = 0.0; p_T_c_trans[1] = 0.0; p_T_c_trans[2] = 0.0;
+    p_T_c_ypr[0] = 0.0;
+    rawyprt_to_eigenmat( p_T_c_ypr, p_T_c_trans, p_T_c );
+
+
+    eigenmat_to_raw( p_T_c, p_T_c_quat, p_T_c_trans );
+
+
+
+    // Save 3d points of curr projected on both views
+    #if CORVUS_DEBUG_LVL > 0
+    saveObservedPoints();
+    saveReprojectedPoints__w_C( p_T_c, string("itr0") );
+    #endif
+
+
+    //
+    // Setup problem
+    ceres::Problem problem;
+    for( int i=0 ; i<c_curr.cols() ; i++ )
+    {
+        ceres::CostFunction * cost_function = Align3d2d::Create( c_curr.col(i), unvn_prev.col(i) );
+
+        ceres::LossFunction *loss_function = NULL;
+        // loss_function = new ceres::HuberLoss(.01);
+        loss_function = new ceres::CauchyLoss(.05);
+
+
+        problem.AddResidualBlock( cost_function, loss_function, p_T_c_quat, p_T_c_trans );
+    }
+
+    // Quaternion parameterization
+    ceres::LocalParameterization *quaternion_parameterization = new ceres::QuaternionParameterization;
+    problem.SetParameterization( p_T_c_quat, quaternion_parameterization );
+
+
+
+    //
+    // Solve
+    ceres::Solver::Options options;
+    // options.linear_solver_type = ceres::DENSE_QR;
+    options.linear_solver_type = ceres::DENSE_SCHUR;
+    #if CORVUS_DEBUG_LVL > 4
+    options.minimizer_progress_to_stdout = true;
+    #endif
+    // ceres::Solver::Summary summary; // This was removed because it is better to return the summary. This is done as an referemce argument to this function
+
+    #if CORVUS_DEBUG_LVL >= 2
+    //
+    // Callback
+    Align3d2d__4DOFCallback callback;
+    callback.setOptimizationVariables_quatertion_t( p_T_c_quat, p_T_c_trans );
+    options.callbacks.push_back(&callback);
+    options.update_state_every_iteration = true;
+
+    #endif
+
+
+    ceres::Solve( options, &problem, &summary );
+    cout << summary.BriefReport() << endl;
+
+
+    //
+    // Retrive Optimized Pose
+    raw_to_eigenmat( p_T_c_quat, p_T_c_trans, p_T_c );
+    to_return_p_T_c = p_T_c;
+
+
+
+
+    //  - Decide if this pose is acceptable.
+    // Instead of returning pose, return status where, this pose is acceptable on not.
+    // The pose can be written to input argument.
+
+    bool status = false;
+    if( p_T_c.col(3).head(3).norm() < 2. ) {
+        cout << "[Accept]: p_T_c.col(3).head(3).norm() < 2.\n";
+        status = true;
+    }
+
+
+
+    //
+    // Process callback and write info to disk
+    // TODO
+    #if CORVUS_DEBUG_LVL > 0
+    char __caption_string[500];
+    // sprintf( __caption_string, "IsSolutionUsable=%d, cost0=%4.4f, final=%4.4f", summary.IsSolutionUsable(), summary.initial_cost(), summary.final_cost() );
+    sprintf( __caption_string, "total_time_msec=%4.2f, cost0=%4.4f, cost%d=%4.4f. %s", 1000.*summary.total_time_in_seconds, (float)summary.initial_cost,  summary.num_successful_steps, summary.final_cost, (status)?"Acceptable":"Reject" );
+
+    string __p_T_c_prettyprint;
+    prettyprintPoseMatrix( p_T_c, __p_T_c_prettyprint );
+    saveReprojectedPoints__w_C( p_T_c, string("final"), string( __caption_string )+":p_T_c "+__p_T_c_prettyprint );
+    #endif
+
+    // TODO
+    #if CORVUS_DEBUG_LVL > 1
+    vector_of_callbacks.clear();
+    vector_of_callbacks.push_back( callback );
+    #endif
+
+
+    return status;
+
+}
+
 
 
 /////////////////////////////ROS Publishing helpers ///////////////////////////////
@@ -499,7 +774,39 @@ void Corvus::saveReprojectedPoints( const Matrix4d& c_T_p, const string& fname_s
 
 }
 
+// Create an image : [ C | P ]. Mark the projected points. 3D points are w_curr (3d points of current image)
+//          [[     PI(c_T_w * w_C)  ||    PI(p_T_c * c_T_w * w_C)    ]]
+void Corvus::saveReprojectedPoints__w_C( const Matrix4d& p_T_c, const string& fname_suffix, const string image_caption_msg)
+{
+    Matrix4d c_T_w = gid_T_w( globalidx_of_curr );
 
+    //  PI(c_T_w * w_C)
+    MatrixXd c_curr = c_T_w * w_curr;
+    MatrixXd projected_c_curr;
+    camera.perspectiveProject3DPoints( c_curr, projected_c_curr );
+
+    // PI(p_T_c * c_T_w * w_C)
+    MatrixXd p_curr = p_T_c * c_T_w * w_curr;
+    MatrixXd projected_p_curr;
+    camera.perspectiveProject3DPoints( p_curr, projected_p_curr );
+
+
+    //
+    assert( global_nodes[globalidx_of_prev]->valid_image() );
+    assert( global_nodes[globalidx_of_curr]->valid_image() );
+    cv::Mat prev_im = global_nodes[globalidx_of_prev]->getImageRef();
+    cv::Mat curr_im = global_nodes[globalidx_of_curr]->getImageRef();
+    cv::Mat dst;
+    plot_point_sets( curr_im, projected_c_curr, globalidx_of_curr,
+                     prev_im, projected_p_curr, globalidx_of_prev,
+                     cv::Scalar( 0,0,255 ), true,
+                     string( "project w_curr on both frames.")+fname_suffix+":"+image_caption_msg,
+                     dst
+                 );
+
+    write_image( to_string(globalidx_of_curr) + "_" + to_string(globalidx_of_prev)+"_reprojected__w_C_"+fname_suffix+".png", dst );
+
+}
 
 void Corvus::saveReprojectedImagesFromCeresCallbacks( )
 {

@@ -98,7 +98,7 @@ import time
 import code
 import os
 import sys
-
+import pickle
 
 from sensor_msgs.msg import Image
 from std_msgs.msg import Float32
@@ -1297,6 +1297,9 @@ def worker_bundle_cpu(  process_flags, Qd, Qdd, S_thumbnails, S_timestamp, S_lut
         feat3d_curr = FF['point3d'][feat2d_curr_idx]
         feat3d_prev = FF['point3d'][feat2d_prev_idx] # This is added may,28,2018. (for opmode 18)
 
+        feat2d_curr_global_idx = FF['global_index'][feat2d_curr_idx]
+        feat2d_prev_global_idx = FF['global_index'][feat2d_prev_idx]
+
         xprint( 'feat2d_curr.shape: '+ str( feat2d_curr.shape ) , THREAD_NAME )
         xprint( 'feat2d_prev.shape: '+ str( feat2d_prev.shape ) , THREAD_NAME )
 
@@ -1336,13 +1339,13 @@ def worker_bundle_cpu(  process_flags, Qd, Qdd, S_thumbnails, S_timestamp, S_lut
             for h in range( len(selected_curr_i) ):
                 _u = feat2d_curr_normed[ 0:2, selected_curr_i[h] ]
                 _U = feat3d_curr[0:3, selected_curr_i[h] ]
-                _g_idx = -100#feat2d_curr_global_idx[ selected_curr_i[h] ]
+                _g_idx = -100#feat2d_curr_global_idx[ selected_curr_i[h] ] #TODO
                 # nap_msg.curr will be 2X length, where nap_msg.prev will be X length.
                 nap_msg.curr.append( Point32(_u[0], _u[1], _g_idx) )
                 nap_msg.curr.append( Point32(_U[0], _U[1], _U[2])  )
 
                 _u = feat2d_prev_normed[ 0:2, selected_prev_i[h] ]
-                _g_idx = -100#feat2d_prev_global_idx[ selected_prev_i[h] ]
+                _g_idx = -100#feat2d_prev_global_idx[ selected_prev_i[h] ] #TODO
                 nap_msg.prev.append( Point32(_u[0], _u[1], _g_idx) )
 
             # Step-3: Put the napmsg in the queue to be published by main-thread.
@@ -1370,7 +1373,8 @@ def worker_bundle_cpu(  process_flags, Qd, Qdd, S_thumbnails, S_timestamp, S_lut
         if( score >= 3.  or ( score > 2.0 and len(selected_curr_i) > 15 ) ):
             # Step-1:
             nap_msg = make_nap_msg( t_curr, t_prev, (0.6,1.0,0.6) )
-            nap_msg.op_mode = 18
+            nap_msg.op_mode = 18 # has gidx set to -180 (this will be verified in DataManager_core.cpp::place_recog_callback). Later merge these two
+            nap_msg.op_mode = 17
             nap_msg.t_curr = t_curr
             nap_msg.t_prev = t_prev
 
@@ -1378,7 +1382,7 @@ def worker_bundle_cpu(  process_flags, Qd, Qdd, S_thumbnails, S_timestamp, S_lut
             for h in range( len(selected_curr_i) ):
                 _u = feat2d_curr_normed[ 0:2, selected_curr_i[h] ]
                 _U = feat3d_curr[0:3, selected_curr_i[h] ]
-                _g_idx = -180#feat2d_curr_global_idx[ selected_curr_i[h] ]
+                _g_idx = feat2d_curr_global_idx[ selected_curr_i[h] ] #-180
                 # nap_msg.curr will be 2X length, where nap_msg.prev will be X length.
                 nap_msg.curr.append( Point32(_u[0], _u[1], _g_idx) )
                 nap_msg.curr.append( Point32(_U[0], _U[1], _U[2])  )
@@ -1386,7 +1390,7 @@ def worker_bundle_cpu(  process_flags, Qd, Qdd, S_thumbnails, S_timestamp, S_lut
 
                 _u = feat2d_prev_normed[ 0:2, selected_prev_i[h] ]
                 _U = feat3d_prev[0:3, selected_prev_i[h] ]
-                _g_idx = -180#feat2d_prev_global_idx[ selected_prev_i[h] ]
+                _g_idx = feat2d_prev_global_idx[ selected_prev_i[h] ] #-180
                 nap_msg.prev.append( Point32(_u[0], _u[1], _g_idx) )
                 nap_msg.prev.append( Point32(_U[0], _U[1], _U[2])  )
 
@@ -1737,6 +1741,30 @@ if __name__ == "__main__":
             if S_full_res is not None:
                 print 'Writing ', BASE__DUMP+'/S_full_res.npy'
                 np.save( BASE__DUMP+'/S_full_res.npy', np.array(S_full_res) )
+
+            # code.interact( local=locals() )
+            ## Write `FEAT_FACT_SEMAPHORES` to file
+            fname = BASE__DUMP+"/feature_factory"
+            # timestamps
+            print 'Writing pickle: ',  fname+'_timestamps.pickle'
+            print 'len=', len(FEAT_FACT_SEMAPHORES['timestamp'])
+            with open( fname+'_timestamps.pickle', 'wb') as fp:
+                pickle.dump( FEAT_FACT_SEMAPHORES['timestamp'], fp )
+
+            # Features in normalized co-ordinates
+            print 'Writing pickle: ',  fname+'_features.pickle'
+            print 'len=', len(FEAT_FACT_SEMAPHORES['features'])
+            with open( fname+'_features.pickle', 'wb') as fp:
+                pickle.dump( FEAT_FACT_SEMAPHORES['features'], fp )
+
+            # Gobal feature index
+            print 'Writing pickle: ',  fname+'_global_index.pickle'
+            print 'len=', len(FEAT_FACT_SEMAPHORES['global_index'])
+            with open( fname+'_global_index.pickle', 'wb') as fp:
+                pickle.dump( FEAT_FACT_SEMAPHORES['global_index'], fp )
+
+            # feature_factory.dump_to_file( BASE__DUMP+"/feature_factory" ) #this does not work
+            ## Done writing `FEAT_FACT_SEMAPHORES`
     except:
         print 'ROSPARAM `/nap/debug_output_dir` not found so not writing debug info'
 

@@ -84,6 +84,7 @@ add_executable( pose_graph_opt_node
                     src/ColorLUT.cpp
                     src/cnpy.cpp
                     #src/SolvePoseGraph.cpp
+                    src/Feature3dInvertedIndex.cpp
               )
 
 target_link_libraries( ls_pose_graph_opt ${CERES_LIBRARIES}  ${catkin_LIBRARIES} )

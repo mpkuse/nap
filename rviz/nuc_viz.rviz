@@ -6,6 +6,7 @@ Panels:
       Expanded:
         - /Ref1/GridXZ1
         - /Ref1/Grid1
+        - /Paths1
         - /Paths1/Camera1
         - /Paths1/Camera VIO1
         - /MarkerArray2/Namespaces1
@@ -303,7 +304,8 @@ Visualization Manager:
           Marker Topic: /plane_detect_node/plane_marker
           Name: Plane Fitting
           Namespaces:
-            {}
+            _3dpt: true
+            plane: true
           Queue Size: 100
           Value: true
       Enabled: true
@@ -438,24 +440,24 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/XYOrbit
-      Distance: 33.1402435
+      Distance: 18.5516891
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.0599999987
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 8.22108078
-        Y: -8.39007568
-        Z: -0.000172596163
+        X: 4.12865496
+        Y: -8.94777298
+        Z: -0.000178318209
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.0500000007
       Name: Current View
       Near Clip Distance: 0.00999999978
-      Pitch: 0.749797761
+      Pitch: 1.2497977
       Target Frame: <Fixed Frame>
       Value: XYOrbit (rviz)
-      Yaw: 6.27079201
+      Yaw: 5.75078154
     Saved: ~
 Window Geometry:
   AR Image:

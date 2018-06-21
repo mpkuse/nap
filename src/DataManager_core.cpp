@@ -8,6 +8,9 @@ DataManager::DataManager(ros::NodeHandle &nh )
 
     // init republish colocation topic
     pub_chatter_colocation = this->nh.advertise<nap::NapMsg>( "/colocation_chatter", 1000 );
+
+
+    tfidf = new Feature3dInvertedIndex();
 }
 
 
@@ -234,6 +237,45 @@ void DataManager::point_cloud_callback( const sensor_msgs::PointCloudConstPtr& m
     // cout << "\tchannels.size() : "<< msg->channels.size(); //this will be N (say 92)
     // cout << "\tchannels[0].size() : "<< msg->channels[0].values.size(); //this will be 5.
     // cout << "\n";
+
+    // An Example Keypoint msg
+    {
+        // ---
+        // header:
+        //   seq: 40
+        //   stamp:
+        //     secs: 1523613562
+        //     nsecs: 530859947
+        //   frame_id: world
+        // points:
+        //   -
+        //     x: -7.59081602097
+        //     y: 7.11367511749
+        //     z: 2.85602664948
+        //   .
+        //   .
+        //   .
+        //   -
+        //     x: -2.64935922623
+        //     y: 0.853760659695
+        //     z: 0.796766400337
+        // channels:
+        //   -
+        //     name: ''
+        //     values: [-0.06108921766281128, 0.02294199913740158, 310.8721618652344, 260.105712890625, 2.0]
+        //     .
+        //     .
+        //     .
+        //   -
+        //     name: ''
+        //     values: [-0.47983112931251526, 0.8081198334693909, 218.95481872558594, 435.47357177734375, 654.0]
+        //   -
+        //     name: ''
+        //     values: [0.07728647440671921, 1.0073764324188232, 344.2176208496094, 473.7791442871094, 660.0]
+        //   -
+        //     name: ''
+        //     values: [-0.6801641583442688, 0.10506453365087509, 159.75746154785156, 279.6077575683594, 663.0]
+    }
     }
 
     // 1.2 msg->channels
@@ -256,6 +298,18 @@ void DataManager::point_cloud_callback( const sensor_msgs::PointCloudConstPtr& m
     // Corresponding node exist
     // nNodes[i_]->setPointCloud( msg->header.stamp, msg->points );
     nNodes[i_]->setPointCloud( msg->header.stamp, msg->points, msg->channels ); //also stores the global id of each of the 3d points
+
+
+    // Add all the 3d points to inverted index
+    assert( msg->channels.size() == msg->points.size() && msg->channels[0].values.size() == 5 );
+    for( int i=0 ; i<msg->points.size() ; i++ )
+    {
+        int _gid = (int)msg->channels[i].values[4];
+        Vector4d _3dpt;
+        _3dpt << msg->points[i].x, msg->points[i].y, msg->points[i].z, 1.0;
+        tfidf->add( _gid, _3dpt, i_ );
+    }
+
 
     {
     // cout << "\tOKpoints.size() : "<< msg->points.size();
@@ -346,8 +400,9 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
   // enabled_opmode.push_back(10);
   // enabled_opmode.push_back(29);
   // enabled_opmode.push_back(20);
-  enabled_opmode.push_back(18);
-  enabled_opmode.push_back(28);
+  // enabled_opmode.push_back(18);
+  // enabled_opmode.push_back(28);
+  enabled_opmode.push_back(17);
 
   if( std::find(enabled_opmode.begin(), enabled_opmode.end(),  (int)msg->op_mode  ) != enabled_opmode.end() )
   {
@@ -453,6 +508,82 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
 
   }
 
+  // this is like opmode18. Also uses the Corvus class but the constructor is different. opmode 17 contains global_idx of the point features. This was not present in opmode18
+  if( msg->op_mode == 17 )
+  {
+        ROS_INFO( "opmode17. Guided match has 3d points and 2d points for this loopmsg. But will use robust 3d points from inverted index maintained internally" );
+        cout << "+++++++++++++++++++++++++++++++++\n";
+        Corvus cor( tfidf, msg, this->nNodes, this->camera );
+
+        if( !cor.isValid() )
+            return;
+
+        // Using 3dpoints of prev and 2d points of curr
+        if( true )
+        {
+            Matrix4d p_T_c;
+            ceres::Solver::Summary summary;
+            bool status = cor.computeRelPose_3dprev_2dcurr(p_T_c, summary);
+            cout << "returned_summary: " << summary.BriefReport() << endl;
+            double weight = min( 1.0, log( summary.initial_cost / summary.final_cost ) );
+            if( status == false )
+            {
+                cout << "Status : Reject\n";
+            }
+
+
+            e->setLoopEdgeSubtype(EDGE_TYPE_LOOP_SUBTYPE_GUIDED);
+            loopClosureEdges.push_back( e );
+
+
+
+            // Publish pose as opmode30.
+            // Re-publish with pose, op_mode:=30
+            if( status )
+            {
+                int32_t mode = 30;
+                republish_nap( msg->c_timestamp, msg->prev_timestamp, p_T_c, mode, weight );
+            }
+        }
+
+
+        // Using 2d points of prev 3dpoints of curr
+        if( true )
+        {
+            Matrix4d p_T_c;
+            ceres::Solver::Summary summary;
+            bool status = cor.computeRelPose_2dprev_3dcurr(p_T_c, summary);
+            cout << "returned_summary: " << summary.BriefReport() << endl;
+            double weight = min( 1.0, log( summary.initial_cost / summary.final_cost ) );
+            if( status == false )
+            {
+                cout << "Status : Reject\n";
+            }
+
+
+            e->setLoopEdgeSubtype(EDGE_TYPE_LOOP_SUBTYPE_GUIDED);
+            loopClosureEdges.push_back( e );
+
+
+
+            // Publish pose as opmode30.
+            // Re-publish with pose, op_mode:=30
+            if( status )
+            {
+                int32_t mode = 30;
+                republish_nap( msg->c_timestamp, msg->prev_timestamp, p_T_c, mode, weight );
+            }
+        }
+
+
+        // TODO. 3d3d Align. use both sets of 3d points and align those.
+
+        cout << "Done...\n";
+
+        return ;
+
+  }
+
   if( msg->op_mode == 18  ) //this is like opmode20, but doing my own pnp.
   {
     //   return;
@@ -467,6 +598,9 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
 
       timing.tic();
       Corvus cor( msg, this->nNodes, this->camera );
+
+
+
       cout << "Constructor done in (ms): "<< timing.toc() << endl;
       if( !cor.isValid() )
         return;
@@ -482,7 +616,8 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
       // relative Pose computation
       timing.tic();
       Matrix4d p_T_c;
-      bool status = cor.computeRelPose_3dprev_2dcurr(p_T_c);
+      ceres::Solver::Summary summary;
+      bool status = cor.computeRelPose_3dprev_2dcurr(p_T_c, summary);
       if( status == false )
       {
           cout << "Status : Reject\n";
@@ -781,6 +916,19 @@ void DataManager::flush_unclaimed_pt_cld()
     {
     //   nNodes[i_]->setPointCloud(t, e );
       nNodes[i_]->setPointCloud(t, e, e_globalid );
+
+
+      // Add all the 3d points to inverted index
+      assert( e.cols() == e_globalid.size() );
+      assert( e.rows() == 4 || e.rows() == 3 );
+      for( int i=0 ; i< e.cols()  ; i++ )
+      {
+          int _gid = (int)e_globalid(i);
+          Vector4d _3dpt;
+          _3dpt << e(0,i), e(1,i), e(2,i), 1.0;
+          tfidf->add( _gid, _3dpt, i_ );
+      }
+
     }
   }
 }

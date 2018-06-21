@@ -118,7 +118,7 @@ void write_nodes_debug_data( const string& base_path, const DataManager&  dataMa
     {
         MatrixXd w_X = all_nodes[i]->getPointCloud(); // 4xN
         VectorXi id_w_X = all_nodes[i]->getPointCloudGlobalIds(); // N
-        cout << "w_X.shape="<<w_X.rows() << " " << w_X.cols() << "; id_size"<< id_w_X.size() << endl;
+        cout << i <<  " w_X.shape="<<w_X.rows() << " " << w_X.cols() << "; id_size"<< id_w_X.size() << endl;
 
         if( id_w_X.size() == 0 )
             continue;
@@ -140,17 +140,17 @@ void write_nodes_debug_data( const string& base_path, const DataManager&  dataMa
     //
     // Print First and Last Matrixces for verification.
     {
-    MatrixXd w_X = all_nodes[0]->getPointCloud(); // 4xN
-    VectorXi id_w_X = all_nodes[0]->getPointCloudGlobalIds(); // N
-    cout << "wvio_X0\n" << w_X.transpose() << endl;
-    cout << "id_w_X\n" << id_w_X << endl;
-
-    int N = all_nodes.size()/2;
-    cout << "N="<< N << endl;
-    w_X = all_nodes[N]->getPointCloud(); // 4xN
-    id_w_X = all_nodes[N]->getPointCloudGlobalIds(); // N
-    cout << "wvio_X"<< N << "\n" << w_X.transpose() << endl;
-    cout << "id_w_X"<< N << "\n" << id_w_X << endl;
+    // MatrixXd w_X = all_nodes[0]->getPointCloud(); // 4xN
+    // VectorXi id_w_X = all_nodes[0]->getPointCloudGlobalIds(); // N
+    // cout << "wvio_X0\n" << w_X.transpose() << endl;
+    // cout << "id_w_X\n" << id_w_X << endl;
+    //
+    // int N = all_nodes.size()/2;
+    // cout << "N="<< N << endl;
+    // w_X = all_nodes[N]->getPointCloud(); // 4xN
+    // id_w_X = all_nodes[N]->getPointCloudGlobalIds(); // N
+    // cout << "wvio_X"<< N << "\n" << w_X.transpose() << endl;
+    // cout << "id_w_X"<< N << "\n" << id_w_X << endl;
     }
 
     cout << "Done with `write_nodes_debug_data`\n";
@@ -258,7 +258,8 @@ int main(int argc, char ** argv )
     loop_rate.sleep();
   }
   // dataManager.bool_publish_all = false;
-  write_nodes_debug_data( "/home/mpkuse/Desktop/bundle_adj/pose_graph_analyis", dataManager );
+  // write_nodes_debug_data( "/home/mpkuse/Desktop/bundle_adj/pose_graph_analyis", dataManager );
+  // dataManager.getTFIDFRef()->sayHi();
 
 
   // solver_thread.join();

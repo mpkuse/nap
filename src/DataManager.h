@@ -80,6 +80,8 @@ using namespace std;
 #include "LocalBundle.h"
 #include "Corvus.h"
 
+#include "Feature3dInvertedIndex.h"
+
 #include "tic_toc.h"
 
 // Debug enable/disable flags
@@ -168,6 +170,7 @@ public:
   mutex lock_enable_ceres;
 
   const vector<Node*>& getNodesRef() { return nNodes; }
+  const Feature3dInvertedIndex * getTFIDFRef() { return tfidf; }
 
 private:
 
@@ -184,6 +187,8 @@ private:
   vector<Node*> nNodes; //list of notes
   vector<Edge*> odometryEdges; //list of odometry edges
   vector<Edge*> loopClosureEdges; //List of closure edges
+
+  Feature3dInvertedIndex  * tfidf; // TF-IDF (inverted index of 3d points by globalidx)
 
   //
   // Buffer Utilities

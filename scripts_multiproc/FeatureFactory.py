@@ -95,7 +95,42 @@ class FeatureFactory:
             ret = yaml.load(yamlFileOut)
         return ret
 
-
+    # An Example Keypoint msg
+        #  ---
+        #  header:
+        #    seq: 40
+        #    stamp:
+        #      secs: 1523613562
+        #      nsecs: 530859947
+        #    frame_id: world
+        #  points:
+        #    -
+        #      x: -7.59081602097
+        #      y: 7.11367511749
+        #      z: 2.85602664948
+        #    .
+        #    .
+        #    .
+        #    -
+        #      x: -2.64935922623
+        #      y: 0.853760659695
+        #      z: 0.796766400337
+        #  channels:
+        #    -
+        #      name: ''
+        #      values: [-0.06108921766281128, 0.02294199913740158, 310.8721618652344, 260.105712890625, 2.0]
+        #      .
+        #      .
+        #      .
+        #    -
+        #      name: ''
+        #      values: [-0.47983112931251526, 0.8081198334693909, 218.95481872558594, 435.47357177734375, 654.0]
+        #    -
+        #      name: ''
+        #      values: [0.07728647440671921, 1.0073764324188232, 344.2176208496094, 473.7791442871094, 660.0]
+        #    -
+        #      name: ''
+        #      values: [-0.6801641583442688, 0.10506453365087509, 159.75746154785156, 279.6077575683594, 663.0]
     def tracked_features_callback(self, data ):
         # print 'Received tracked feature', data.header.stamp, len( data.points ), len( data.channels )
         assert len( data.points ) == len( data.channels ) , "in FeatureFactor/tracked_features_callback() data.channels and data.points must have same count"
@@ -134,6 +169,16 @@ class FeatureFactory:
         # print 'gindex.shape', gindex.shape
         # print gindex
 
+        # In the commit `6d1bb531d02fc37187b966da8245a4f47b1d6ba3` of vins_testbed.
+        # IN previous versions there were only 4 channels.
+        # there will be 5 channels. ch[0]: un, ch[1]: vn,  ch[2]: u, ch[3]: v.  ch[4]: globalid of the feature.
+        gindex = []
+        assert( len(data.channels[0].values) == 5 )
+        for i, ch in enumerate( data.channels ):
+            gindex.append( ch.values[4] )
+        self.global_index.append( gindex )
+
+
     def find_index( self, stamp ):
         # print 'find_index'
         del_duration = rospy.Duration.from_sec( 0.001 ) #1ms
@@ -151,25 +196,30 @@ class FeatureFactory:
 
         # timestamps
         print 'Writing pickle: ',  fname+'_timestamps.pickle'
+        print 'len=', len(self.timestamp)
         with open( fname+'_timestamps.pickle', 'wb') as fp:
             pickle.dump( self.timestamp, fp )
 
         # Features in normalized co-ordinates
         print 'Writing pickle: ',  fname+'_features.pickle'
+        print 'len=', len(self.features)
         with open( fname+'_features.pickle', 'wb') as fp:
             pickle.dump( self.features, fp )
 
         # Gobal feature index
         print 'Writing pickle: ',  fname+'_global_index.pickle'
+        print 'len=', len(self.global_index)
         with open( fname+'_global_index.pickle', 'wb') as fp:
             pickle.dump( self.global_index, fp )
 
         # Save self.K and self.K_org
         print 'Writing pickle: ', fname+'_cam_intrinsic_K.pickle'
+        print 'len=', len(self.K)
         with open( fname+'_cam_intrinsic_K.pickle', 'wb') as fp:
             pickle.dump( self.K, fp )
 
         print 'Writing pickle: ', fname+'_cam_intrinsic_K_org.pickle'
+        print 'len=', len(self.K_org)
         with open( fname+'_cam_intrinsic_K_org.pickle', 'wb') as fp:
             pickle.dump( self.K_org, fp )
 
