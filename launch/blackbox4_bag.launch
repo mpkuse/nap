@@ -64,10 +64,10 @@
     <!-- Bag set 06, Sequences captured with blackbox4, softtry-sequences -->
     <arg name="bag_path" default="/media/mpkuse/Bulk_Data/other_seqs/blackbox4_bags/" />
     <!-- <arg name="bag_file" default="2018-02-19-17-52-36.bag" doc="single loop in lab"/> -->
-    <arg name="bag_file" default="2018-03-20-10-40-43.bag" doc="multiple loops in lab"/>
+    <!-- <arg name="bag_file" default="2018-03-20-10-40-43.bag" doc="multiple loops in lab"/> -->
     <!-- <arg name="bag_file" default="2018-04-13-17-59-15.bag" doc="loopy in drone flying area of lab"/> -->
     <!-- <arg name="bag_file" default="2018-04-13-18-28-56.bag" doc=""/> -->
-    <!-- <arg name="bag_file" default="2018-04-16-12-03-50.bag" doc="long trajectory in lab"/> -->
+    <arg name="bag_file" default="2018-04-16-12-03-50.bag" doc="long trajectory in lab"/>
 
     <!-- Bag set 07, Sequences having good circle init, to enable estimating ground plane -->
     <!-- <arg name="bag_path" default="/media/mpkuse/Bulk_Data/other_seqs/blackbox4_bags/" /> -->

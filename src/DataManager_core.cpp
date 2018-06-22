@@ -401,7 +401,7 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
   // enabled_opmode.push_back(29);
   // enabled_opmode.push_back(20);
   // enabled_opmode.push_back(18);
-  // enabled_opmode.push_back(28);
+  enabled_opmode.push_back(28);
   enabled_opmode.push_back(17);
 
   if( std::find(enabled_opmode.begin(), enabled_opmode.end(),  (int)msg->op_mode  ) != enabled_opmode.end() )
@@ -583,7 +583,7 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
             ceres::Solver::Summary summary;
             bool status = cor.computeRelPose_3dprev_3dcurr(p_T_c, summary);
             cout << "returned_summary: " << summary.BriefReport() << endl;
-            double weight = min( 1.0, log( summary.initial_cost / summary.final_cost ) );
+            double weight = min( 1.0, 3.*log( summary.initial_cost / summary.final_cost ) );
             if( status == false )
             {
                 cout << "Status : Reject\n";
@@ -749,9 +749,12 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
     // localBundle.ceresDummy();
 
     Matrix4d p_T_c;
-    p_T_c = localBundle.crossRelPoseComputation3d2d(); // OK!
+    ceres::Solver::Summary summary;
+    p_T_c = localBundle.crossRelPoseComputation3d2d(summary); // OK!
 
     // p_T_c = localBundle.crossRelPoseJointOptimization3d2d(); // OK! but it needs more work, currently quite slow ~5 sec
+
+    double weight = min( 1.0, log( summary.initial_cost / summary.final_cost ) );
 
 
 
@@ -765,7 +768,7 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
 
     // Re-publish with pose, op_mode:=30
     int32_t mode = 30;
-    republish_nap( msg->c_timestamp, msg->prev_timestamp, p_T_c, mode, 0.28 );
+    republish_nap( msg->c_timestamp, msg->prev_timestamp, p_T_c, mode, weight );
     //TODO: Also add to msg goodness. This can denote the weight
 
     return;

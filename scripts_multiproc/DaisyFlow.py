@@ -161,7 +161,7 @@ class DaisyFlow:
             text_color = line_color
 
 
-            cv2.circle( xcanvas, tuple(pt1[xi]), 1, circle_color, -1 )
+            cv2.circle( xcanvas, tuple(pt1[xi]), 2, circle_color, -1 )
             ptb = tuple(np.array(pt2[xi]) + [im1.shape[1],0])
             cv2.circle( xcanvas, ptb, 1, circle_color, -1 )
 
@@ -169,7 +169,7 @@ class DaisyFlow:
                 cv2.line( xcanvas, tuple(pt1[xi]), ptb, line_color)  #true color is blue
 
 
-            if enable_text and np.random.random() < .1:
+            if enable_text and np.random.random() < .3:
                 color_com = text_color #(0,0,255)
                 cv2.putText( xcanvas, str(xi), tuple(pt1[xi]), cv2.FONT_HERSHEY_SIMPLEX, .3, color_com )
                 cv2.putText( xcanvas, str(xi), ptb, cv2.FONT_HERSHEY_SIMPLEX, .3, color_com )

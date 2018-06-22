@@ -84,7 +84,7 @@ public:
   void ceresDummy();
   // void crossPoseComputation3d3d(); // align3d point clouds. point cloud of curr is pretty bad, resulting in bad alignment, So removed.
   // void crossPoseComputation3d2d();    //< Estimate global pose c_T_w, this gives optimization difficulties. Function removed
-  Matrix4d crossRelPoseComputation3d2d(); //< Essentially like PNP. (will expand to multiple frames). Returns p_T_c
+  Matrix4d crossRelPoseComputation3d2d( ceres::Solver::Summary& summary ); //< Essentially like PNP. (will expand to multiple frames). Returns p_T_c
   Matrix4d crossRelPoseJointOptimization3d2d(); //< similar to crossRelPoseJointOptimization3d2d() but has joint optimization to compute p_T_c, p_T_{c-1}, p_T_{c-2}, p_T_{c-3}, ...
 
   void sayHi();
@@ -95,6 +95,9 @@ public:
 
   void mark3dPointsOnPrevIm( const Matrix4d& p_T_w, const string& fname_prefix, const string& msg=string("No Additional Msg") );
   void markObservedPointsOnPrevIm();
+
+  void LocalBundle::markObservedPoints__CP(); //consolidation of markObservedPointsOnCurrIm(), markObservedPointsOnPrevIm()
+
 
   Matrix4d p_T_w() { return gi_T_w(localidx_of_iprev); }
 

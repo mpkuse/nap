@@ -99,6 +99,7 @@ import code
 import os
 import sys
 import pickle
+import random
 
 from sensor_msgs.msg import Image
 from std_msgs.msg import Float32
@@ -919,7 +920,7 @@ def create_visualization_image( DF, ch_alpha, ptset_alpha, ch_beta, ptset_beta, 
     xcanvas_expanded = DF.plot_dense_point_sets( DF.uim[ch_alpha], ptset_alpha, DF.uim[ch_beta], ptset_beta, mask=pset_mask, enable_text=True  )
 
 
-    status = np.zeros( (100, xcanvas_expanded.shape[1], 3), dtype='uint8' )
+    status = np.zeros( (100, xcanvas_expanded.shape[1], 3), dtype=np.uint8 )
     status = cv2.putText( status, '%d' %(DF.global_idx[ch_alpha]), (10,30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 2 )
     status = cv2.putText( status, '%d' %(DF.global_idx[ch_beta]), (_C+10,30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 2 )
 
@@ -930,6 +931,31 @@ def create_visualization_image( DF, ch_alpha, ptset_alpha, ch_beta, ptset_beta, 
     xcanvas_expanded = np.concatenate( (xcanvas_expanded, status), axis=0 )
 
     return xcanvas_expanded
+
+
+
+# pts_A : [(323,222), (54,22), .... (54,222)]
+# image_shape: (nrows, ncols) eg. 320x240
+# Make a subset of this and return the indices of those
+def select_equally_spaced( pts_A, image_shape ):
+    G = np.zeros( image_shape, dtype=np.uint8 )
+
+    selected = []
+    for i, pt in enumerate(pts_A):
+        r = int(pt[1])
+        c = int(pt[0])
+        assert r>=0 and r<image_shape[0] and c>=0 and c<image_shape[1]
+        if G[r,c] == 0  :
+            selected.append( i )
+
+            r_start = max(0, r-10 )
+            r_end = min( image_shape[0], r+10 )
+            c_start = max(0, c-10 )
+            c_end = min( image_shape[1], c+10 )
+            G[ r_start:r_end, c_start:c_end  ] = 1
+
+    return selected
+
 
 
 
@@ -984,12 +1010,14 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
         ####
         #### Step-1 : Get Dense matches between i_curr, i_prev call them pts_A, pts_B respectively
         ####
+        startDenseMatching = time.time();
         DF.set_image( S_thumbnails[i_curr], ch=0, d_ch=0, global_idx=i_curr )
         DF.set_image( S_thumbnails[i_prev], ch=1, d_ch=1, global_idx=i_prev )
 
         DF.set_lut( S_lut_raw[i_curr], ch=0 )
         DF.set_lut( S_lut_raw[i_prev], ch=1 )
         pts_A, pts_B, pt_match_quality_scores = DF.daisy_dense_matches( 0,0, 1,1 )
+        xprint( '[time_sec=%4.2f] Step-1 : Get Dense matches between i_curr, i_prev call them pts_A, pts_B respectively' %(time.time() - startDenseMatching), THREAD_NAME )
 
         # TODO
         # A better way to evaluate a dense match is using the histogram2d. ie.
@@ -1006,6 +1034,14 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
             xprint( tcol.FAIL+'too few matches (%d) in daisy_dense_matches(). Rejecting this candidate' %(len(pts_A))+tcol.ENDC, THREAD_NAME )
             continue
 
+        # Sample Dense Match (For faster computation. 1000s matches is too much)
+        # r = range(0,100)
+        r = select_equally_spaced( pts_A, S_thumbnails[i_curr].shape[0:2] )
+        pts_A = list( pts_A[u] for u in r )
+        pts_B = list( pts_B[u] for u in r )
+        pt_match_quality_scores = list( pt_match_quality_scores[u] for u in r )
+
+
         TRACKS.set( DF.global_idx[0], pts_A, DF.global_idx[1], pts_B, np.ones( (len(pts_A),1 ) ), TYPE=-1 )
 
         # disp = [ '#daisy-dense-matches: %d' %(len(pts_A)) ]
@@ -1019,6 +1055,7 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
         ####
         L = len(pts_A)
         for e, _j in enumerate(range(-1,-5,-1)):
+            startL = time.time()
             if e % 2 == 0:
                 DF.set_image( S_thumbnails[i_curr+_j], ch=2, d_ch=2, global_idx=i_curr+_j )
                 pts_C, pts_C_NN_scores, pts_C_lowe_mask, f_test_mask = DF.expand_matches( 0,0, pts_A, 2,2, PARAM_W=32 )
@@ -1045,6 +1082,7 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
                 # xprint( 'Writing file to folder: '+ output_dump_path+ ' '+ str(DF.global_idx[2])+ ' '+ str(DF.global_idx[0]) , THREAD_NAME )
                 # cv2.imwrite( '%s/%04d_%04d_local-track-%04d_%04d.png' \
                 #         %(output_dump_path, i_curr, i_prev,  DF.global_idx[2], DF.global_idx[0]), xcanvas_expanded )
+            xprint( '[time_sec=%4.2f] Step-2 : track pts_A on i_curr-j forall j in 1,...7 ' %(time.time()-startL) , THREAD_NAME )
 
 
 
@@ -1058,6 +1096,7 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
 
         L = len(pts_B)
         for e, _j in enumerate( range( -1, -5, -1 ) ):
+            startL = time.time()
             if e%2 == 0 :
                 DF.set_image( S_thumbnails[i_prev+_j], ch=3, d_ch=3, global_idx=i_prev+_j )
                 pts_D, pts_D_NN_scores, pts_D_lowe_mask, f_test_mask = DF.expand_matches( 1,1, pts_B, 3,3, PARAM_W=32 )
@@ -1082,6 +1121,7 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
                 # xprint( 'Writing file to folder: '+ output_dump_path+ ' '+ str(DF.global_idx[3])+ ' '+str(DF.global_idx[1]), THREAD_NAME )
                 # cv2.imwrite( '%s/%04d_%04d_local-track--%04d_%04d.png' \
                 #             %(output_dump_path, i_curr, i_prev,  DF.global_idx[3], DF.global_idx[1]), xcanvas_expanded )
+            xprint( '[time_sec=%4.2f] Step-3.1 : track pts_B on i_prev-j forall j in 1,...5 ' %(time.time()-startL) , THREAD_NAME )
 
 
 
@@ -1094,6 +1134,7 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
         pts_B = org_pts_B
         DF.set_image( S_thumbnails[i_prev], ch=0, d_ch=0, global_idx=i_prev )
         for e, _j in enumerate( range( 1, 5 ) ):
+            startL = time.time()
             if e%2 == 0:
                 DF.set_image( S_thumbnails[i_prev+_j], ch=2, d_ch=2, global_idx=i_prev+_j )
                 pts_D, pts_D_NN_scores, pts_D_lowe_mask, f_test_mask = DF.expand_matches( 0,0, pts_B, 2,2, PARAM_W=32 )
@@ -1120,6 +1161,8 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
                 # xprint( 'Writing file to folder: '+ output_dump_path+ '  '+str(DF.global_idx[2])+ ' '+str(DF.global_idx[0]), THREAD_NAME )
                 # cv2.imwrite( '%s/%04d_%04d_local-track++--%04d_%04d.png' \
                 #             %(output_dump_path, i_curr, i_prev,  DF.global_idx[2], DF.global_idx[0]), xcanvas_expanded )
+            xprint( '[time_sec=%4.2f] Step-3.2 : track pts_B on i_prev+j forall j in 1,...5 ' %(time.time()-startL) , THREAD_NAME )
+
 
 
 
@@ -1146,7 +1189,7 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
             ptsB = TRACKS.features_list[ _k[1] ]
             AB_mask = TRACKS.visibility_table[ _k ]
             pair_type = TRACKS.pair_type[_k]
-            print _k[0], _k[1], AB_mask.sum(), pair_type
+            print _k[0], _k[1], int(AB_mask.sum()), pair_type
 
             if pair_type != -1: #only display images with pair_type==-1
                 continue

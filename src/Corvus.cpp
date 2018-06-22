@@ -112,7 +112,7 @@ Corvus::Corvus( const Feature3dInvertedIndex  * tfidf, const nap::NapMsg::ConstP
 
 
     // Print 3d 3d points from curr and prev
-    #if CORVUS_DEBUG_LVL >= 0
+    #if CORVUS_DEBUG_LVL >= 3
     {
         int n_matched_pts = gidx_of_prev.size();
         for( int i=0 ; i< n_matched_pts ; i++ )

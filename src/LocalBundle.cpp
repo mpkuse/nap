@@ -1830,14 +1830,17 @@ void LocalBundle::ceresDummy()
 
 }
 
-Matrix4d LocalBundle::crossRelPoseComputation3d2d()
+Matrix4d LocalBundle::crossRelPoseComputation3d2d( ceres::Solver::Summary& summary )
 {
-  assert( isValid_iprev_X_iprev_triangulated );
+    cout << "   In function LocalBundle::crossRelPoseComputation3d2d()\n";
+  assert( isValid_iprev_X_iprev_triangulated && iprev_X_iprev_triangulated.cols() > 0 );
 
   #if LOCALBUNDLE_DEBUG_LVL >= 1
   markObservedPointsOnCurrIm();
   markObservedPointsOnPrevIm();
+  markObservedPoints__CP();
   mark3dPointsOnPrevIm( gi_T_w(localidx_of_iprev), "proj3dPointsOnPrev" );
+  cout << "Done writing image files init\n";
   #endif
 
 
@@ -1846,6 +1849,7 @@ Matrix4d LocalBundle::crossRelPoseComputation3d2d()
 
   //
   // Reprojection residues. Only use good 3d points which are in the front.
+
   MatrixXd reprojection_residue = MatrixXd::Zero( 2, iprev_X_iprev_triangulated.cols() );
   reprojection_residue.row(0) =  unvn_undistorted[localidx_of_iprev].row(0) -  ( iprev_X_iprev_triangulated.row(0).array() / iprev_X_iprev_triangulated.row(2).array() ).matrix();
   reprojection_residue.row(1) =  unvn_undistorted[localidx_of_iprev].row(1) -  ( iprev_X_iprev_triangulated.row(1).array() / iprev_X_iprev_triangulated.row(2).array() ).matrix();
@@ -1948,12 +1952,12 @@ Matrix4d LocalBundle::crossRelPoseComputation3d2d()
   //
   // Solve
   ceres::Solver::Options options;
-  // options.linear_solver_type = ceres::DENSE_QR;
-  options.linear_solver_type = ceres::DENSE_SCHUR;
+  options.linear_solver_type = ceres::DENSE_QR;
+  // options.linear_solver_type = ceres::DENSE_SCHUR;
   options.minimizer_progress_to_stdout = false;
   // options.use_nonmonotonic_steps = true;
   // options.minimizer_type = ceres::LINE_SEARCH;
-  ceres::Solver::Summary summary;
+  // ceres::Solver::Summary summary;
 
   //
   // Callback
@@ -1988,7 +1992,10 @@ Matrix4d LocalBundle::crossRelPoseComputation3d2d()
   string ___jks_prettypose_string;
   prettyprintPoseMatrix( T_cap, ___jks_prettypose_string  );
 
-  string __cost_string = "e_0="+to_string(summary.initial_cost)+"   e_" + to_string(summary.num_successful_steps) + "="+to_string(summary.final_cost)+"  #etrms="+to_string(nresidual_terms);
+  char  __raw_cost_string[100];
+  snprintf( __raw_cost_string, 100, "time_ms=%4.2f, e_0=%4.2f, e_%d=%4.2f, #e=%d", 1000.*summary.total_time_in_seconds, summary.initial_cost, summary.num_successful_steps, summary.final_cost, nresidual_terms );
+  string __cost_string = string( __raw_cost_string );
+  // string __cost_string = "e_0="+to_string(summary.initial_cost)+"   e_" + to_string(summary.num_successful_steps) + "="+to_string(summary.final_cost)+"  #etrms="+to_string(nresidual_terms);
   mark3dPointsOnCurrIm( T_cap * p_T_w(), "proj3dPointsOnCurr_itr.final", "c_T_p "+___jks_prettypose_string+":"+__cost_string );
   #endif
 
@@ -2299,6 +2306,43 @@ void LocalBundle::mark3dPointsOnPrevIm( const Matrix4d& px_T_w, const string& fn
 
 
   write_image( to_string(nap_idx_of_nodes[ localidx_of_icurr ])+"_"+to_string(nap_idx_of_nodes[localidx_of_iprev])+"___"+to_string(this_nap_id)+"_"+fname_prefix+".png" , outImg );
+}
+
+void LocalBundle::markObservedPoints__CP()
+{
+    cv::Mat outImg_curr, outImg_prev;
+    {
+        assert( uv.size() == n_ptClds );
+
+        int this_local_id = localidx_of_icurr;
+        int this_global_id = global_idx_of_nodes[this_local_id];
+        int this_nap_id    = nap_idx_of_nodes[this_local_id];
+
+        cv::Mat outImg;
+        string msg = "lid="+to_string( this_local_id) + "; gid="+to_string(this_global_id) + "; nap_id="+to_string(this_nap_id);
+        plot_dense_point_sets( global_nodes[this_global_id]->getImageRef(), uv[this_local_id], visibility_mask_nodes.row(this_local_id),
+                           true, true, msg, outImg_curr );
+
+    }
+
+    {
+        assert( uv.size() == n_ptClds );
+
+        int this_local_id = localidx_of_iprev;
+        int this_global_id = global_idx_of_nodes[this_local_id];
+        int this_nap_id    = nap_idx_of_nodes[this_local_id];
+
+        cv::Mat outImg;
+        string msg = "lid="+to_string( this_local_id) + "; gid="+to_string(this_global_id) + "; nap_id="+to_string(this_nap_id);
+        plot_dense_point_sets( global_nodes[this_global_id]->getImageRef(), uv[this_local_id], visibility_mask_nodes.row(this_local_id),
+                           true, true, msg, outImg_prev );
+
+    }
+
+    cv::Mat outImg;
+    cv::hconcat( outImg_curr, outImg_prev, outImg );
+    write_image( to_string(nap_idx_of_nodes[ localidx_of_icurr ])+"_"+to_string(nap_idx_of_nodes[localidx_of_iprev])+"_ObservedPoints.png" , outImg );
+
 }
 
 void LocalBundle::markObservedPointsOnCurrIm()
