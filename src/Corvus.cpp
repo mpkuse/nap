@@ -44,6 +44,7 @@ Corvus::Corvus( const Feature3dInvertedIndex  * tfidf, const nap::NapMsg::ConstP
     w_curr = MatrixXd::Zero( 4, msg->curr.size()/2 );
     unvn_curr = MatrixXd::Zero( 3, msg->curr.size()/2 );
     gidx_of_curr = VectorXi::Zero( msg->curr.size()/2 );
+    sqrtweight_w_curr = VectorXd::Zero( msg->curr.size()/2 ); //< For each point the weight is 1/(1+Q) where Q=max( sigmaX, sigmaY, sigmaZ ). 3d points that have less uncertainity will have higher weight.
     for( int i=0 ; i< msg->curr.size()/2 ; i++ )
     {
         geometry_msgs::Point32 u = msg->curr[2*i];
@@ -67,14 +68,16 @@ Corvus::Corvus( const Feature3dInvertedIndex  * tfidf, const nap::NapMsg::ConstP
         bool status_curr_V = tfidf->query_feature_var(  gidx_of_curr(i) , V_curr );
         assert( status_curr && status_curr_V );
         w_curr.col(i) = M_curr;
+        sqrtweight_w_curr(i) = sqrt(1.0 / ( 1.0 + (double) max( max( V_curr(0), V_curr(1) ), V_curr(2) ) ) );
 
     }
 
 
     // Collect tracked points and 2d points of prev
-    w_prev = MatrixXd::Zero( 4, msg->curr.size()/2 );
-    unvn_prev = MatrixXd::Zero( 3, msg->curr.size()/2 );
-    gidx_of_prev = VectorXi::Zero( msg->curr.size()/2 );
+    w_prev = MatrixXd::Zero( 4, msg->prev.size()/2 );
+    unvn_prev = MatrixXd::Zero( 3, msg->prev.size()/2 );
+    gidx_of_prev = VectorXi::Zero( msg->prev.size()/2 );
+    sqrtweight_w_prev = VectorXd::Zero( msg->prev.size()/2 ); //< For each point the weight is 1/(1+Q) where Q=max( sigmaX, sigmaY, sigmaZ ). 3d points that have less uncertainity will have higher weight.
     for( int i=0 ; i< msg->prev.size()/2 ; i++ )
     {
         geometry_msgs::Point32 u = msg->prev[2*i];
@@ -98,16 +101,18 @@ Corvus::Corvus( const Feature3dInvertedIndex  * tfidf, const nap::NapMsg::ConstP
         bool status_prev_V = tfidf->query_feature_var(  gidx_of_curr(i) , V_prev );
         assert( status_prev & status_prev_V );
         w_prev.col(i) = M_prev;
+        sqrtweight_w_prev(i) = sqrt( 1.0 / ( 1.0 + (double) max( max( V_prev(0), V_prev(1) ), V_prev(2) ) ) );
 
     }
 
     is_data_set = true;
     is_gidx_set = true;
+    is_data_tfidf = true;
 
 
 
     // Print 3d 3d points from curr and prev
-    #if CORVUS_DEBUG_LVL >= 3
+    #if CORVUS_DEBUG_LVL >= 0
     {
         int n_matched_pts = gidx_of_prev.size();
         for( int i=0 ; i< n_matched_pts ; i++ )
@@ -119,6 +124,7 @@ Corvus::Corvus( const Feature3dInvertedIndex  * tfidf, const nap::NapMsg::ConstP
             bool status_curr_V = tfidf->query_feature_var(  gidx_of_curr(i) , V_curr );
             assert( status_curr && status_curr_V );
             cout << "\tM_curr: " << M_curr(0) << "," << M_curr(1) << "," <<M_curr(2) << "," <<M_curr(3) << ";";
+            cout << "\tw=" << 1.0 / ( 1.0 + (double) max( max( V_curr(0), V_curr(1) ), V_curr(2) ) );
             cout << "\tV_curr: " << V_curr(0) << "," << V_curr(1) << "," <<V_curr(2) << "," <<V_curr(3) << ";";
 
 
@@ -129,6 +135,7 @@ Corvus::Corvus( const Feature3dInvertedIndex  * tfidf, const nap::NapMsg::ConstP
             bool status_prev_V = tfidf->query_feature_var(  gidx_of_curr(i) , V_prev );
             assert( status_prev & status_prev_V );
             cout << "\tM_prev: " << M_prev(0) << "," << M_prev(1) << "," <<M_prev(2) << "," <<M_prev(3) << ";";
+            cout << "\tw=" << 1.0 / ( 1.0 + (double) max( max( V_prev(0), V_prev(1) ), V_prev(2) ) );
             cout << "\tV_prev: " << V_prev(0) << "," << V_prev(1) << "," <<V_prev(2) << "," <<V_prev(3) << ";";
 
 
@@ -314,7 +321,7 @@ bool Corvus::computeRelPose_3dprev_2dcurr( Matrix4d& to_return_p_T_c, ceres::Sol
     ceres::Problem problem;
     for( int i=0 ; i<p_prev.cols() ; i++ )
     {
-        ceres::CostFunction * cost_function = Align3d2d::Create( p_prev.col(i), unvn_curr.col(i) );
+        ceres::CostFunction * cost_function = Align3d2d::Create( p_prev.col(i), unvn_curr.col(i),  sqrtweight_w_prev(i) );
 
         ceres::LossFunction *loss_function = NULL;
         // loss_function = new ceres::HuberLoss(.01);
@@ -440,7 +447,7 @@ bool Corvus::computeRelPose_2dprev_3dcurr( Matrix4d& to_return_p_T_c, ceres::Sol
     ceres::Problem problem;
     for( int i=0 ; i<c_curr.cols() ; i++ )
     {
-        ceres::CostFunction * cost_function = Align3d2d::Create( c_curr.col(i), unvn_prev.col(i) );
+        ceres::CostFunction * cost_function = Align3d2d::Create( c_curr.col(i), unvn_prev.col(i),  sqrtweight_w_curr(i) );
 
         ceres::LossFunction *loss_function = NULL;
         // loss_function = new ceres::HuberLoss(.01);
@@ -503,7 +510,6 @@ bool Corvus::computeRelPose_2dprev_3dcurr( Matrix4d& to_return_p_T_c, ceres::Sol
 
     //
     // Process callback and write info to disk
-    // TODO
     #if CORVUS_DEBUG_LVL > 0
     char __caption_string[500];
     // sprintf( __caption_string, "IsSolutionUsable=%d, cost0=%4.4f, final=%4.4f", summary.IsSolutionUsable(), summary.initial_cost(), summary.final_cost() );
@@ -526,6 +532,97 @@ bool Corvus::computeRelPose_2dprev_3dcurr( Matrix4d& to_return_p_T_c, ceres::Sol
 }
 
 
+// 3d3d alignment. TODO
+// Solve  minimize_{p_T_c}   || c_T_p * p_X__{of prev}  -   p_X'__{of curr} ||
+bool Corvus::computeRelPose_3dprev_3dcurr( Matrix4d& to_return_p_T_c, ceres::Solver::Summary& summary )
+{
+    assert( isValid() );
+    cout << "\nCorvus::computeRelPose_3dprev_3dcurr()\n";
+
+    //
+    // convert w_P to p_P
+    MatrixXd p_P = gid_T_w( globalidx_of_prev ) * w_prev;
+
+
+    //
+    // convert w_C to c_C
+    MatrixXd c_C = gid_T_w( globalidx_of_curr ) * w_curr;
+
+    // minimize_{ c_T_p \in SE(3) }    || p_P - pTc * c_C ||
+
+    //
+    // Initial Guess (Identity)
+    Matrix4d p_T_c = Matrix4d::Identity();
+    double p_T_c_quat[10], p_T_c_trans[10];
+    eigenmat_to_raw( p_T_c, p_T_c_quat, p_T_c_trans);
+
+
+    // Save 3d points of curr projected on both views
+    #if CORVUS_DEBUG_LVL > 0
+    saveObservedPoints();
+    saveReprojectedPoints__w_C( p_T_c, string("3d3d_itr0") );
+    #endif
+
+
+    //
+    // Setup Problem
+    assert( p_P.cols() == c_C.cols() );
+    ceres::Problem problem;
+    for( int i=0 ; i<p_P.cols() ; i++ )
+    {
+        ceres::CostFunction * cost_function = Align3dPointsResidueEigen::Create( p_P.col(i), c_C.col(i), sqrtweight_w_prev(i)*sqrtweight_w_curr(i) );
+
+        ceres::LossFunction *loss_function = NULL;
+        // loss_function = new ceres::HuberLoss(.01);
+        loss_function = new ceres::CauchyLoss(.1);
+
+        problem.AddResidualBlock( cost_function, loss_function, p_T_c_quat, p_T_c_trans );
+    }
+
+    //
+    // Quaternion parameterization
+    ceres::LocalParameterization *quaternion_parameterization = new ceres::QuaternionParameterization;
+    problem.SetParameterization( p_T_c_quat, quaternion_parameterization );
+
+
+    //
+    // SOlve
+    ceres::Solver::Options options;
+    // options.linear_solver_type = ceres::DENSE_QR;
+    options.linear_solver_type = ceres::DENSE_SCHUR;
+
+    ceres::Solve( options, &problem, &summary );
+    cout << summary.BriefReport() << endl;
+    // cout << summary.FullReport() << endl;
+
+
+    //
+    // Retrive Optimized Pose
+    raw_to_eigenmat( p_T_c_quat, p_T_c_trans, p_T_c );
+    prettyprintPoseMatrix( p_T_c );
+    to_return_p_T_c = p_T_c;
+
+
+    // TODO Decide if this pose looks exceptable
+    bool status = true;
+
+
+
+    //
+    // Write to disk
+    #if CORVUS_DEBUG_LVL > 0
+    char __caption_string[500];
+    // sprintf( __caption_string, "IsSolutionUsable=%d, cost0=%4.4f, final=%4.4f", summary.IsSolutionUsable(), summary.initial_cost(), summary.final_cost() );
+    sprintf( __caption_string, "total_time_msec=%4.2f, cost0=%4.4f, cost%d=%4.4f. %s", 1000.*summary.total_time_in_seconds, (float)summary.initial_cost,  summary.num_successful_steps, summary.final_cost, (status)?"Acceptable":"Reject" );
+
+    string __p_T_c_prettyprint;
+    prettyprintPoseMatrix( p_T_c, __p_T_c_prettyprint );
+    saveReprojectedPoints__w_C( p_T_c, string("3d3d_final"), string( __caption_string )+":p_T_c "+__p_T_c_prettyprint );
+    #endif
+
+    return true;
+
+}
 
 /////////////////////////////ROS Publishing helpers ///////////////////////////////
 void Corvus::eigenpointcloud_2_ros_markermsg( const MatrixXd& M, visualization_msgs::Marker& marker, const string& ns )
@@ -770,7 +867,7 @@ void Corvus::saveReprojectedPoints( const Matrix4d& c_T_p, const string& fname_s
                      dst
                  );
 
-    write_image( to_string(globalidx_of_curr) + "_" + to_string(globalidx_of_prev)+"_reprojected_"+fname_suffix+".png", dst );
+    write_image( to_string(globalidx_of_curr) + "_" + to_string(globalidx_of_prev)+"_reprojected_w_P_"+fname_suffix+".png", dst );
 
 }
 

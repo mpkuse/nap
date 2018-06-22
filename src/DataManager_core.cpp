@@ -577,6 +577,32 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
 
 
         // TODO. 3d3d Align. use both sets of 3d points and align those.
+        if( true )
+        {
+            Matrix4d p_T_c;
+            ceres::Solver::Summary summary;
+            bool status = cor.computeRelPose_3dprev_3dcurr(p_T_c, summary);
+            cout << "returned_summary: " << summary.BriefReport() << endl;
+            double weight = min( 1.0, log( summary.initial_cost / summary.final_cost ) );
+            if( status == false )
+            {
+                cout << "Status : Reject\n";
+            }
+
+
+            e->setLoopEdgeSubtype(EDGE_TYPE_LOOP_SUBTYPE_GUIDED);
+            loopClosureEdges.push_back( e );
+
+
+
+            // Publish pose as opmode30.
+            // Re-publish with pose, op_mode:=30
+            if( status )
+            {
+                int32_t mode = 30;
+                republish_nap( msg->c_timestamp, msg->prev_timestamp, p_T_c, mode, weight );
+            }
+        }
 
         cout << "Done...\n";
 

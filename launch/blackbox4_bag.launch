@@ -228,8 +228,8 @@
     <arg name="ar_mesh_initial_positions_list" default="-8,-1,-0.5" />
 
     <arg name="ar_input_camera_image" default="/pg_17302081/image" doc="video feed"/>
-    <arg name="camera_navmsg_path" default="/pose_graph/pose_graph_camera_path" doc="4DOF. If using this make sure pose_graph node is runnning" />
-    <!-- <arg name="camera_navmsg_path" default="/keyframe_pose_graph_slam/opt_path" doc="6DOF. If using this make sure solve_posegraph_opt node is running" /> -->
+    <!-- <arg name="camera_navmsg_path" default="/pose_graph/pose_graph_camera_path" doc="4DOF. If using this make sure pose_graph node is runnning" /> -->
+    <arg name="camera_navmsg_path" default="/keyframe_pose_graph_slam/opt_path" doc="6DOF. If using this make sure solve_posegraph_opt node is running" />
 
 
     <node pkg="ar_demo" type="ar_demo_node2" name="ar_demo_node" output="log">

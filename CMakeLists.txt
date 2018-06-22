@@ -22,7 +22,7 @@ find_package(DBoW3 REQUIRED )
 find_package(OpenCV 3 REQUIRED)
 find_package(ZLIB REQUIRED) #for cnpy.cpp
 
-set( CMAKE_CXX_FLAGS "-fpermissive -std=c++11" )
+set( CMAKE_CXX_FLAGS "-fpermissive -std=c++11 -O3" )
 
 
 

@@ -85,6 +85,7 @@ public:
     // Pose Computation
     bool computeRelPose_3dprev_2dcurr(Matrix4d& to_return_p_T_c, ceres::Solver::Summary& summary ); //< compute pose using 3d points from previous and 2d points from curr.
     bool computeRelPose_2dprev_3dcurr( Matrix4d& to_return_p_T_c, ceres::Solver::Summary& summary ); //< compute pose using 3d points from current and 2d points from prev.
+    bool computeRelPose_3dprev_3dcurr( Matrix4d& to_return_p_T_c, ceres::Solver::Summary& summary );
 
 
     void sayHi();
@@ -135,9 +136,11 @@ private:
 
     // global idx of w_prev and w_curr
     VectorXi gidx_of_curr, gidx_of_prev; //< this is global id of each of the features.
+    VectorXd sqrtweight_w_curr, sqrtweight_w_prev; //< For each point the weight is 1/(1+Q) where Q=max( sigmaX, sigmaY, sigmaZ ). 3d points that have less uncertainity will have higher weight.
     bool is_gidx_set = false;
 
     bool is_data_set = false;
+    bool is_data_tfidf = false; 
 
 
     // publishing helpers
