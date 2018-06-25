@@ -280,6 +280,9 @@ void Corvus::publishPoints3d( const ros::Publisher& pub )
 
 ////////////////// Real stuff ///////////////////////////////////
 
+
+
+
 //< compute pose using 3d points from previous and 2d points from curr.
 bool Corvus::computeRelPose_3dprev_2dcurr( Matrix4d& to_return_p_T_c, ceres::Solver::Summary& summary )
 {
@@ -304,7 +307,7 @@ bool Corvus::computeRelPose_3dprev_2dcurr( Matrix4d& to_return_p_T_c, ceres::Sol
     c_T_p_ypr[0] = 0.0;
     rawyprt_to_eigenmat( c_T_p_ypr, c_T_p_trans, c_T_p );
 
-
+    Matrix4d c_T_p_init = c_T_p;
     eigenmat_to_raw( c_T_p, c_T_p_quat, c_T_p_trans );
 
 
@@ -316,9 +319,10 @@ bool Corvus::computeRelPose_3dprev_2dcurr( Matrix4d& to_return_p_T_c, ceres::Sol
     #endif
 
 
-    //
-    // Setup problem
     ceres::Problem problem;
+    #ifndef CORVUS__align3d2d_with_switching_constraints__
+    //
+    // Setup problem - Ordinary 3d2d alignment
     for( int i=0 ; i<p_prev.cols() ; i++ )
     {
         ceres::CostFunction * cost_function = Align3d2d::Create( p_prev.col(i), unvn_curr.col(i),  sqrtweight_w_prev(i) );
@@ -330,6 +334,25 @@ bool Corvus::computeRelPose_3dprev_2dcurr( Matrix4d& to_return_p_T_c, ceres::Sol
 
         problem.AddResidualBlock( cost_function, loss_function, c_T_p_quat, c_T_p_trans );
     }
+    #endif
+
+    #ifdef CORVUS__align3d2d_with_switching_constraints__
+    //
+    // Setup Problem - with Switching constraints
+    double * switches = new double[p_prev.cols()]; //remeber to deallocate after Solve()
+
+    for( int i=0 ; i<p_prev.cols() ; i++ )
+    {
+        ceres::CostFunction * cost_function = Align3d2dWithSwitchingConstraints::Create( p_prev.col(i), unvn_curr.col(i),  sqrtweight_w_prev(i) );
+
+        ceres::LossFunction *loss_function = NULL;
+        // loss_function = new ceres::HuberLoss(.01);
+        // loss_function = new ceres::CauchyLoss(.05);
+
+        switches[i] = 0.999;
+        problem.AddResidualBlock( cost_function, loss_function, &switches[i], c_T_p_quat, c_T_p_trans );
+    }
+    #endif
 
     // Quaternion parameterization
     ceres::LocalParameterization *quaternion_parameterization = new ceres::QuaternionParameterization;
@@ -366,6 +389,13 @@ bool Corvus::computeRelPose_3dprev_2dcurr( Matrix4d& to_return_p_T_c, ceres::Sol
     // Retrive Optimized Pose
     raw_to_eigenmat( c_T_p_quat, c_T_p_trans, c_T_p );
     to_return_p_T_c = c_T_p.inverse();
+    cout << "p_T_c_init (inv of c_T_p):" ; prettyprintPoseMatrix( c_T_p_init );
+    cout << "p_T_c_final (inv of c_T_p):" ; prettyprintPoseMatrix( to_return_p_T_c );
+    #ifdef CORVUS__align3d2d_with_switching_constraints__
+    // info on final states of switches
+    int switching_inliers = _switches_stats( switches,  p_prev.cols(), 0.8 );
+    cout << "switching_inliers=" << switching_inliers << " of " << p_prev.cols() << endl;
+    #endif
 
 
 
@@ -387,11 +417,19 @@ bool Corvus::computeRelPose_3dprev_2dcurr( Matrix4d& to_return_p_T_c, ceres::Sol
     #if CORVUS_DEBUG_LVL > 0
     char __caption_string[500];
     // sprintf( __caption_string, "IsSolutionUsable=%d, cost0=%4.4f, final=%4.4f", summary.IsSolutionUsable(), summary.initial_cost(), summary.final_cost() );
-    sprintf( __caption_string, "total_time_msec=%4.2f, cost0=%4.4f, cost%d=%4.4f. %s", 1000.*summary.total_time_in_seconds, (float)summary.initial_cost,  summary.num_successful_steps, summary.final_cost, (status)?"Acceptable":"Reject" );
+    sprintf( __caption_string, "total_time_msec=%4.2f, cost0=%4.4f, cost%d=%4.4f. %s", 1000.*summary.total_time_in_seconds, (float)summary.initial_cost,  summary.num_successful_steps, summary.final_cost, (status)?"OK":"Reject" );
 
     string __c_T_p_prettyprint;
     prettyprintPoseMatrix( c_T_p, __c_T_p_prettyprint );
+    // saveReprojectedPoints( c_T_p, string("final"), string( __caption_string )+":c_T_p "+__c_T_p_prettyprint );
+
+    #ifdef CORVUS__align3d2d_with_switching_constraints__
+    saveReprojectedPoints( c_T_p, string("final"), string( __caption_string )+":c_T_p "+__c_T_p_prettyprint, switches );
+    #else
     saveReprojectedPoints( c_T_p, string("final"), string( __caption_string )+":c_T_p "+__c_T_p_prettyprint );
+    #endif
+
+
     #endif
 
     #if CORVUS_DEBUG_LVL > 1
@@ -399,6 +437,9 @@ bool Corvus::computeRelPose_3dprev_2dcurr( Matrix4d& to_return_p_T_c, ceres::Sol
     vector_of_callbacks.push_back( callback );
     #endif
 
+    #ifdef CORVUS__align3d2d_with_switching_constraints__
+    delete [] switches; // delete the switch variables
+    #endif
 
     return status;
 
@@ -431,6 +472,7 @@ bool Corvus::computeRelPose_2dprev_3dcurr( Matrix4d& to_return_p_T_c, ceres::Sol
     rawyprt_to_eigenmat( p_T_c_ypr, p_T_c_trans, p_T_c );
 
 
+    Matrix4d p_T_c_init = p_T_c;
     eigenmat_to_raw( p_T_c, p_T_c_quat, p_T_c_trans );
 
 
@@ -442,9 +484,11 @@ bool Corvus::computeRelPose_2dprev_3dcurr( Matrix4d& to_return_p_T_c, ceres::Sol
     #endif
 
 
+    ceres::Problem problem;
+    #ifndef CORVUS__align3d2d_with_switching_constraints__
+
     //
     // Setup problem
-    ceres::Problem problem;
     for( int i=0 ; i<c_curr.cols() ; i++ )
     {
         ceres::CostFunction * cost_function = Align3d2d::Create( c_curr.col(i), unvn_prev.col(i),  sqrtweight_w_curr(i) );
@@ -456,6 +500,25 @@ bool Corvus::computeRelPose_2dprev_3dcurr( Matrix4d& to_return_p_T_c, ceres::Sol
 
         problem.AddResidualBlock( cost_function, loss_function, p_T_c_quat, p_T_c_trans );
     }
+    #endif
+
+    #ifdef CORVUS__align3d2d_with_switching_constraints__
+    //
+    // Setup Problem - with Switching constraints
+    double * switches = new double[c_curr.cols()]; //remeber to deallocate after Solve()
+
+    for( int i=0 ; i<c_curr.cols() ; i++ )
+    {
+        ceres::CostFunction * cost_function = Align3d2dWithSwitchingConstraints::Create( c_curr.col(i), unvn_prev.col(i),  sqrtweight_w_curr(i) );
+
+        ceres::LossFunction *loss_function = NULL;
+        // loss_function = new ceres::HuberLoss(.01);
+        // loss_function = new ceres::CauchyLoss(.05);
+
+        switches[i] = 0.999;
+        problem.AddResidualBlock( cost_function, loss_function, &switches[i], p_T_c_quat, p_T_c_trans );
+    }
+    #endif
 
     // Quaternion parameterization
     ceres::LocalParameterization *quaternion_parameterization = new ceres::QuaternionParameterization;
@@ -491,7 +554,14 @@ bool Corvus::computeRelPose_2dprev_3dcurr( Matrix4d& to_return_p_T_c, ceres::Sol
     //
     // Retrive Optimized Pose
     raw_to_eigenmat( p_T_c_quat, p_T_c_trans, p_T_c );
+    cout << "p_T_c_init:" ; prettyprintPoseMatrix( p_T_c_init );
+    cout << "p_T_c_final:" ; prettyprintPoseMatrix( p_T_c );
     to_return_p_T_c = p_T_c;
+    #ifdef CORVUS__align3d2d_with_switching_constraints__
+    // info on final states of switches
+    int switching_inliers = _switches_stats( switches,  c_curr.cols(), 0.8 );
+    cout << "switching_inliers=" << switching_inliers << " of " << c_curr.cols() << endl;
+    #endif
 
 
 
@@ -517,7 +587,15 @@ bool Corvus::computeRelPose_2dprev_3dcurr( Matrix4d& to_return_p_T_c, ceres::Sol
 
     string __p_T_c_prettyprint;
     prettyprintPoseMatrix( p_T_c, __p_T_c_prettyprint );
+    // saveReprojectedPoints__w_C( p_T_c, string("final"), string( __caption_string )+":p_T_c "+__p_T_c_prettyprint );
+
+    #ifdef CORVUS__align3d2d_with_switching_constraints__
+    saveReprojectedPoints__w_C( p_T_c, string("final"), string( __caption_string )+":p_T_c "+__p_T_c_prettyprint, switches );
+    #else
     saveReprojectedPoints__w_C( p_T_c, string("final"), string( __caption_string )+":p_T_c "+__p_T_c_prettyprint );
+    #endif
+
+
     #endif
 
     // TODO
@@ -527,12 +605,16 @@ bool Corvus::computeRelPose_2dprev_3dcurr( Matrix4d& to_return_p_T_c, ceres::Sol
     #endif
 
 
+    #ifdef CORVUS__align3d2d_with_switching_constraints__
+    delete [] switches; // delete the switch variables
+    #endif
+
     return status;
 
 }
 
 
-// 3d3d alignment. TODO
+// 3d3d alignment.
 // Solve  minimize_{p_T_c}   || c_T_p * p_X__{of prev}  -   p_X'__{of curr} ||
 bool Corvus::computeRelPose_3dprev_3dcurr( Matrix4d& to_return_p_T_c, ceres::Solver::Summary& summary )
 {
@@ -554,6 +636,8 @@ bool Corvus::computeRelPose_3dprev_3dcurr( Matrix4d& to_return_p_T_c, ceres::Sol
     // Initial Guess (Identity)
     Matrix4d p_T_c = Matrix4d::Identity();
     double p_T_c_quat[10], p_T_c_trans[10];
+
+    Matrix4d p_T_c_init = p_T_c;
     eigenmat_to_raw( p_T_c, p_T_c_quat, p_T_c_trans);
 
 
@@ -564,13 +648,14 @@ bool Corvus::computeRelPose_3dprev_3dcurr( Matrix4d& to_return_p_T_c, ceres::Sol
     #endif
 
 
-    //
-    // Setup Problem
     assert( p_P.cols() == c_C.cols() );
     ceres::Problem problem;
+    #ifndef CORVUS__align3d3d_with_switching_constraints__
+    //
+    // Setup Problem - Ordinary
     for( int i=0 ; i<p_P.cols() ; i++ )
     {
-        ceres::CostFunction * cost_function = Align3dPointsResidueEigen::Create( p_P.col(i), c_C.col(i), sqrtweight_w_prev(i)*sqrtweight_w_curr(i) );
+        ceres::CostFunction * cost_function = Align3dPointsResidueEigen::Create( p_P.col(i), c_C.col(i), sqrt(sqrtweight_w_prev(i)*sqrtweight_w_curr(i)) );
 
         ceres::LossFunction *loss_function = NULL;
         // loss_function = new ceres::HuberLoss(.01);
@@ -578,6 +663,25 @@ bool Corvus::computeRelPose_3dprev_3dcurr( Matrix4d& to_return_p_T_c, ceres::Sol
 
         problem.AddResidualBlock( cost_function, loss_function, p_T_c_quat, p_T_c_trans );
     }
+    #endif
+
+    #ifdef CORVUS__align3d3d_with_switching_constraints__
+    //
+    // Setup problem with switch constraints.
+    double * switches = new double[p_P.cols()]; //remeber to deallocate after Solve()
+    for( int i=0 ; i<p_P.cols() ; i++ )
+    {
+
+        ceres::CostFunction * cost_function = Align3dPointsWithSwitchingConstraints::Create( p_P.col(i), c_C.col(i), sqrt(sqrtweight_w_prev(i)*sqrtweight_w_curr(i)) );
+
+        ceres::LossFunction *loss_function = NULL;
+        // loss_function = new ceres::HuberLoss(.01);
+        // loss_function = new ceres::CauchyLoss(.1);
+
+        switches[i] = 0.999;
+        problem.AddResidualBlock( cost_function, loss_function, &switches[i], p_T_c_quat, p_T_c_trans );
+    }
+    #endif
 
     //
     // Quaternion parameterization
@@ -599,8 +703,14 @@ bool Corvus::computeRelPose_3dprev_3dcurr( Matrix4d& to_return_p_T_c, ceres::Sol
     //
     // Retrive Optimized Pose
     raw_to_eigenmat( p_T_c_quat, p_T_c_trans, p_T_c );
-    prettyprintPoseMatrix( p_T_c );
+    cout << "p_T_c_init:" ; prettyprintPoseMatrix( p_T_c_init );
+    cout << "p_T_c_final:" ; prettyprintPoseMatrix( p_T_c );
     to_return_p_T_c = p_T_c;
+    #ifdef CORVUS__align3d3d_with_switching_constraints__
+    // info on final states of switches
+    int switching_inliers = _switches_stats( switches,  p_P.cols(), 0.8 );
+    cout << "switching_inliers=" << switching_inliers << " of " << p_P.cols() << endl;
+    #endif
 
 
     // TODO Decide if this pose looks exceptable
@@ -617,7 +727,19 @@ bool Corvus::computeRelPose_3dprev_3dcurr( Matrix4d& to_return_p_T_c, ceres::Sol
 
     string __p_T_c_prettyprint;
     prettyprintPoseMatrix( p_T_c, __p_T_c_prettyprint );
+    // saveReprojectedPoints__w_C( p_T_c, string("3d3d_final"), string( __caption_string )+":p_T_c "+__p_T_c_prettyprint );
+
+    #ifdef CORVUS__align3d3d_with_switching_constraints__
+    saveReprojectedPoints__w_C( p_T_c, string("3d3d_final"), string( __caption_string )+":p_T_c "+__p_T_c_prettyprint, switches );
+    #else
     saveReprojectedPoints__w_C( p_T_c, string("3d3d_final"), string( __caption_string )+":p_T_c "+__p_T_c_prettyprint );
+    #endif
+
+    #endif
+
+
+    #ifdef CORVUS__align3d3d_with_switching_constraints__
+    delete [] switches;
     #endif
 
     return true;
@@ -783,7 +905,93 @@ void Corvus::plot_point_sets( const cv::Mat& imA, const MatrixXd& ptsA, int idxA
   cv::Mat status = cv::Mat(150, outImg.cols, CV_8UC3, cv::Scalar(0,0,0) );
   cv::putText( status, to_string(idxA).c_str(), cv::Point(10,30), cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255,255,255), 2 );
   cv::putText( status, to_string(idxB).c_str(), cv::Point(imA.cols+10,30), cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255,255,255), 2 );
-  cv::putText( status, "marked # pts: "+to_string(count), cv::Point(10,60), cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255,255,255), 2 );
+  cv::putText( status, "marked # pts: "+to_string(count), cv::Point(10,60), cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255,255,255), 1.5 );
+
+
+  // put msg in status image
+  if( msg.length() > 0 ) { // ':' separated. Each will go in new line
+      std::vector<std::string> msg_tokens = split(msg, ':');
+      for( int h=0 ; h<msg_tokens.size() ; h++ )
+          cv::putText( status, msg_tokens[h].c_str(), cv::Point(10,80+20*h), cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(255,255,255), 1.5 );
+  }
+
+  cv::vconcat( outImg, status, dst );
+
+}
+
+// switches come from the switching constraints optimization for alignment.
+void Corvus::plot_point_sets_with_switches( const cv::Mat& imA, const MatrixXd& ptsA, int idxA,
+                      const cv::Mat& imB, const MatrixXd& ptsB, int idxB,
+                    //   const VectorXd& mask,
+                    const double * switches,
+                      const cv::Scalar& color, bool annotate_pts,
+                      /*const vector<string>& msg,*/
+                      const string& msg,
+                    cv::Mat& dst )
+{
+  // ptsA : ptsB : 2xN or 3xN
+
+  assert( imA.rows == imB.rows );
+  assert( imA.cols == imB.cols );
+  assert( ptsA.cols() == ptsB.cols() );
+  // assert( mask.size() == ptsA.cols() );
+
+  cv::Mat outImg;
+  cv::hconcat(imA, imB, outImg);
+
+  // loop over all points
+  int count = 0;
+  double sum_of_switches = 0.;
+  int switching_inliers = 0;
+  for( int kl=0 ; kl<ptsA.cols() ; kl++ )
+  {
+    // if( mask(kl) == 0 )
+    //   continue;
+
+    count++;
+    cv::Point2d A( ptsA(0,kl), ptsA(1,kl) );
+    cv::Point2d B( ptsB(0,kl), ptsB(1,kl) );
+
+    cv::circle( outImg, A, 2,color, -1 );
+    cv::circle( outImg, B+cv::Point2d(imA.cols,0), 2,color, -1 );
+
+    cv::Scalar line_color = cv::Scalar( 255,0,0 );
+    if( switches != NULL )
+    {
+        char __tmp_string[20];
+        snprintf( __tmp_string, 20, "%2.2f", (float)switches[kl] );
+
+        if( switches[kl] > 0.8 )
+        {
+            cv::putText( outImg, string(__tmp_string), 0.5*(A+B+cv::Point2d(imA.cols,0)), cv::FONT_HERSHEY_SIMPLEX, 0.3, color, 1 );
+            switching_inliers++;
+        }
+        else {
+            cv::putText( outImg, string(__tmp_string), 0.5*(A+B+cv::Point2d(imA.cols,0)), cv::FONT_HERSHEY_SIMPLEX, 0.3, cv::Scalar(10,10,10), 1 );
+            line_color = cv::Scalar( 10, 10, 10 );
+        }
+        sum_of_switches += switches[kl];
+    }
+
+    cv::line( outImg,  A, B+cv::Point2d(imA.cols,0), line_color );
+
+    if( annotate_pts )
+    {
+      cv::putText( outImg, to_string(kl), A, cv::FONT_HERSHEY_SIMPLEX, 0.3, color, 1 );
+      cv::putText( outImg, to_string(kl), B+cv::Point2d(imA.cols,0), cv::FONT_HERSHEY_SIMPLEX, 0.3, color, 1 );
+    }
+  }
+
+
+
+  cv::Mat status = cv::Mat(150, outImg.cols, CV_8UC3, cv::Scalar(0,0,0) );
+  cv::putText( status, to_string(idxA).c_str(), cv::Point(10,30), cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255,255,255), 2 );
+  cv::putText( status, to_string(idxB).c_str(), cv::Point(imA.cols+10,30), cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255,255,255), 2 );
+
+  char marked[100];
+  snprintf( marked, 100, "marked # pts: %d of %d; sum_of_switches=%4.2f", switching_inliers,  count, (double)sum_of_switches );
+  cv::putText( status, string(marked), cv::Point(10,60), cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255,255,255), 1.5 );
+  // cv::putText( status, "marked # pts: "+to_string(count)+"; sum_of_switches="+to_string((double)sum_of_switches), cv::Point(10,60), cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255,255,255), 2 );
 
 
   // put msg in status image
@@ -839,7 +1047,7 @@ void Corvus::saveObservedPoints( )
 
 // Create an image : [ C | P ]. Mark the projected points.
 //         [[  PI( c_T_p * p_T_w * w_P ) ||   PI( p_T_w * w_P)   ]]
-void Corvus::saveReprojectedPoints( const Matrix4d& c_T_p, const string& fname_suffix, const string image_caption_msg)
+void Corvus::saveReprojectedPoints( const Matrix4d& c_T_p, const string& fname_suffix, const string image_caption_msg, const double * switches )
 {
     Matrix4d p_T_w = gid_T_w( globalidx_of_prev );
 
@@ -860,12 +1068,25 @@ void Corvus::saveReprojectedPoints( const Matrix4d& c_T_p, const string& fname_s
     cv::Mat prev_im = global_nodes[globalidx_of_prev]->getImageRef();
     cv::Mat curr_im = global_nodes[globalidx_of_curr]->getImageRef();
     cv::Mat dst;
-    plot_point_sets( curr_im, projected_c_prev, globalidx_of_curr,
-                     prev_im, projected_p_prev, globalidx_of_prev,
-                     cv::Scalar( 0,0,255 ), true,
-                     string( "project w_prev on both frames.")+fname_suffix+":"+image_caption_msg,
-                     dst
-                 );
+    if( switches == NULL ) {
+        plot_point_sets( curr_im, projected_c_prev, globalidx_of_curr,
+                         prev_im, projected_p_prev, globalidx_of_prev,
+                         cv::Scalar( 0,0,255 ), true,
+                         string( "project w_prev on both frames.")+fname_suffix+":"+image_caption_msg,
+                         dst
+                     );
+     }
+
+     if( switches != NULL ) {
+         plot_point_sets_with_switches( curr_im, projected_c_prev, globalidx_of_curr,
+                          prev_im, projected_p_prev, globalidx_of_prev,
+                          switches,
+                          cv::Scalar( 0,0,255 ), true,
+                          string( "project w_prev on both frames.")+fname_suffix+":"+image_caption_msg,
+                          dst
+                      );
+     }
+
 
     write_image( to_string(globalidx_of_curr) + "_" + to_string(globalidx_of_prev)+"_reprojected_w_P_"+fname_suffix+".png", dst );
 
@@ -873,7 +1094,7 @@ void Corvus::saveReprojectedPoints( const Matrix4d& c_T_p, const string& fname_s
 
 // Create an image : [ C | P ]. Mark the projected points. 3D points are w_curr (3d points of current image)
 //          [[     PI(c_T_w * w_C)  ||    PI(p_T_c * c_T_w * w_C)    ]]
-void Corvus::saveReprojectedPoints__w_C( const Matrix4d& p_T_c, const string& fname_suffix, const string image_caption_msg)
+void Corvus::saveReprojectedPoints__w_C( const Matrix4d& p_T_c, const string& fname_suffix, const string image_caption_msg,  const double * switches )
 {
     Matrix4d c_T_w = gid_T_w( globalidx_of_curr );
 
@@ -894,12 +1115,26 @@ void Corvus::saveReprojectedPoints__w_C( const Matrix4d& p_T_c, const string& fn
     cv::Mat prev_im = global_nodes[globalidx_of_prev]->getImageRef();
     cv::Mat curr_im = global_nodes[globalidx_of_curr]->getImageRef();
     cv::Mat dst;
+
+    if( switches == NULL ) {
     plot_point_sets( curr_im, projected_c_curr, globalidx_of_curr,
                      prev_im, projected_p_curr, globalidx_of_prev,
                      cv::Scalar( 0,0,255 ), true,
                      string( "project w_curr on both frames.")+fname_suffix+":"+image_caption_msg,
                      dst
                  );
+     }
+
+     if( switches != NULL ) {
+         plot_point_sets_with_switches( curr_im, projected_c_curr, globalidx_of_curr,
+                          prev_im, projected_p_curr, globalidx_of_prev,
+                          switches,
+                          cv::Scalar( 0,0,255 ), true,
+                          string( "project w_curr on both frames.")+fname_suffix+":"+image_caption_msg,
+                          dst
+                      );
+     }
+
 
     write_image( to_string(globalidx_of_curr) + "_" + to_string(globalidx_of_prev)+"_reprojected__w_C_"+fname_suffix+".png", dst );
 

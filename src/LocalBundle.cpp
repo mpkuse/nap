@@ -1194,6 +1194,7 @@ void LocalBundle::plot_dense_point_sets( const cv::Mat& im, const MatrixXd& pts,
 {
   assert( pts.rows() == 2 || pts.rows() == 3 );
   assert( mask.size() == pts.cols() );
+  assert( im.rows > 0 && im.cols > 0 );
 
   cv::Mat outImg = im.clone();
   ColorLUT lut = ColorLUT();
@@ -1836,10 +1837,14 @@ Matrix4d LocalBundle::crossRelPoseComputation3d2d( ceres::Solver::Summary& summa
   assert( isValid_iprev_X_iprev_triangulated && iprev_X_iprev_triangulated.cols() > 0 );
 
   #if LOCALBUNDLE_DEBUG_LVL >= 1
-  markObservedPointsOnCurrIm();
-  markObservedPointsOnPrevIm();
+  // cout << "Do markObservedPointsOnCurrIm()\n";
+  // markObservedPointsOnCurrIm();
+  // cout << "Done  markObservedPointsOnCurrIm()\n";
+  // markObservedPointsOnPrevIm();
+  // cout << "Done markObservedPointsOnPrevIm()\n";
   markObservedPoints__CP();
-  mark3dPointsOnPrevIm( gi_T_w(localidx_of_iprev), "proj3dPointsOnPrev" );
+  cout << "Done markObservedPoints__CP()\n";
+
   cout << "Done writing image files init\n";
   #endif
 
@@ -1881,7 +1886,9 @@ Matrix4d LocalBundle::crossRelPoseComputation3d2d( ceres::Solver::Summary& summa
   #if LOCALBUNDLE_DEBUG_LVL >= 1
   string ___prettypose_string;
   prettyprintPoseMatrix( T_cap, ___prettypose_string  );
-  mark3dPointsOnCurrIm( T_cap * p_T_w(), "proj3dPointsOnCurr_itr.initial", "c_T_p "+___prettypose_string );
+  // mark3dPointsOnCurrIm( T_cap * p_T_w(), "proj3dPointsOnCurr_itr.initial", "c_T_p "+___prettypose_string );
+  markReprojected3dPoints__CP( T_cap,  "proj3dPointsOnCurr_itr.initialCP", "c_T_p "+___prettypose_string );
+
   #endif
 
 
@@ -1889,6 +1896,7 @@ Matrix4d LocalBundle::crossRelPoseComputation3d2d( ceres::Solver::Summary& summa
 
   // printMatrix1d( "T_cap_ypr",T_cap_ypr, 3 );
   // printMatrix1d( "T_cap_t", T_cap_t, 3 );
+
   cout << " ~~~~~ ~~~~~ ~~~~~ ~~~~~\n";
 
 
@@ -1920,11 +1928,11 @@ Matrix4d LocalBundle::crossRelPoseComputation3d2d( ceres::Solver::Summary& summa
                                                       /*T_cap_ypr[1], T_cap_ypr[2]*/ //);
 
     // 6DOF loss
-    // ceres::CostFunction * cost_function = Align3d2d::Create( this->iprev_X_iprev_triangulated.col(i),
-                                                        // unvn_undistorted[localidx_of_icurr].col(i) );
-
-    ceres::CostFunction * cost_function = Align3dHomogeneous2d::Create( this->iprev_X_iprev_triangulated.col(i),
+    ceres::CostFunction * cost_function = Align3d2d::Create( this->iprev_X_iprev_triangulated.col(i),
                                                         unvn_undistorted[localidx_of_icurr].col(i) );
+
+    // ceres::CostFunction * cost_function = Align3dHomogeneous2d::Create( this->iprev_X_iprev_triangulated.col(i),
+                                                        // unvn_undistorted[localidx_of_icurr].col(i) );
 
 
     ceres::LossFunction *loss_function = NULL;
@@ -1996,7 +2004,10 @@ Matrix4d LocalBundle::crossRelPoseComputation3d2d( ceres::Solver::Summary& summa
   snprintf( __raw_cost_string, 100, "time_ms=%4.2f, e_0=%4.2f, e_%d=%4.2f, #e=%d", 1000.*summary.total_time_in_seconds, summary.initial_cost, summary.num_successful_steps, summary.final_cost, nresidual_terms );
   string __cost_string = string( __raw_cost_string );
   // string __cost_string = "e_0="+to_string(summary.initial_cost)+"   e_" + to_string(summary.num_successful_steps) + "="+to_string(summary.final_cost)+"  #etrms="+to_string(nresidual_terms);
-  mark3dPointsOnCurrIm( T_cap * p_T_w(), "proj3dPointsOnCurr_itr.final", "c_T_p "+___jks_prettypose_string+":"+__cost_string );
+  // mark3dPointsOnCurrIm( T_cap * p_T_w(), "proj3dPointsOnCurr_itr.final", "c_T_p "+___jks_prettypose_string+":"+__cost_string );
+  // mark3dPointsOnPrevIm( gi_T_w(localidx_of_iprev), "proj3dPointsOnPrev" );
+
+  markReprojected3dPoints__CP( T_cap,  "proj3dPoints.final", "c_T_p "+___jks_prettypose_string+":"+__cost_string );
   #endif
 
   Matrix4d to_return = T_cap.inverse();
@@ -2259,6 +2270,62 @@ Matrix4d LocalBundle::crossRelPoseJointOptimization3d2d()
 }
 
 /////////////////////// Image Marking //////////////////////////
+void LocalBundle::markReprojected3dPoints__CP( const Matrix4d& c_T_p, const string fname_prefix, const string& msg )
+{
+    cv::Mat outImageCurr, outImagePrev;
+
+    // plot 3d points on curr image
+    Matrix4d cx_T_w = c_T_p * p_T_w();
+    {
+        assert( isValid_w_X_iprev_triangulated );
+        int this_local_id = localidx_of_icurr;
+        int this_global_id = global_idx_of_nodes[localidx_of_icurr];
+        int this_nap_id    = nap_idx_of_nodes[localidx_of_icurr];
+
+
+        MatrixXd v_X;
+        v_X = cx_T_w * w_X_iprev_triangulated;
+
+        MatrixXd reproj_pts;
+        camera.perspectiveProject3DPoints( v_X, reproj_pts );
+
+        cv::Mat outImg;
+        string fullmsg = "lid="+to_string( this_local_id) + "; gid="+to_string(this_global_id) + "; nap_id="+to_string(this_nap_id);
+        fullmsg += ":" + msg;
+        plot_dense_point_sets( global_nodes[this_global_id]->getImageRef(), reproj_pts, visibility_mask_nodes.row(localidx_of_icurr),
+                           true, true, fullmsg, outImageCurr );
+
+    }
+
+    // plot 3d points on prev image
+    Matrix4d px_T_w =  gi_T_w(localidx_of_iprev);
+    {
+        assert( isValid_w_X_iprev_triangulated );
+        int this_local_id = localidx_of_iprev;
+        int this_global_id = global_idx_of_nodes[this_local_id];
+        int this_nap_id    = nap_idx_of_nodes[this_local_id];
+
+
+        MatrixXd v_X;
+        v_X = px_T_w * w_X_iprev_triangulated;
+
+        MatrixXd reproj_pts;
+        camera.perspectiveProject3DPoints( v_X, reproj_pts );
+
+        cv::Mat outImg;
+        string fullmsg = "lid="+to_string( this_local_id) + "; gid="+to_string(this_global_id) + "; nap_id="+to_string(this_nap_id);
+        // fullmsg += ":" + msg;
+        plot_dense_point_sets( global_nodes[this_global_id]->getImageRef(), reproj_pts, visibility_mask_nodes.row(this_local_id),
+                           true, true, fullmsg, outImagePrev );
+
+    }
+
+    cv::Mat outImg;
+    cv::hconcat( outImageCurr, outImagePrev, outImg );
+    write_image( to_string(nap_idx_of_nodes[ localidx_of_icurr ])+"_"+to_string(nap_idx_of_nodes[localidx_of_iprev])+"_"+ fname_prefix +"_Reproj3dPts.png" , outImg );
+
+
+}
 void LocalBundle::mark3dPointsOnCurrIm( const Matrix4d& cx_T_w, const string& fname_prefix, const string & msg  )
 {
   assert( isValid_w_X_iprev_triangulated );
@@ -2318,9 +2385,12 @@ void LocalBundle::markObservedPoints__CP()
         int this_global_id = global_idx_of_nodes[this_local_id];
         int this_nap_id    = nap_idx_of_nodes[this_local_id];
 
+        VectorXd mask = VectorXd::Constant( visibility_mask_nodes.cols(), 1.0 );
+        // VectorXd mask = visibility_mask_nodes.row(this_local_id);
+
         cv::Mat outImg;
         string msg = "lid="+to_string( this_local_id) + "; gid="+to_string(this_global_id) + "; nap_id="+to_string(this_nap_id);
-        plot_dense_point_sets( global_nodes[this_global_id]->getImageRef(), uv[this_local_id], visibility_mask_nodes.row(this_local_id),
+        plot_dense_point_sets( global_nodes[this_global_id]->getImageRef(), uv[this_local_id], mask,
                            true, true, msg, outImg_curr );
 
     }
@@ -2332,9 +2402,12 @@ void LocalBundle::markObservedPoints__CP()
         int this_global_id = global_idx_of_nodes[this_local_id];
         int this_nap_id    = nap_idx_of_nodes[this_local_id];
 
+        VectorXd mask = VectorXd::Constant( visibility_mask_nodes.cols(), 1.0 );
+        // VectorXd mask = visibility_mask_nodes.row(this_local_id)
+
         cv::Mat outImg;
         string msg = "lid="+to_string( this_local_id) + "; gid="+to_string(this_global_id) + "; nap_id="+to_string(this_nap_id);
-        plot_dense_point_sets( global_nodes[this_global_id]->getImageRef(), uv[this_local_id], visibility_mask_nodes.row(this_local_id),
+        plot_dense_point_sets( global_nodes[this_global_id]->getImageRef(), uv[this_local_id], mask,
                            true, true, msg, outImg_prev );
 
     }
@@ -2348,18 +2421,33 @@ void LocalBundle::markObservedPoints__CP()
 void LocalBundle::markObservedPointsOnCurrIm()
 {
   assert( uv.size() == n_ptClds );
+  cout << "[markObservedPointsOnCurrIm]\n";
+  cout << "uv.size()=" << uv.size() << "\t";
+  cout << "n_ptClds=" << n_ptClds << "\t";
+  cout << endl;
 
   int this_local_id = localidx_of_icurr;
   int this_global_id = global_idx_of_nodes[this_local_id];
   int this_nap_id    = nap_idx_of_nodes[this_local_id];
 
+  cout << "this_local_id=" << this_local_id << "\t";
+  cout << "this_global_id=" << this_global_id << "\t";
+  cout << "this_nap_id=" << this_nap_id << "\t";
+  cout << endl;
+
+  assert( global_nodes[this_global_id]->valid_image()  );
+  assert( this_local_id < uv.size() );
+  assert( this_local_id < visibility_mask_nodes.rows() );
+
   cv::Mat outImg;
   string msg = "lid="+to_string( this_local_id) + "; gid="+to_string(this_global_id) + "; nap_id="+to_string(this_nap_id);
   plot_dense_point_sets( global_nodes[this_global_id]->getImageRef(), uv[this_local_id], visibility_mask_nodes.row(this_local_id),
                      true, true, msg, outImg );
-
+  cout << "plot_dense_point_sets done\n";
 
   write_image( to_string(nap_idx_of_nodes[ localidx_of_icurr ])+"_"+to_string(nap_idx_of_nodes[localidx_of_iprev])+"___"+to_string(this_nap_id)+"_ObservedPointsOnCurrIm.png" , outImg );
+  cout << "write_image done\n";
+  cout << "Done [/markObservedPointsOnCurrIm]\n";
 
 }
 

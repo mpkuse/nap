@@ -95,8 +95,10 @@ public:
 
   void mark3dPointsOnPrevIm( const Matrix4d& p_T_w, const string& fname_prefix, const string& msg=string("No Additional Msg") );
   void markObservedPointsOnPrevIm();
+  void markReprojected3dPoints__CP( const Matrix4d& c_T_p, const string fname_prefix, const string& msg );//consolidation of markObservedPointsOnCurrIm(), markObservedPointsOnPrevIm()
 
-  void LocalBundle::markObservedPoints__CP(); //consolidation of markObservedPointsOnCurrIm(), markObservedPointsOnPrevIm()
+
+  void markObservedPoints__CP();
 
 
   Matrix4d p_T_w() { return gi_T_w(localidx_of_iprev); }
@@ -427,9 +429,9 @@ public:
     Matrix<T,3,1> error;
     error = ___X - q.toRotationMatrix() * ___Xd - t;
 
-    e[0] = error(0);
-    e[1] = error(1);
-    e[2] = error(2);
+    e[0] = T(weight) * error(0);
+    e[1] = T(weight) * error(1);
+    e[2] = T(weight) * error(2);
     return true;
 
   }
@@ -450,6 +452,63 @@ private:
   double weight;
 
 };
+
+
+class Align3dPointsWithSwitchingConstraints {
+public:
+  // p_X : 3d point (triangulated from iprev) in iprev frame of reference.
+  // c_Xd : 3d point (triangulated from icurr) in icurr frame of reference .
+  Align3dPointsWithSwitchingConstraints( const VectorXd& _X, const VectorXd& _Xd, const double _weight=1.0 )
+  {
+    X << _X(0) , _X(1) , _X(2) ;
+    Xd << _Xd(0) , _Xd(1) , _Xd(2) ;
+    weight = _weight;
+  }
+
+  // R: p_R_c. This is represented as quaternion
+  // Tr : p_Tr_c
+  template<typename T>
+  bool operator()( const T* const switch_var, const T* const quat, const T* const tran, T*e  ) const
+  {
+    Quaternion<T> q( quat[0], quat[1], quat[2], quat[3] );//w,x,y,z
+    Matrix<T,3,1> t;
+    t<< tran[0], tran[1], tran[2];
+
+    Matrix<T,3,1> ___X;
+    ___X << T(X(0)), T(X(1)), T(X(2));
+
+    Matrix<T,3,1> ___Xd;
+    ___Xd << T(Xd(0)), T(Xd(1)), T(Xd(2));
+
+
+    Matrix<T,3,1> error;
+    error = ___X - q.toRotationMatrix() * ___Xd - t;
+
+    e[0] = switch_var[0] * T(weight) * error(0);
+    e[1] = switch_var[0] * T(weight) * error(1);
+    e[2] = switch_var[0] * T(weight) * error(2);
+    e[3] = T(2.0) * (T(1.0) - switch_var[0] );
+    return true;
+
+  }
+
+  // minimize_{T}   ||  p_X - T * c_Xd ||_2
+  static ceres::CostFunction* Create( const VectorXd& _X, const VectorXd& _Xd, const double weight )
+  {
+    return ( new ceres::AutoDiffCostFunction<Align3dPointsWithSwitchingConstraints,4,1,4,3>
+      (
+        new Align3dPointsWithSwitchingConstraints(_X, _Xd, weight )
+      )
+    );
+  }
+
+private:
+  Vector3d X;
+  Vector3d Xd;
+  double weight;
+
+};
+
 
 /* Not sure if this is worth. TODO. Try this later.
 class Align3d2dVectorized {
@@ -536,6 +595,70 @@ public:
 
     return (
        new ceres::AutoDiffCostFunction<Align3d2d,2,4,3>( new Align3d2d( a, b, weight ) )
+    );
+  }
+
+
+private:
+  Vector3d _3d; //3d point in world co-ordinate
+  Vector2d _2d; //undistorrted normalized observed points
+  double weight;
+
+};
+
+
+class Align3d2dWithSwitchingConstraints {
+public:
+  Align3d2dWithSwitchingConstraints( const Vector3d& _3d, const Vector2d& _2d, const double _weight=1.0 )
+          :_3d(_3d), _2d(_2d), weight( _weight ) {}
+
+  // w_T_c
+  template <typename T>
+  bool operator()( const T* const switch_var, const T* const quat, const T* const tran, T*e  ) const
+  {
+    Quaternion<T> q( quat[0], quat[1], quat[2], quat[3] );//w,x,y,z
+    Matrix<T,3,1> t;
+    t<< tran[0], tran[1], tran[2];
+
+    Matrix<T,4,4> G; //the transform, made up of q, t
+    G << q.toRotationMatrix() , t , T(0.0), T(0.0), T(0.0), T(1.0);
+
+
+    // Matrix<T,3,1> w_X; //3d co-ordinates in world ref-frame
+    // w_X << T(_3d(0)), T(_3d(1)), T(_3d(2));
+    Matrix<T,4,1> w_X; //3d co-ordinates in world ref-frame
+    w_X << T(_3d(0)), T(_3d(1)), T(_3d(2)), T(1.0);
+
+    Matrix<T,2,1> unvn; //normalized undistorrted observed points
+    unvn << T(_2d(0)), T(_2d(1));
+
+    // Matrix<T,3,1> c_X; //3d co-ordinates in camera ref-frame
+    // c_X = q.toRotationMatrix() * w_X + t;
+    Matrix<T,4,1> c_X;
+    c_X = G * w_X;
+
+    Matrix<T,2,1> error; // this variable is redundant. consider removal. TODO
+    error(0) = c_X(0) / c_X(2) - unvn(0);
+    error(1) = c_X(1) / c_X(2) - unvn(1);
+
+    e[0] = switch_var[0] * T(weight) * error(0);
+    e[1] = switch_var[0] * T(weight) * error(1);
+    e[2] = T(.5) * ( T(1.0) - switch_var[0] );
+    return true;
+
+  }
+
+  static ceres::CostFunction* Create( const VectorXd& __3d, const VectorXd& __2d, const double weight=1.0 )
+  {
+    Vector3d a;
+    a << __3d(0), __3d(1), __3d(2);
+
+
+    Vector2d b;
+    b << __2d(0), __2d(1);
+
+    return (
+       new ceres::AutoDiffCostFunction<Align3d2dWithSwitchingConstraints,3,1,4,3>( new Align3d2dWithSwitchingConstraints( a, b, weight ) )
     );
   }
 

@@ -234,7 +234,7 @@ int main(int argc, char ** argv )
 
 
   //--- END Subscribes ---//
-  std::cout<< Color::green <<  "Pose Graph Optimization Node by mpkuse!" << Color::def << endl;
+  std::cout<< Color::green <<  "Coordinates to Pose Processor Node by mpkuse!" << Color::def << endl;
 
 
 

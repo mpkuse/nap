@@ -401,7 +401,7 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
   // enabled_opmode.push_back(29);
   // enabled_opmode.push_back(20);
   // enabled_opmode.push_back(18);
-  enabled_opmode.push_back(28);
+  // enabled_opmode.push_back(28);
   enabled_opmode.push_back(17);
 
   if( std::find(enabled_opmode.begin(), enabled_opmode.end(),  (int)msg->op_mode  ) != enabled_opmode.end() )
@@ -518,17 +518,25 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
         if( !cor.isValid() )
             return;
 
+        Matrix4d p_T_c_3dprev_2dcurr, p_T_c_2dprev_3dcurr, p_T_c_3dprev_3dcurr;
+        bool status_3dprev_2dcurr, status_2dprev_3dcurr, status_3dprev_3dcurr;
+        double weight_3dprev_2dcurr, weight_2dprev_3dcurr, weight_3dprev_3dcurr;
+
         // Using 3dpoints of prev and 2d points of curr
         if( true )
         {
             Matrix4d p_T_c;
             ceres::Solver::Summary summary;
             bool status = cor.computeRelPose_3dprev_2dcurr(p_T_c, summary);
-            cout << "returned_summary: " << summary.BriefReport() << endl;
             double weight = min( 1.0, log( summary.initial_cost / summary.final_cost ) );
+
+            // Write in semi-global variables
+            p_T_c_3dprev_2dcurr = p_T_c;
+            status_3dprev_2dcurr = status;
+            weight_3dprev_2dcurr = weight;
             if( status == false )
             {
-                cout << "Status : Reject\n";
+                cout << "computeRelPose_3dprev_2dcurr Status : Reject\n";
             }
 
 
@@ -553,11 +561,16 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
             Matrix4d p_T_c;
             ceres::Solver::Summary summary;
             bool status = cor.computeRelPose_2dprev_3dcurr(p_T_c, summary);
-            cout << "returned_summary: " << summary.BriefReport() << endl;
             double weight = min( 1.0, log( summary.initial_cost / summary.final_cost ) );
+
+            // Write Semi-global
+            p_T_c_2dprev_3dcurr = p_T_c;
+            status_2dprev_3dcurr = status;
+            weight_2dprev_3dcurr = weight;
+
             if( status == false )
             {
-                cout << "Status : Reject\n";
+                cout << "computeRelPose_2dprev_3dcurr Status : Reject\n";
             }
 
 
@@ -576,17 +589,22 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
         }
 
 
-        // TODO. 3d3d Align. use both sets of 3d points and align those.
+        // 3d3d Align. use both sets of 3d points and align those.
         if( true )
         {
             Matrix4d p_T_c;
             ceres::Solver::Summary summary;
             bool status = cor.computeRelPose_3dprev_3dcurr(p_T_c, summary);
-            cout << "returned_summary: " << summary.BriefReport() << endl;
             double weight = min( 1.0, 3.*log( summary.initial_cost / summary.final_cost ) );
+
+            // Write Semi-global
+            p_T_c_3dprev_3dcurr = p_T_c;
+            status_3dprev_3dcurr = status;
+            weight_3dprev_3dcurr = weight;
+
             if( status == false )
             {
-                cout << "Status : Reject\n";
+                cout << "computeRelPose_3dprev_3dcurr Status : Reject\n";
             }
 
 
@@ -603,6 +621,24 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
                 republish_nap( msg->c_timestamp, msg->prev_timestamp, p_T_c, mode, weight );
             }
         }
+
+
+        // See if all the 3 estimates are consistent
+        cout << endl;
+        Vector4d F;
+        F << 3.0, 3.0, 3.0, 1.0;
+        cout << "[status="<< status_3dprev_2dcurr << "]  ";
+        cout << "[weight=" << std::fixed << std::setprecision(2) << weight_3dprev_2dcurr << "\t";
+        cout << "p_T_c_3dprev_2dcurr: " <<  (p_T_c_3dprev_2dcurr * F).transpose() << endl;
+
+        cout << "[status="<< status_2dprev_3dcurr << "]  ";
+        cout << "[weight=" << std::fixed << std::setprecision(2) << weight_2dprev_3dcurr << "\t";
+        cout << "p_T_c_2dprev_3dcurr: " <<  (p_T_c_2dprev_3dcurr * F).transpose() << endl;
+
+        cout << "[status="<< status_3dprev_3dcurr << "]  ";
+        cout << "[weight=" << std::fixed << std::setprecision(2) << weight_3dprev_3dcurr << "\t";
+        cout << "p_T_c_3dprev_3dcurr: " <<  (p_T_c_3dprev_3dcurr * F).transpose() << endl;
+
 
         cout << "Done...\n";
 

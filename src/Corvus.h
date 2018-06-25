@@ -68,6 +68,14 @@ using namespace std;
 #define CORVUS_DEBUG_LVL 1
 
 
+// Enabling below will compile 3d2d with switching constraints
+#define CORVUS__align3d2d_with_switching_constraints__ 1
+
+// 3d3d alignment with switching constraints.
+#define CORVUS__align3d3d_with_switching_constraints__ 1
+
+
+
 class Corvus
 {
 public:
@@ -101,13 +109,13 @@ private:
     // c_T_p : pose of frame-p as observed from frame c.
     // fname_suffix : suffix in the image file name
     // image_caption_msg : a string that will go in status part of the image.
-    void saveReprojectedPoints( const Matrix4d& c_T_p, const string& fname_suffix, const string image_caption_msg = string( "No Caption" ) );
+    void saveReprojectedPoints( const Matrix4d& c_T_p, const string& fname_suffix, const string image_caption_msg = string( "No Caption" ), const double * switches= NULL );
 
 
 
     // Create an image [ C| P ]. Mark the 3d points of curr ie. w_C onto both images
     // [[     PI(c_T_w * w_C)  ||    PI(p_T_c * c_T_w * w_C)    ]]
-    void saveReprojectedPoints__w_C( const Matrix4d& p_T_c, const string& fname_suffix, const string image_caption_msg = string( "No Caption" ));
+    void saveReprojectedPoints__w_C( const Matrix4d& p_T_c, const string& fname_suffix, const string image_caption_msg = string( "No Caption" ), const double * switches= NULL);
 
 
 
@@ -140,7 +148,7 @@ private:
     bool is_gidx_set = false;
 
     bool is_data_set = false;
-    bool is_data_tfidf = false; 
+    bool is_data_tfidf = false;
 
 
     // publishing helpers
@@ -158,21 +166,37 @@ private:
                 cv::Mat& dst );
 
 
+
     // Plots [ imA | imaB ] with points correspondences
     // [Input]
     //    imA, imB : Images
     //    ptsA, ptsB : 2xN or 3xN
     //    idxA, idxB : Index of each of the image. This will appear in status part. No other imppact of these
-    //    mask : binary mask, 1 ==> plot, 0 ==> ignore point. Must be of length N
     // [Output]
     //    outImg : Output image
     void plot_point_sets( const cv::Mat& imA, const MatrixXd& ptsA, int idxA,
                           const cv::Mat& imB, const MatrixXd& ptsB, int idxB,
-                        //   const VectorXd& mask,
                           const cv::Scalar& color, bool annotate_pts,
                           const string& msg,
                         cv::Mat& dst );
 
+
+    // Plots [ imA | imaB ] with points correspondences
+    // [Input]
+    //    imA, imB : Images
+    //    ptsA, ptsB : 2xN or 3xN
+    //    idxA, idxB : Index of each of the image. This will appear in status part. No other imppact of these
+    //    switches   : double array of switches (from the switching constraint optimization to align 3d2d or 3d3d points)
+    // [Output]
+    //    outImg : Output image
+    void plot_point_sets_with_switches( const cv::Mat& imA, const MatrixXd& ptsA, int idxA,
+                          const cv::Mat& imB, const MatrixXd& ptsB, int idxB,
+                        //   const VectorXd& mask,
+                        const double * switches,
+                          const cv::Scalar& color, bool annotate_pts,
+                          /*const vector<string>& msg,*/
+                          const string& msg,
+                        cv::Mat& dst );
 
     void raw_to_eigenmat( const double * quat, const double * t, Matrix4d& dstT );
     void eigenmat_to_raw( const Matrix4d& T, double * quat, double * t);
@@ -199,4 +223,15 @@ private:
     void setcolor_to_cameravisual( float r, float g, float b, visualization_msgs::Marker& marker  );
 
 
+    int _switches_stats( const double * switches, int len, double thresh=0.8 )
+    {
+        assert( switches != NULL );
+        int count_inliers=0;
+        for( int i=0 ; i<len ; i++ )
+        {
+            if( switches[i] > thresh )
+                count_inliers++;
+        }
+        return count_inliers;
+    }
 };
