@@ -967,13 +967,13 @@ def select_equally_spaced( pts_A, image_shape ):
 ##
 ## Q_bundle_napmsg : Queue of nap msg. This queue is produced by this function and consumed by main-thread
 ## Q_match_im_bundle : Debug image. This queue is produced by this thread and consumed by main-thread.
-def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_raw, Q_bundle_napmsg, Q_match_im_bundle ):
+def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_raw, Q_bundle_napmsg, Q_match_im_bundle, output_dump_path ):
     THREAD_NAME = '%5d-worker_qdd_processor' %( os.getpid() )
 
     DF = DaisyFlow() #TODO May be have an argument to constructor of DaisyFlow to indicate how many daisy's to allocate
     TRACKS = DenseFeatureTracks()
 
-    output_dump_path = '/home/mpkuse/Desktop/bundle_adj/dump/'
+    # output_dump_path = '/home/mpkuse/Desktop/bundle_adj/dump/' #now passed as argument.
 
 
     while process_flags['MAIN_ENDED'] is False:
@@ -1639,7 +1639,8 @@ if __name__ == "__main__":
                             Qdd,\
                             S_thumbnails, S_timestamp, S_lut_raw,\
                             Q_bundle_napmsg,\
-                            Q_match_im_bundle
+                            Q_match_im_bundle,\
+                            rospy.get_param( '/nap/debug_output_dir')+'/dump'
                             )\
                         )
 
