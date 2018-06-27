@@ -51,13 +51,14 @@ using namespace Eigen;
 #include "ColorLUT.h"
 #include "tic_toc.h"
 
+
 using namespace std;
 // using namespace cv; //don't do using namespace std; On some versions of opencv there is cv::Node which conflicts with my class Node.
 
 // 0 : Only print some messages. No writing data to disk
 // 1 : Write only comprehensive data to disk. and publish some basic data
 // 2 : Write ceres poses at each iteration to disk along with reprojection images.
-#define LOCALBUNDLE_DEBUG_LVL 1
+#define LOCALBUNDLE_DEBUG_LVL 0
 
 
 //forward declaration of ceres classes
@@ -84,7 +85,7 @@ public:
   void ceresDummy();
   // void crossPoseComputation3d3d(); // align3d point clouds. point cloud of curr is pretty bad, resulting in bad alignment, So removed.
   // void crossPoseComputation3d2d();    //< Estimate global pose c_T_w, this gives optimization difficulties. Function removed
-  Matrix4d crossRelPoseComputation3d2d( ceres::Solver::Summary& summary ); //< Essentially like PNP. (will expand to multiple frames). Returns p_T_c
+  bool crossRelPoseComputation3d2d( ceres::Solver::Summary& summary, Matrix4d& to_return_p_T_c ); //< Essentially like PNP. (will expand to multiple frames). Returns p_T_c
   Matrix4d crossRelPoseJointOptimization3d2d(); //< similar to crossRelPoseJointOptimization3d2d() but has joint optimization to compute p_T_c, p_T_{c-1}, p_T_{c-2}, p_T_{c-3}, ...
 
   void sayHi();
@@ -458,11 +459,12 @@ class Align3dPointsWithSwitchingConstraints {
 public:
   // p_X : 3d point (triangulated from iprev) in iprev frame of reference.
   // c_Xd : 3d point (triangulated from icurr) in icurr frame of reference .
-  Align3dPointsWithSwitchingConstraints( const VectorXd& _X, const VectorXd& _Xd, const double _weight=1.0 )
+  Align3dPointsWithSwitchingConstraints( const VectorXd& _X, const VectorXd& _Xd, const double _weight=1.0, const double _switching_lambda=2.0 )
   {
     X << _X(0) , _X(1) , _X(2) ;
     Xd << _Xd(0) , _Xd(1) , _Xd(2) ;
     weight = _weight;
+    switching_lambda = _switching_lambda;
   }
 
   // R: p_R_c. This is represented as quaternion
@@ -487,7 +489,7 @@ public:
     e[0] = switch_var[0] * T(weight) * error(0);
     e[1] = switch_var[0] * T(weight) * error(1);
     e[2] = switch_var[0] * T(weight) * error(2);
-    e[3] = T(2.0) * (T(1.0) - switch_var[0] );
+    e[3] = T(switching_lambda) * T(weight) * (T(1.0) - switch_var[0] );
     return true;
 
   }
@@ -506,6 +508,7 @@ private:
   Vector3d X;
   Vector3d Xd;
   double weight;
+  double switching_lambda;
 
 };
 
@@ -609,8 +612,8 @@ private:
 
 class Align3d2dWithSwitchingConstraints {
 public:
-  Align3d2dWithSwitchingConstraints( const Vector3d& _3d, const Vector2d& _2d, const double _weight=1.0 )
-          :_3d(_3d), _2d(_2d), weight( _weight ) {}
+  Align3d2dWithSwitchingConstraints( const Vector3d& _3d, const Vector2d& _2d, const double _weight=1.0, const double _switching_lambda=0.5 )
+          :_3d(_3d), _2d(_2d), weight( _weight ), switching_lambda( _switching_lambda ) {}
 
   // w_T_c
   template <typename T>
@@ -643,7 +646,7 @@ public:
 
     e[0] = switch_var[0] * T(weight) * error(0);
     e[1] = switch_var[0] * T(weight) * error(1);
-    e[2] = T(.5) * ( T(1.0) - switch_var[0] );
+    e[2] = T(switching_lambda) * T(weight) * ( T(1.0) - switch_var[0] );
     return true;
 
   }
@@ -667,6 +670,7 @@ private:
   Vector3d _3d; //3d point in world co-ordinate
   Vector2d _2d; //undistorrted normalized observed points
   double weight;
+  double switching_lambda;
 
 };
 

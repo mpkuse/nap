@@ -1055,7 +1055,7 @@ LocalBundle::LocalBundle( const nap::NapMsg::ConstPtr& msg,
 
 
 
-  if( ( _m1set.size() == 2 ) && ( _1set.size() > 2 ) && ( _2set.size() > 2 ) && ( _3set.size() > 2 ) )
+  if( ( _m1set.size() == 2 ) && ( _1set.size() >= 2 ) && ( _2set.size() >= 2 ) && ( _3set.size() >= 2 ) )
   {
       isValid_incoming_msg = true;
   }
@@ -1192,19 +1192,23 @@ void LocalBundle::plot_dense_point_sets( const cv::Mat& im, const MatrixXd& pts,
             bool enable_text, bool enable_status_image, const string& msg ,
             cv::Mat& dst )
 {
+
   assert( pts.rows() == 2 || pts.rows() == 3 );
-  assert( mask.size() == pts.cols() );
+  assert( mask.size() == pts.cols() && pts.cols() > 0 );
   assert( im.rows > 0 && im.cols > 0 );
 
   cv::Mat outImg = im.clone();
+  assert( outImg.rows > 0 && outImg.cols > 0 );
+
   ColorLUT lut = ColorLUT();
 
   int count = 0 ;
-  int n_every = pts.cols()/75; //10
+  float percentage_of_points_to_annotate = 80. / (float)pts.cols(); // 0.3;
+
   for( int kl=0 ; kl<pts.cols() ; kl++ )
   {
-    if( mask(kl) == 0 )
-      continue;
+      if( mask(kl) == 0 )
+        continue;
 
       count++;
 
@@ -1215,14 +1219,15 @@ void LocalBundle::plot_dense_point_sets( const cv::Mat& im, const MatrixXd& pts,
       // cv::Scalar color1 = lut.get_color( A.x / 10 ) ; // cv::Scalar( 255,255,0);
       // cv::Scalar color2 = lut.get_color( A.y / 10 ) ;
       // cv::Scalar color = cv::Scalar( (color1[2]+color2[2])/2 , (color1[1]+color2[1])/2, (color1[0]+color2[0])/2 );
-
       cv::Scalar color = lut.get_color( kl % 64 );
-
 
       cv::circle( outImg, A, 1, color, -1 );
 
-      if( enable_text && kl%n_every == 0 ) // if write text only on 10% of the points to avoid clutter.
-        cv::putText( outImg, to_string(kl), A, cv::FONT_HERSHEY_SIMPLEX, 0.3, color, 1 );
+      if( enable_text && drand48() < percentage_of_points_to_annotate ) // if write text only on 10% of the points to avoid clutter.
+      {
+          cv::putText( outImg, to_string(kl), A, cv::FONT_HERSHEY_SIMPLEX, 0.3, color, 1 );
+      }
+
   }
 
 
@@ -1242,7 +1247,6 @@ void LocalBundle::plot_dense_point_sets( const cv::Mat& im, const MatrixXd& pts,
 
   // if( msg.length() > 0 )
     // cv::putText( status, msg.c_str(), cv::Point(10,50), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255,255,255), 2 );
-
   if( msg.length() > 0 ) { // ':' separated. Each will go in new line
         std::vector<std::string> msg_tokens = split(msg, ':');
         for( int h=0 ; h<msg_tokens.size() ; h++ )
@@ -1831,7 +1835,7 @@ void LocalBundle::ceresDummy()
 
 }
 
-Matrix4d LocalBundle::crossRelPoseComputation3d2d( ceres::Solver::Summary& summary )
+bool LocalBundle::crossRelPoseComputation3d2d( ceres::Solver::Summary& summary, Matrix4d& to_return_p_T_c )
 {
     cout << "   In function LocalBundle::crossRelPoseComputation3d2d()\n";
   assert( isValid_iprev_X_iprev_triangulated && iprev_X_iprev_triangulated.cols() > 0 );
@@ -1842,6 +1846,7 @@ Matrix4d LocalBundle::crossRelPoseComputation3d2d( ceres::Solver::Summary& summa
   // cout << "Done  markObservedPointsOnCurrIm()\n";
   // markObservedPointsOnPrevIm();
   // cout << "Done markObservedPointsOnPrevIm()\n";
+  cout << "Do markObservedPoints__CP\n";
   markObservedPoints__CP();
   cout << "Done markObservedPoints__CP()\n";
 
@@ -2010,13 +2015,14 @@ Matrix4d LocalBundle::crossRelPoseComputation3d2d( ceres::Solver::Summary& summa
   markReprojected3dPoints__CP( T_cap,  "proj3dPoints.final", "c_T_p "+___jks_prettypose_string+":"+__cost_string );
   #endif
 
-  Matrix4d to_return = T_cap.inverse();
-  return to_return;
+
+  to_return_p_T_c = T_cap.inverse();
 
 
   // TODO - Decide if this pose is acceptable.
   // Instead of returning pose, return status where, this pose is acceptable on not.
   // The pose can be written to input argument.
+  return true;
 
 
 }
@@ -2322,7 +2328,9 @@ void LocalBundle::markReprojected3dPoints__CP( const Matrix4d& c_T_p, const stri
 
     cv::Mat outImg;
     cv::hconcat( outImageCurr, outImagePrev, outImg );
-    write_image( to_string(nap_idx_of_nodes[ localidx_of_icurr ])+"_"+to_string(nap_idx_of_nodes[localidx_of_iprev])+"_"+ fname_prefix +"_Reproj3dPts.png" , outImg );
+
+    string fname = to_string(global_idx_of_nodes[ localidx_of_icurr ])+"_"+to_string(global_idx_of_nodes[localidx_of_iprev])+"__"+to_string(nap_idx_of_nodes[ localidx_of_icurr ])+"_"+to_string(nap_idx_of_nodes[localidx_of_iprev])+"_"+ fname_prefix +"_Reproj3dPts.png";
+    write_image( fname, outImg );
 
 
 }
@@ -2378,6 +2386,7 @@ void LocalBundle::mark3dPointsOnPrevIm( const Matrix4d& px_T_w, const string& fn
 void LocalBundle::markObservedPoints__CP()
 {
     cv::Mat outImg_curr, outImg_prev;
+    cout << "Making the current image annotation\n";
     {
         assert( uv.size() == n_ptClds );
 
@@ -2390,11 +2399,13 @@ void LocalBundle::markObservedPoints__CP()
 
         cv::Mat outImg;
         string msg = "lid="+to_string( this_local_id) + "; gid="+to_string(this_global_id) + "; nap_id="+to_string(this_nap_id);
+        cout << "plot_dense_point_sets\n";
         plot_dense_point_sets( global_nodes[this_global_id]->getImageRef(), uv[this_local_id], mask,
                            true, true, msg, outImg_curr );
 
     }
 
+    cout << "Making the prev image annotation\n";
     {
         assert( uv.size() == n_ptClds );
 
@@ -2407,6 +2418,7 @@ void LocalBundle::markObservedPoints__CP()
 
         cv::Mat outImg;
         string msg = "lid="+to_string( this_local_id) + "; gid="+to_string(this_global_id) + "; nap_id="+to_string(this_nap_id);
+        cout << "plot_dense_point_sets\n";
         plot_dense_point_sets( global_nodes[this_global_id]->getImageRef(), uv[this_local_id], mask,
                            true, true, msg, outImg_prev );
 
@@ -2414,7 +2426,9 @@ void LocalBundle::markObservedPoints__CP()
 
     cv::Mat outImg;
     cv::hconcat( outImg_curr, outImg_prev, outImg );
-    write_image( to_string(nap_idx_of_nodes[ localidx_of_icurr ])+"_"+to_string(nap_idx_of_nodes[localidx_of_iprev])+"_ObservedPoints.png" , outImg );
+
+    string fname = to_string(global_idx_of_nodes[ localidx_of_icurr ])+"_"+to_string(global_idx_of_nodes[localidx_of_iprev])+"__"+to_string(nap_idx_of_nodes[ localidx_of_icurr ])+"_"+to_string(nap_idx_of_nodes[localidx_of_iprev])+"_ObservedPoints.png";
+    write_image( fname , outImg );
 
 }
 

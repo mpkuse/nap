@@ -404,10 +404,25 @@ bool Corvus::computeRelPose_3dprev_2dcurr( Matrix4d& to_return_p_T_c, ceres::Sol
     // Instead of returning pose, return status where, this pose is acceptable on not.
     // The pose can be written to input argument.
 
-    bool status = false;
-    if( c_T_p.col(3).head(3).norm() < 2. ) {
-        cout << "[Accept]: c_T_p.col(3).head(3).norm() < 2.\n";
-        status = true;
+    bool status = true;
+    string status_string = string("OK");
+    {
+        // Rule : Too much changes in the optimization variable.
+        if( c_T_p.col(3).head(3).norm() > 2. ) {
+            cout << "[Reject]: c_T_p.col(3).head(3).norm() > 2.\n";
+            status_string = "[Reject]: c_T_p.col(3).head(3).norm() > 2";
+            status = false;
+        }
+
+        // Rule: If less than 15 inliers with switching, suggest to reject
+        #ifdef CORVUS__align3d2d_with_switching_constraints__
+            // if less than 15 switching inliers, suggest to reject.
+            if( switching_inliers < 15 ) {
+                cout << "[Reject]: less than 15 switching inliers, suggest to reject.\n";
+                status_string = string( "[Reject]: less than 15 switching inliers, suggest to reject." );
+                status = false;
+            }
+        #endif
     }
 
 
@@ -417,7 +432,8 @@ bool Corvus::computeRelPose_3dprev_2dcurr( Matrix4d& to_return_p_T_c, ceres::Sol
     #if CORVUS_DEBUG_LVL > 0
     char __caption_string[500];
     // sprintf( __caption_string, "IsSolutionUsable=%d, cost0=%4.4f, final=%4.4f", summary.IsSolutionUsable(), summary.initial_cost(), summary.final_cost() );
-    sprintf( __caption_string, "total_time_msec=%4.2f, cost0=%4.4f, cost%d=%4.4f. %s", 1000.*summary.total_time_in_seconds, (float)summary.initial_cost,  summary.num_successful_steps, summary.final_cost, (status)?"OK":"Reject" );
+    // sprintf( __caption_string, "total_time_msec=%4.2f, cost0=%4.4f, cost%d=%4.4f. %s", 1000.*summary.total_time_in_seconds, (float)summary.initial_cost,  summary.num_successful_steps, summary.final_cost, (status)?"OK":"Reject" );
+    sprintf( __caption_string, "total_time_msec=%4.2f, cost0=%4.4f, cost%d=%4.4f. %s", 1000.*summary.total_time_in_seconds, (float)summary.initial_cost,  summary.num_successful_steps, summary.final_cost, status_string.c_str() );
 
     string __c_T_p_prettyprint;
     prettyprintPoseMatrix( c_T_p, __c_T_p_prettyprint );
@@ -570,10 +586,26 @@ bool Corvus::computeRelPose_2dprev_3dcurr( Matrix4d& to_return_p_T_c, ceres::Sol
     // Instead of returning pose, return status where, this pose is acceptable on not.
     // The pose can be written to input argument.
 
-    bool status = false;
-    if( p_T_c.col(3).head(3).norm() < 2. ) {
-        cout << "[Accept]: p_T_c.col(3).head(3).norm() < 2.\n";
-        status = true;
+    bool status = true;
+    string status_string = string("OK");
+    {
+        // Rule: If too much change, then reject
+        if( p_T_c.col(3).head(3).norm() > 2. ) {
+            cout << "[Reject]: p_T_c.col(3).head(3).norm() > 2.\n";
+            status_string = "[Reject]: p_T_c.col(3).head(3).norm() > 2.";
+            status = false;
+        }
+
+
+        // Rule: If less than 15 inliers with switching, suggest to reject
+        #ifdef CORVUS__align3d2d_with_switching_constraints__
+            // if less than 15 switching inliers, suggest to reject.
+            if( switching_inliers < 15 ) {
+                cout << "[Reject]: less than 15 switching inliers, suggest to reject.\n";
+                status_string = string("[Reject]: less than 15 switching inliers, suggest to reject.");
+                status = false;
+            }
+        #endif
     }
 
 
@@ -583,7 +615,8 @@ bool Corvus::computeRelPose_2dprev_3dcurr( Matrix4d& to_return_p_T_c, ceres::Sol
     #if CORVUS_DEBUG_LVL > 0
     char __caption_string[500];
     // sprintf( __caption_string, "IsSolutionUsable=%d, cost0=%4.4f, final=%4.4f", summary.IsSolutionUsable(), summary.initial_cost(), summary.final_cost() );
-    sprintf( __caption_string, "total_time_msec=%4.2f, cost0=%4.4f, cost%d=%4.4f. %s", 1000.*summary.total_time_in_seconds, (float)summary.initial_cost,  summary.num_successful_steps, summary.final_cost, (status)?"Acceptable":"Reject" );
+    // sprintf( __caption_string, "total_time_msec=%4.2f, cost0=%4.4f, cost%d=%4.4f. %s", 1000.*summary.total_time_in_seconds, (float)summary.initial_cost,  summary.num_successful_steps, summary.final_cost, (status)?"OK":"Reject" );
+    sprintf( __caption_string, "total_time_msec=%4.2f, cost0=%4.4f, cost%d=%4.4f. %s", 1000.*summary.total_time_in_seconds, (float)summary.initial_cost,  summary.num_successful_steps, summary.final_cost, status_string.c_str() );
 
     string __p_T_c_prettyprint;
     prettyprintPoseMatrix( p_T_c, __p_T_c_prettyprint );
@@ -713,9 +746,20 @@ bool Corvus::computeRelPose_3dprev_3dcurr( Matrix4d& to_return_p_T_c, ceres::Sol
     #endif
 
 
-    // TODO Decide if this pose looks exceptable
     bool status = true;
+    string status_string = string( "OK" );
+    {
 
+        // Rule: If less than 15 inliers with switching, suggest to reject
+        #ifdef CORVUS__align3d3d_with_switching_constraints__
+            // if less than 15 switching inliers, suggest to reject.
+            if( switching_inliers < 15 ) {
+                cout << "[Reject]: less than 15 switching inliers, suggest to reject.\n";
+                status = false;
+            }
+        #endif
+
+    }
 
 
     //
@@ -723,7 +767,8 @@ bool Corvus::computeRelPose_3dprev_3dcurr( Matrix4d& to_return_p_T_c, ceres::Sol
     #if CORVUS_DEBUG_LVL > 0
     char __caption_string[500];
     // sprintf( __caption_string, "IsSolutionUsable=%d, cost0=%4.4f, final=%4.4f", summary.IsSolutionUsable(), summary.initial_cost(), summary.final_cost() );
-    sprintf( __caption_string, "total_time_msec=%4.2f, cost0=%4.4f, cost%d=%4.4f. %s", 1000.*summary.total_time_in_seconds, (float)summary.initial_cost,  summary.num_successful_steps, summary.final_cost, (status)?"Acceptable":"Reject" );
+    // sprintf( __caption_string, "total_time_msec=%4.2f, cost0=%4.4f, cost%d=%4.4f. %s", 1000.*summary.total_time_in_seconds, (float)summary.initial_cost,  summary.num_successful_steps, summary.final_cost, (status)?"OK":"Reject" );
+    sprintf( __caption_string, "total_time_msec=%4.2f, cost0=%4.4f, cost%d=%4.4f. %s", 1000.*summary.total_time_in_seconds, (float)summary.initial_cost,  summary.num_successful_steps, summary.final_cost, status_string.c_str() );
 
     string __p_T_c_prettyprint;
     prettyprintPoseMatrix( p_T_c, __p_T_c_prettyprint );
@@ -742,7 +787,7 @@ bool Corvus::computeRelPose_3dprev_3dcurr( Matrix4d& to_return_p_T_c, ceres::Sol
     delete [] switches;
     #endif
 
-    return true;
+    return status;
 
 }
 

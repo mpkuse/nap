@@ -61,14 +61,14 @@ using namespace Eigen;
 using namespace std;
 // using namespace cv;  //don't do using namespace std; On some versions of opencv there is cv::Node which conflicts with my class Node.
 
-// 0 : No debugging or minimal debugging info
+// 0 : No debugging or minimal debugging info. No images written
 // 1 : Some images written
-// 2 : Most of images written
+// 2 : Most of images written. Use with caution.
 // 3 : Lot of text written in addition to lots of images.
-#define CORVUS_DEBUG_LVL 1
+#define CORVUS_DEBUG_LVL 0
 
 
-// Enabling below will compile 3d2d with switching constraints
+// Enabling below will compile 3d2d with switching constraints (recommended)
 #define CORVUS__align3d2d_with_switching_constraints__ 1
 
 // 3d3d alignment with switching constraints.

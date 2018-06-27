@@ -153,7 +153,9 @@ def xprint( msg, threadId ):
         return
     if threadId.find( 'worker_gpu') > 0 :
         return
-    if threadId.find( 'worker_bundle_cpu') > 0 :
+    # if threadId.find( 'worker_bundle_cpu') > 0 :
+        # return
+    if threadId.find( 'worker_qdd_processor') > 0 :
         return
 
 
@@ -1358,7 +1360,10 @@ def worker_bundle_cpu(  process_flags, Qd, Qdd, S_thumbnails, S_timestamp, S_lut
         ### Step-1 :  DF.guided_matches()
         startGuided = time.time()
         selected_curr_i, selected_prev_i, score = DF.guided_matches( 0, 0, feat2d_curr, 1, 1, feat2d_prev )
+        if len(selected_curr_i ) == 0 :
+            score = 0.;
         xprint( 'guided_matches exec in (ms): %4.2f' %( 1000. *( time.time() - startGuided) ), THREAD_NAME )
+        xprint( 'len_selected_curr_i : '+str( len(selected_curr_i))+'\tscore_string'+str(score) , THREAD_NAME  )
         xprint( 'guided_matches Score: %4.2f' %(score), THREAD_NAME )
 
 

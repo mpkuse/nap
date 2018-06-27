@@ -177,8 +177,18 @@ int main(int argc, char ** argv )
   //--- Pose Graph Visual Marker ---//
   string rviz_pose_graph_topic = string( "/mish/pose_nodes" );
   ROS_INFO( "Publish Pose Graph Visual Marker to %s", rviz_pose_graph_topic.c_str() );
-  dataManager.setVisualizationTopic( rviz_pose_graph_topic );
+  dataManager.setVisualizationTopics( rviz_pose_graph_topic );
 
+
+  //-- Tell the place_recog_callback() which opmodes to process. opmodes not in this list will be ignored.
+  vector<int> enabled_opmode;
+  // enabled_opmode.push_back(10); // republish t_curr and t_prev
+  // enabled_opmode.push_back(29); // 3way (not in use)
+  // enabled_opmode.push_back(20); // contains t_curr, t_prev and matched-tracked points.
+  // enabled_opmode.push_back(18); // Corvus
+  // enabled_opmode.push_back(28); // LocalBundle
+  enabled_opmode.push_back(17);    // Corvus with tfidf.
+  dataManager.setOpmodesToProcess( enabled_opmode );
 
 
   //--- Subscribers ---//
@@ -201,8 +211,8 @@ int main(int argc, char ** argv )
   ROS_INFO( "Subscribed to %s", point_cloud_topic.c_str() );
   ros::Subscriber sub_pcl_topic = nh.subscribe( point_cloud_topic, 1000, &DataManager::point_cloud_callback, &dataManager );
 
-#if defined _DEBUG_BUNDLE
 
+#if LOCALBUNDLE_DEBUG_LVL > 0 || CORVUS_DEBUG_LVL > 0
   //
   //   This is not a requirement for core computation. But is subscribed for debug reasons. Especially to verify correctness of 3way matches
   string image_topic = string( "/vins_estimator/keyframe_image");
@@ -211,7 +221,8 @@ int main(int argc, char ** argv )
 
 #endif
 
-#if defined _DEBUG_3WAY || defined _DEBUG_PNP
+// #if defined _DEBUG_3WAY || defined _DEBUG_PNP // these #defs were removed. Below code kept for reference.
+#if 0
   // 2d features in normalized cords
   string features_tracked_topic = string( "/feature_tracker/feature" );
   ROS_INFO( "Subscribed to %s", features_tracked_topic.c_str() );
@@ -235,14 +246,6 @@ int main(int argc, char ** argv )
 
   //--- END Subscribes ---//
   std::cout<< Color::green <<  "Coordinates to Pose Processor Node by mpkuse!" << Color::def << endl;
-
-
-
-  //
-  // Setup thread for solving the pose graph slam. Uses std::thread
-  // SolvePoseGraph solve(dataManager );
-  // solve.setFileOut( "/dev/pts/18" );
-  // std::thread solver_thread( &SolvePoseGraph::sayHi, solve );
 
 
 

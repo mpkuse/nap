@@ -4,145 +4,12 @@
 
 void DataManager::publish_once()
 {
+    // Caution: Please quickly go thrughout the functions to know exactly what is being published.
   // publish_pose_graph_nodes();
   publish_pose_graph_nodes_original_poses();
   publish_pose_graph_edges( this->odometryEdges );
   publish_pose_graph_edges( this->loopClosureEdges );
   // publish_node_pointcloud();
-}
-
-
-void DataManager::publish_pose_graph_nodes()
-{
-  visualization_msgs::Marker marker;
-  marker.header.frame_id = "world";
-  marker.header.stamp = ros::Time::now();
-  marker.ns = "spheres";
-  marker.id = 0;
-  marker.type = visualization_msgs::Marker::SPHERE;
-  marker.action = visualization_msgs::Marker::ADD;
-  marker.scale.x = 0.05;
-  marker.scale.y = 0.05;
-  marker.scale.z = 0.05;
-  marker.color.a = .6; // Don't forget to set the alpha!
-
-  int nSze = nNodes.size();
-  // for( int i=0; i<nNodes.size() ; i+=1 )
-  for( int i=max(0,nSze-10); i<nNodes.size() ; i++ ) //optimization trick: only publish last 10. assuming others are already on rviz
-  {
-    marker.color.r = 0.0;marker.color.g = 0.0;marker.color.b = 0.0; //default color of node
-
-    Node * n = nNodes[i];
-
-
-
-    // Publish Sphere
-    marker.type = visualization_msgs::Marker::SPHERE;
-    marker.id = i;
-    marker.ns = "spheres";
-    Matrix4d pose_mat_curr; //w_T_c
-    n->getCurrTransform( pose_mat_curr );
-    marker.pose.position.x = pose_mat_curr(0,3);
-    marker.pose.position.y = pose_mat_curr(1,3);
-    marker.pose.position.z = pose_mat_curr(2,3);
-    marker.pose.orientation.x = 0.;
-    marker.pose.orientation.y = 0.;
-    marker.pose.orientation.z = 0.;
-    marker.pose.orientation.w = 1.;
-    marker.color.r = 0.0; marker.color.g = 0.0; marker.color.b = 0.0;
-    marker.scale.x = .05;marker.scale.y = .05;marker.scale.z = .05;
-    pub_pgraph.publish( marker );
-
-    // Publish Text
-    marker.type = visualization_msgs::Marker::TEXT_VIEW_FACING;
-    marker.id = i;
-    marker.ns = "text_label";
-    marker.scale.z = .03;
-
-    // pink color text if node doesnt contain images
-    if( n->getNapClusterMap().data == NULL )
-    { marker.color.r = 1.0;  marker.color.g = .4;  marker.color.b = .4; }
-    else
-    { marker.color.r = 1.0;  marker.color.g = 1.0;  marker.color.b = 1.0; } //text in white color
-    // marker.text = std::to_string(i)+std::string(":")+std::to_string(n->ptCld.cols())+std::string(":")+((n->getImageRef().data)?"I":"~I");
-
-    std::stringstream buffer;
-    buffer << i << ":" << n->time_stamp - nNodes[0]->time_stamp << ":" << n->getn3dpts() << ":" << n->getn2dfeat();
-    // buffer << i << ":" << n->time_stamp - nNodes[0]->time_stamp << ":" << n->time_image- nNodes[0]->time_stamp  ;
-    marker.text = buffer.str();
-    // marker.text = std::to_string(i)+std::string(":")+std::to_string( n->time_stamp );
-    pub_pgraph.publish( marker );
-
-
-
-    //
-    // Write Node Image along with feat2d to file //
-    char imfile_name[200];
-    // sprintf( imfile_name, "/home/mpkuse/Desktop/a/drag2/kf_%d.png", i );
-    sprintf( imfile_name, "%s/kf_%d.png", _DEBUG_SAVE_BASE_PATH, i );
-
-    if( !if_file_exist(imfile_name) )
-    {
-      if( n->valid_image() && n->valid_3dpts() && n->valid_2dfeats() ) {
-        cout << "3d:"<< n->valid_3dpts()   << "(" << n->getn3dpts() << "); ";
-        cout << "2d:"<< n->valid_2dfeats() << "(" << n->getn2dfeat() << ")\n";
-
-        // Write original image
-        cout << "Writing file "<< imfile_name << endl;
-        cv::imwrite( imfile_name, n->getImageRef() );
-
-        // Write Node data to file.
-        char debug_fname[100];
-        // sprintf( debug_fname, "/home/mpkuse/Desktop/a/drag2/kf_%d.yaml", i );
-        sprintf( debug_fname, "%s/kf_%d.yaml", _DEBUG_SAVE_BASE_PATH, i );
-        n->write_debug_xml( debug_fname );
-
-
-        // Get 3dpoints - Probably don't need to bother with 3dpts.
-        // MatrixXd c_M; //4xN
-        // n->getPointCloudHomogeneous(c_M);
-        //
-        // // Project 3d points on camera
-        // MatrixXd reprojM;
-        // camera.perspectiveProject3DPoints( c_M, reprojM );
-        //
-        // MatrixXf reproj_float;
-        // reproj_float = reprojM.cast<float>();
-        // cv::Mat reprojM_mat;
-        // cv::eigen2cv( reproj_float, reprojM_mat );
-        //
-        //
-        // // plot reproj-3d points on image
-        // cv::Mat dst;
-        // plot_point_sets( n->getImageRef(), reprojM_mat, dst, cv::Scalar(0,0,244));
-
-
-        // Get 2d features
-        MatrixXd c_feat2d_normed, c_feat2d;
-        n->getFeatures2dHomogeneous( c_feat2d_normed );
-        camera.normalizedImCords_2_imageCords( c_feat2d_normed, c_feat2d );
-
-
-
-        // plot 2dfeats on image
-        cv::Mat dst;
-        plot_point_sets( n->getImageRef(), c_feat2d, dst, cv::Scalar(0,0,244), string("feat2d in red"));
-
-
-        // Write annotated image
-        // Write Node data to file.
-        // sprintf( debug_fname, "/home/mpkuse/Desktop/a/drag2/kf_%d_anno.png", i );
-        sprintf( debug_fname, "%s/kf_%d_anno.png", _DEBUG_SAVE_BASE_PATH, i );
-        cv::imwrite( debug_fname, dst );
-
-
-
-      }
-    }
-    // END
-
-
-  }
 }
 
 
@@ -417,6 +284,38 @@ void DataManager::publish_node_pointcloud()
     cout << "nvalid=" << nvalid << " of " << nNodes.size() << endl;
 }
 
+
+
+void DataManager::publish_image( const ros::Publisher& pub, const cv::Mat& img )
+{
+    sensor_msgs::ImagePtr msg = cv_bridge::CvImage( std_msgs::Header(), "bgr8", img ).toImageMsg();
+    pub.publish( msg );
+}
+
+void DataManager::publish_text_as_image( const ros::Publisher& pub, const string& colon_separated_text )
+{
+    vector<string> tokens = split( colon_separated_text, ':' );
+
+
+    // Text to image
+    int image_rows = 100;
+    cv::Mat status_image = cv::Mat(  image_rows, 250, CV_8UC3, cv::Scalar( 40,40,40 ) );
+
+    // cv::putText(status_image, colon_separated_text, cvPoint(10,10),
+    // cv::FONT_HERSHEY_COMPLEX_SMALL, 0.8, cvScalar(200,200,250), 1, CV_AA);
+
+    for( int i=0 ; i<tokens.size() ; i++ )
+    {
+        cv::putText(status_image, tokens[i], cvPoint(10,10+i*15),
+            cv::FONT_HERSHEY_COMPLEX_SMALL, 0.6, cvScalar(255,255,255), 0.3 );
+
+    }
+
+    // Publish
+    publish_image( pub, status_image );
+}
+
+/*
 void DataManager::plot_3way_match( const cv::Mat& curr_im, const cv::Mat& mat_pts_curr,
                       const cv::Mat& prev_im, const cv::Mat& mat_pts_prev,
                       const cv::Mat& curr_m_im, const cv::Mat& mat_pts_curr_m,
@@ -464,7 +363,10 @@ void DataManager::plot_3way_match( const cv::Mat& curr_im, const cv::Mat& mat_pt
   }
 }
 
+*/
 
+
+/*
 void DataManager::plot_3way_match_clean( const cv::Mat& curr_im, const cv::Mat& mat_pts_curr,
                       const cv::Mat& prev_im, const cv::Mat& mat_pts_prev,
                       const cv::Mat& curr_m_im, const cv::Mat& mat_pts_curr_m,
@@ -518,6 +420,7 @@ void DataManager::plot_3way_match_clean( const cv::Mat& curr_im, const cv::Mat& 
   }
 }
 
+*/
 bool DataManager::if_file_exist( char * fname )
 {
   ifstream f(fname);

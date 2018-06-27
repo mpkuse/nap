@@ -29,22 +29,36 @@ void DataManager::setCamera( const PinholeCamera& camera )
   cout << "--- END\n";
 }
 
-void DataManager::setVisualizationTopic( string rviz_topic )
+void DataManager::setVisualizationTopics( string rviz_topic )
 {
   // usually was "/mish/pose_nodes"
-  pub_pgraph = nh.advertise<visualization_msgs::Marker>( rviz_topic.c_str(), 0 );
-  pub_pgraph_org = nh.advertise<visualization_msgs::Marker>( (rviz_topic+string("_original")).c_str(), 0 );
+    pub_pgraph = nh.advertise<visualization_msgs::Marker>( rviz_topic.c_str(), 0 );
+    pub_pgraph_org = nh.advertise<visualization_msgs::Marker>( (rviz_topic+string("_original")).c_str(), 0 );
 
-  pub_bundle = nh.advertise<visualization_msgs::Marker>( (rviz_topic+string("_bundle_opmode28")).c_str(), 0 );
+    pub_bundle = nh.advertise<visualization_msgs::Marker>( (rviz_topic+string("_bundle_opmode28")).c_str(), 0 );
 
-  pub_3dpoints = nh.advertise<visualization_msgs::Marker>( (rviz_topic+string("_3dpoints_analysis")).c_str(), 0 );
+    pub_3dpoints = nh.advertise<visualization_msgs::Marker>( (rviz_topic+string("_3dpoints_analysis")).c_str(), 0 );
 
+    pub_place_recog_status_image = nh.advertise<sensor_msgs::Image>("place_recog_callback_status_image",1000);
+
+}
+
+void DataManager::setOpmodesToProcess( const vector<int>& _enabled_opmode ) {
+    enabled_opmode = _enabled_opmode;
 }
 
 
 DataManager::~DataManager()
 {
   cout << "In ~DataManager\n";
+
+// This is one way to write the data. But a better way is to use public methods,
+// DataManager::getNodesRef() and DataManager::getTFIDFRef() in main() and write-out
+// whatever data you need. See example in the main().
+
+/*
+// make sure this folder exisits.!
+#define _DEBUG_SAVE_BASE_PATH "/home/mpkuse/Desktop/a/drag_posecompute_node/"
 
 #ifdef _DEBUG_POSEGRAPH_2_FILE
   // string base_path = string( "/home/mpkuse/Desktop/a/drag/" );
@@ -103,6 +117,7 @@ DataManager::~DataManager()
   }
   fp_loop_edge.close();
 #endif
+*/
 
 }
 
@@ -396,6 +411,7 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
   }
 
 
+  /*
   vector<int> enabled_opmode;
   // enabled_opmode.push_back(10);
   // enabled_opmode.push_back(29);
@@ -403,6 +419,10 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
   // enabled_opmode.push_back(18);
   // enabled_opmode.push_back(28);
   enabled_opmode.push_back(17);
+  */
+  assert( enabled_opmode.size() > 0 );
+
+
 
   if( std::find(enabled_opmode.begin(), enabled_opmode.end(),  (int)msg->op_mode  ) != enabled_opmode.end() )
   {
@@ -415,6 +435,9 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
       ROS_INFO( "Ignore napmsg (op_mode=%d) as commanded by flags", msg->op_mode );
       return;
   }
+
+  string __msg = to_string(i_curr)+"<-->"+to_string(i_prev)+"  opmode="+to_string(msg->op_mode);
+  publish_text_as_image( pub_place_recog_status_image,  __msg );
 
 
   //
@@ -438,9 +461,8 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
     ROS_INFO( "Set closure-edge-subtype : EDGE_TYPE_LOOP_SUBTYPE_BASIC");
     e->setLoopEdgeSubtype(EDGE_TYPE_LOOP_SUBTYPE_BASIC);
 
-    // TODO: Put Qin Tong's code here. ie. rel pose computation when we have sufficient number of matches
-    // Matrix4d p_T_c;
-    // this->pose_from_2way_matching(msg, p_T_c );
+    // Don't do anything, just forward the match.
+    // This contains just 2 timestamps. No other useful info.
 
 
     // Set the computed pose into edge
@@ -453,6 +475,8 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
     int32_t mode = 10;
     // republish_nap( msg->c_timestamp, msg->prev_timestamp, __h, mode );
     republish_nap( msg );
+
+    publish_text_as_image( pub_place_recog_status_image,  __msg +":republish_nap");
 
 
     return;
@@ -502,13 +526,17 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
     // int32_t mode = 10;
     // republish_nap( msg->c_timestamp, msg->prev_timestamp, __h, mode );
     republish_nap( msg );
+    publish_text_as_image( pub_place_recog_status_image,  __msg +":republish_nap");
 
 
     return;
 
   }
 
+  // Uses class Corvus.
   // this is like opmode18. Also uses the Corvus class but the constructor is different. opmode 17 contains global_idx of the point features. This was not present in opmode18
+  // Idea is to use 3d points from tfidf (inverted index). Note that inverted index (along with mean and variance
+  // of each 3d point) is also maintained in DataManager which can be a source of robust 3d points.
   if( msg->op_mode == 17 )
   {
         ROS_INFO( "opmode17. Guided match has 3d points and 2d points for this loopmsg. But will use robust 3d points from inverted index maintained internally" );
@@ -516,7 +544,10 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
         Corvus cor( tfidf, msg, this->nNodes, this->camera );
 
         if( !cor.isValid() )
+        {
+            publish_text_as_image( pub_place_recog_status_image,  __msg +":constructor_failed");
             return;
+        }
 
         Matrix4d p_T_c_3dprev_2dcurr, p_T_c_2dprev_3dcurr, p_T_c_3dprev_3dcurr;
         bool status_3dprev_2dcurr, status_2dprev_3dcurr, status_3dprev_3dcurr;
@@ -528,7 +559,7 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
             Matrix4d p_T_c;
             ceres::Solver::Summary summary;
             bool status = cor.computeRelPose_3dprev_2dcurr(p_T_c, summary);
-            double weight = min( 1.0, log( summary.initial_cost / summary.final_cost ) );
+            double weight = min( 1.0, log( summary.initial_cost / summary.final_cost ) / log(10.) );
 
             // Write in semi-global variables
             p_T_c_3dprev_2dcurr = p_T_c;
@@ -544,14 +575,6 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
             loopClosureEdges.push_back( e );
 
 
-
-            // Publish pose as opmode30.
-            // Re-publish with pose, op_mode:=30
-            if( status )
-            {
-                int32_t mode = 30;
-                republish_nap( msg->c_timestamp, msg->prev_timestamp, p_T_c, mode, weight );
-            }
         }
 
 
@@ -561,7 +584,7 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
             Matrix4d p_T_c;
             ceres::Solver::Summary summary;
             bool status = cor.computeRelPose_2dprev_3dcurr(p_T_c, summary);
-            double weight = min( 1.0, log( summary.initial_cost / summary.final_cost ) );
+            double weight = min( 1.0, log( summary.initial_cost / summary.final_cost ) / log(10.) );
 
             // Write Semi-global
             p_T_c_2dprev_3dcurr = p_T_c;
@@ -578,14 +601,6 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
             loopClosureEdges.push_back( e );
 
 
-
-            // Publish pose as opmode30.
-            // Re-publish with pose, op_mode:=30
-            if( status )
-            {
-                int32_t mode = 30;
-                republish_nap( msg->c_timestamp, msg->prev_timestamp, p_T_c, mode, weight );
-            }
         }
 
 
@@ -595,7 +610,7 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
             Matrix4d p_T_c;
             ceres::Solver::Summary summary;
             bool status = cor.computeRelPose_3dprev_3dcurr(p_T_c, summary);
-            double weight = min( 1.0, 3.*log( summary.initial_cost / summary.final_cost ) );
+            double weight = min( 1.0, log( summary.initial_cost / summary.final_cost ) / log(10.) );
 
             // Write Semi-global
             p_T_c_3dprev_3dcurr = p_T_c;
@@ -611,15 +626,6 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
             e->setLoopEdgeSubtype(EDGE_TYPE_LOOP_SUBTYPE_GUIDED);
             loopClosureEdges.push_back( e );
 
-
-
-            // Publish pose as opmode30.
-            // Re-publish with pose, op_mode:=30
-            if( status )
-            {
-                int32_t mode = 30;
-                republish_nap( msg->c_timestamp, msg->prev_timestamp, p_T_c, mode, weight );
-            }
         }
 
 
@@ -627,18 +633,46 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
         cout << endl;
         Vector4d F;
         F << 3.0, 3.0, 3.0, 1.0;
-        cout << "[status="<< status_3dprev_2dcurr << "]  ";
-        cout << "[weight=" << std::fixed << std::setprecision(2) << weight_3dprev_2dcurr << "\t";
+        cout << "[status="<< (status_3dprev_2dcurr?"True  ":"False ") << "]  ";
+        cout << "[weight=" << std::fixed << std::setprecision(2) << weight_3dprev_2dcurr << "]\t";
         cout << "p_T_c_3dprev_2dcurr: " <<  (p_T_c_3dprev_2dcurr * F).transpose() << endl;
 
-        cout << "[status="<< status_2dprev_3dcurr << "]  ";
-        cout << "[weight=" << std::fixed << std::setprecision(2) << weight_2dprev_3dcurr << "\t";
+        cout << "[status="<< (status_2dprev_3dcurr?"True  ":"False ") << "]  ";
+        cout << "[weight=" << std::fixed << std::setprecision(2) << weight_2dprev_3dcurr << "]\t";
         cout << "p_T_c_2dprev_3dcurr: " <<  (p_T_c_2dprev_3dcurr * F).transpose() << endl;
 
-        cout << "[status="<< status_3dprev_3dcurr << "]  ";
-        cout << "[weight=" << std::fixed << std::setprecision(2) << weight_3dprev_3dcurr << "\t";
+        cout << "[status="<< (status_3dprev_3dcurr?"True  ":"False ") << "]  ";
+        cout << "[weight=" << std::fixed << std::setprecision(2) << weight_3dprev_3dcurr << "]\t";
         cout << "p_T_c_3dprev_3dcurr: " <<  (p_T_c_3dprev_3dcurr * F).transpose() << endl;
 
+        // if only 1 was true => make weight 1/3
+        // if only 2 was true => make weight 2/3
+        double weight_multiplier = 0.0;
+        weight_multiplier = ( status_3dprev_2dcurr )?weight_multiplier+0.33:weight_multiplier;
+        weight_multiplier = ( status_2dprev_3dcurr )?weight_multiplier+0.33:weight_multiplier;
+        weight_multiplier = ( status_3dprev_3dcurr )?weight_multiplier+0.33:weight_multiplier;
+
+
+        // Publish pose as opmode30.
+        if( status_3dprev_2dcurr && false ) {
+            republish_nap( msg->c_timestamp, msg->prev_timestamp, p_T_c_3dprev_2dcurr, 30, weight_multiplier* weight_3dprev_2dcurr );
+        }
+
+        if( status_2dprev_3dcurr && false ) {
+            republish_nap( msg->c_timestamp, msg->prev_timestamp, p_T_c_2dprev_3dcurr, 30, weight_multiplier *weight_2dprev_3dcurr );
+        }
+
+        if( status_3dprev_3dcurr ) {
+            republish_nap( msg->c_timestamp, msg->prev_timestamp, p_T_c_3dprev_3dcurr, 30, weight_multiplier * weight_3dprev_3dcurr );
+        }
+
+
+        char __ghgh__sf[100];
+        snprintf( __ghgh__sf, 100, ":3dprev_2dcurr %d %2.2f:2dprev_3dcurr %d %2.2f:3dprev_3dcurr %d %2.2f", status_3dprev_2dcurr, weight_3dprev_2dcurr,
+                                                                                                            status_2dprev_3dcurr, weight_3dprev_3dcurr,
+                                                                                                            status_3dprev_3dcurr, weight_3dprev_3dcurr
+                );
+        publish_text_as_image( pub_place_recog_status_image,  __msg +string(__ghgh__sf) );
 
         cout << "Done...\n";
 
@@ -646,7 +680,10 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
 
   }
 
-  if( msg->op_mode == 18  ) //this is like opmode20, but doing my own pnp.
+
+  // Uses class Corvus.
+  //this is like opmode20, but doing my own pnp.
+  if( msg->op_mode == 18  )
   {
     //   return;
       ROS_INFO( "opmode18. Guided match has 3d points and 2d points for this loopmsg" );
@@ -715,6 +752,7 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
   }
 
 
+  // Uses class LocalBundle..
   // Indicates this napmsg contains bundle
   if( msg->op_mode == 28  )
   {
@@ -722,7 +760,7 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
 
     // Contains dense features tracked for the bundle. See also nap/script_multiproc/nap_multiproc.py:worker_qdd_processor().
     // The worker_qdd_processor() function
-    ROS_ERROR( "[Not Error]geometry_node OK! set edge as EDGE_TYPE_LOOP_SUBTYPE_BUNDLE" );
+    ROS_INFO( "[Not Error]geometry_node OK! set edge as EDGE_TYPE_LOOP_SUBTYPE_BUNDLE" );
 
 
 
@@ -739,9 +777,10 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
 
     if( localBundle.isValid_incoming_msg == false ) {
         ROS_ERROR( "[Not Error]Ignore message because constructor failed" );
+        publish_text_as_image( pub_place_recog_status_image,  __msg +string(":construtor_failed") );
         return;
     }
-    ROS_ERROR_STREAM( "[Not Error]Done setting bundle data in (ms):" << timing.toc() );
+    ROS_INFO_STREAM( "[Not Error]Done setting bundle data in (ms):" << timing.toc() );
 
 
 
@@ -759,7 +798,8 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
     timing.tic();
     localBundle.randomViewTriangulate( 50, 0 ); // 3d points from iprev-j to iprev+j
     // localBundle.randomViewTriangulate( 50, 1 ); // 3d points from icurr-j to icurr
-    ROS_ERROR_STREAM( "[Not Error]Done triangulating iprev-j to iprev+j in (ms):" << timing.toc() );
+    ROS_INFO_STREAM( "[Not Error]Done triangulating iprev-j to iprev+j in (ms):" << timing.toc() );
+    __msg += ":triangulating iprev-j to iprev+j";
 
 
 
@@ -786,12 +826,9 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
 
     Matrix4d p_T_c;
     ceres::Solver::Summary summary;
-    p_T_c = localBundle.crossRelPoseComputation3d2d(summary); // OK!
-
+    bool status = localBundle.crossRelPoseComputation3d2d(summary, p_T_c); // OK!
     // p_T_c = localBundle.crossRelPoseJointOptimization3d2d(); // OK! but it needs more work, currently quite slow ~5 sec
-
     double weight = min( 1.0, log( summary.initial_cost / summary.final_cost ) );
-
 
 
     // Look at what happened at each iteration
@@ -799,13 +836,17 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
     localBundle.publishCameras_cerescallbacks( pub_bundle, true ); //use `false` with crossRelPoseJointOptimization3d2d()
     #endif
 
-    ROS_ERROR_STREAM( "[Not Error]crossRelPoseComputation3d2d() OK. Done in (ms):" << timing.toc() );
+    ROS_INFO_STREAM( "[Not Error]crossRelPoseComputation3d2d() OK. Done in (ms):" << timing.toc() );
+
+
+    char __ghgh__sf[100];
+    snprintf( __ghgh__sf, 100, ":crossRelPoseComputation3d2d %d %2.2f", status, weight );
+    publish_text_as_image( pub_place_recog_status_image, __msg+string(__ghgh__sf) );
 
 
     // Re-publish with pose, op_mode:=30
     int32_t mode = 30;
     republish_nap( msg->c_timestamp, msg->prev_timestamp, p_T_c, mode, weight );
-    //TODO: Also add to msg goodness. This can denote the weight
 
     return;
   }
