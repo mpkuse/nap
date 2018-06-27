@@ -1112,7 +1112,9 @@ LocalBundle::LocalBundle( const nap::NapMsg::ConstPtr& msg,
 #define write_image_debug( msg ) ;
 void LocalBundle::write_image( string fname, const cv::Mat& img)
 {
-    string base = string("/home/mpkuse/Desktop/bundle_adj/dump/localbundle_");
+    assert( debug_directory_is_set && "Appears that debug directory is not set for class LocalBundle\n");
+    // string base = string("/home/mpkuse/Desktop/bundle_adj/dump/localbundle_");
+    string base = BASE__DUMP+string("/dump/localbundle_");
     write_image_debug( cout << "Writing file: "<< base << fname << endl );
     cv::imwrite( (base+fname).c_str(), img );
 }
@@ -1121,7 +1123,9 @@ void LocalBundle::write_image( string fname, const cv::Mat& img)
 template <typename Derived>
 void LocalBundle::write_EigenMatrix(const string& filename, const MatrixBase<Derived>& a)
 {
-  string base = string("/home/mpkuse/Desktop/bundle_adj/dump/mateigen_");
+    assert( debug_directory_is_set && "Appears that debug directory is not set for class LocalBundle\n");
+  // string base = string("/home/mpkuse/Desktop/bundle_adj/dump/mateigen_");
+  string base = BASE__DUMP+string("/dump/mateigen_");
   std::ofstream file(base+filename);
   if( file.is_open() )
   {
@@ -1139,7 +1143,9 @@ void LocalBundle::write_EigenMatrix(const string& filename, const MatrixBase<Der
 
 void LocalBundle::write_Matrix2d( const string& filename, const double * D, int nRows, int nCols )
 {
-  string base = string("/home/mpkuse/Desktop/bundle_adj/dump/mat2d_");
+    assert( debug_directory_is_set && "Appears that debug directory is not set for class LocalBundle\n");
+  // string base = string("/home/mpkuse/Desktop/bundle_adj/dump/mat2d_");
+  string base = BASE__DUMP+string("/dump/mat2d_");
   std::ofstream file(base+filename);
   if( file.is_open() )
   {

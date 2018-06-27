@@ -58,7 +58,7 @@ using namespace std;
 // 0 : Only print some messages. No writing data to disk
 // 1 : Write only comprehensive data to disk. and publish some basic data
 // 2 : Write ceres poses at each iteration to disk along with reprojection images.
-#define LOCALBUNDLE_DEBUG_LVL 0
+#define LOCALBUNDLE_DEBUG_LVL 1
 
 
 //forward declaration of ceres classes
@@ -71,7 +71,18 @@ public:
   bool isValid_incoming_msg;
 
 
+  void setDebugOutputFolder( const string& debug_output_dir ) {
+      this->BASE__DUMP=debug_output_dir;
+      debug_directory_is_set=true;
+      ROS_INFO( "LocalBundle DEBUG Directory :: %s",  BASE__DUMP.c_str() );
+  }
+ private:
+    vector<int> enabled_opmode;
+    string BASE__DUMP;
+    bool debug_directory_is_set = false;
 
+
+public:
 
   // Picks 2 random views from the set of images. Triangulates those points and stores the
   // 3d points in a class variable.

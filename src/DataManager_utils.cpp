@@ -4,7 +4,8 @@
 #define write_image_debug_dm( msg ) msg;
 void DataManager::write_image( string fname, const cv::Mat& img)
 {
-    string base = string("/home/mpkuse/Desktop/bundle_adj/dump/datamgr_");
+    // string base = string("/home/mpkuse/Desktop/bundle_adj/dump/datamgr_");
+    string base = BASE__DUMP+"/dump/datamgr_";
     write_image_debug_dm( cout << "Writing file: "<< base << fname << endl );
     cv::imwrite( (base+fname).c_str(), img );
 }
@@ -13,7 +14,8 @@ void DataManager::write_image( string fname, const cv::Mat& img)
 template <typename Derived>
 void DataManager::write_EigenMatrix(const string& filename, const MatrixBase<Derived>& a)
 {
-  string base = string("/home/mpkuse/Desktop/bundle_adj/dump/datamgr_mateigen_");
+  // string base = string("/home/mpkuse/Desktop/bundle_adj/dump/datamgr_mateigen_");
+  string base = BASE__DUMP+"/dump/datamgr_";
   std::ofstream file(base+filename);
   if( file.is_open() )
   {
@@ -31,7 +33,8 @@ void DataManager::write_EigenMatrix(const string& filename, const MatrixBase<Der
 
 void DataManager::write_Matrix2d( const string& filename, const double * D, int nRows, int nCols )
 {
-  string base = string("/home/mpkuse/Desktop/bundle_adj/dump/datamgr_mat2d_");
+  // string base = string("/home/mpkuse/Desktop/bundle_adj/dump/datamgr_mat2d_");
+  string base = BASE__DUMP+"/dump/datamgr_";
   std::ofstream file(base+filename);
   if( file.is_open() )
   {
@@ -59,7 +62,8 @@ void DataManager::write_Matrix2d( const string& filename, const double * D, int 
 
 void DataManager::write_Matrix1d( const string& filename, const double * D, int n  )
 {
-  string base = string("/home/mpkuse/Desktop/bundle_adj/dump/datamgr_mat1d_");
+  // string base = string("/home/mpkuse/Desktop/bundle_adj/dump/datamgr_mat1d_");
+  string base = BASE__DUMP+"/dump/datamgr_";
   std::ofstream file(base+filename);
   if( file.is_open() )
   {

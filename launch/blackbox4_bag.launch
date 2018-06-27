@@ -178,6 +178,7 @@
             subscribes to `vins/camera_pose`, `3d_point_cloud`, `napMsg`  -->
     <node name="pgraph_opt" pkg="nap" type="pose_graph_opt_node" output="screen">
         <param name="config_file" type="string" value="$(arg config_path)" />
+        <param name="debug_output_dir" type="string" value="/home/mpkuse/Desktop/bundle_adj" />
         <!-- Commentout next line to remove the places-feedback-->
         <!-- <remap from="/colocation_chatter" to="/colocation" /> -->
     </node>

@@ -65,7 +65,7 @@ using namespace std;
 // 1 : Some images written
 // 2 : Most of images written. Use with caution.
 // 3 : Lot of text written in addition to lots of images.
-#define CORVUS_DEBUG_LVL 0
+#define CORVUS_DEBUG_LVL 1
 
 
 // Enabling below will compile 3d2d with switching constraints (recommended)
@@ -97,6 +97,17 @@ public:
 
 
     void sayHi();
+
+    void setDebugOutputFolder( const string& debug_output_dir ) {
+        this->BASE__DUMP=debug_output_dir;
+        debug_directory_is_set=true;
+        ROS_INFO( "Corvus DEBUG Directory :: %s",  BASE__DUMP.c_str() );
+    }
+private:
+      vector<int> enabled_opmode;
+      string BASE__DUMP;
+      bool debug_directory_is_set = false;
+
 private:
 
     //

@@ -162,6 +162,11 @@ int main(int argc, char ** argv )
   ros::init( argc, argv, "pose_graph_opt_node" );
   ros::NodeHandle nh("~");
 
+  //-- Set debug directory --//
+  string debug_output_dir;
+  nh.getParam( "debug_output_dir", debug_output_dir );
+  ROS_WARN( "debug_output_dir : %s", debug_output_dir.c_str() );
+
 
   //--- Config File ---//
   string config_file;
@@ -173,6 +178,7 @@ int main(int argc, char ** argv )
   //--- DataManager ---//
   DataManager dataManager = DataManager(nh);
   dataManager.setCamera(camera);
+  dataManager.setDebugOutputFolder( debug_output_dir );
 
   //--- Pose Graph Visual Marker ---//
   string rviz_pose_graph_topic = string( "/mish/pose_nodes" );
@@ -186,7 +192,7 @@ int main(int argc, char ** argv )
   // enabled_opmode.push_back(29); // 3way (not in use)
   // enabled_opmode.push_back(20); // contains t_curr, t_prev and matched-tracked points.
   // enabled_opmode.push_back(18); // Corvus
-  // enabled_opmode.push_back(28); // LocalBundle
+  enabled_opmode.push_back(28); // LocalBundle
   enabled_opmode.push_back(17);    // Corvus with tfidf.
   dataManager.setOpmodesToProcess( enabled_opmode );
 

@@ -94,8 +94,15 @@ public:
   void setCamera( const PinholeCamera& camera );
   void setVisualizationTopics( string rviz_topic );
   void setOpmodesToProcess( const vector<int>& _enabled_opmode );
+  void setDebugOutputFolder( const string& debug_output_dir ) {
+      this->BASE__DUMP=debug_output_dir;
+      debug_directory_is_set=true;
+      ROS_INFO( "DEBUG Directory :: %s",  BASE__DUMP.c_str() );
+  }
 private:
     vector<int> enabled_opmode;
+    string BASE__DUMP;
+    bool debug_directory_is_set = false;
 
 public:
 

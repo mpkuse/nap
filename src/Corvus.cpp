@@ -865,7 +865,12 @@ Matrix4d Corvus::gid_T_w( int gid )
 // #define write_image_debug( msg ) ;
 void Corvus::write_image( string fname, const cv::Mat& img)
 {
-    string base = string("/home/mpkuse/Desktop/bundle_adj/dump/corvus_");
+    assert( debug_directory_is_set && "Appears that debug directory is not set for class LocalBundle\n");
+
+    // string base = string("/home/mpkuse/Desktop/bundle_adj/dump/corvus_");
+    string base = BASE__DUMP+string("/dump/corvus_");
+
+
     #if CORVUS_DEBUG_LVL > 2
     write_image_debug( cout << "Writing file: "<< base << fname << endl );
     #endif

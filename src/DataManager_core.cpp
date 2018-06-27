@@ -542,6 +542,7 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
         ROS_INFO( "opmode17. Guided match has 3d points and 2d points for this loopmsg. But will use robust 3d points from inverted index maintained internally" );
         cout << "+++++++++++++++++++++++++++++++++\n";
         Corvus cor( tfidf, msg, this->nNodes, this->camera );
+        cor.setDebugOutputFolder( BASE__DUMP );
 
         if( !cor.isValid() )
         {
@@ -697,6 +698,7 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
 
       timing.tic();
       Corvus cor( msg, this->nNodes, this->camera );
+      cor.setDebugOutputFolder( BASE__DUMP );
 
 
 
@@ -774,6 +776,8 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
     //
     timing.tic();
     LocalBundle localBundle = LocalBundle( msg, this->nNodes, this->camera );
+    localBundle.setDebugOutputFolder( BASE__DUMP );
+
 
     if( localBundle.isValid_incoming_msg == false ) {
         ROS_ERROR( "[Not Error]Ignore message because constructor failed" );
