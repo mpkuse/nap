@@ -161,6 +161,8 @@ int main(int argc, char ** argv )
   //--- ROS INIT ---//
   ros::init( argc, argv, "pose_graph_opt_node" );
   ros::NodeHandle nh("~");
+  // ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Debug);
+
 
   //-- Set debug directory --//
   string debug_output_dir;
@@ -266,8 +268,11 @@ int main(int argc, char ** argv )
     ros::spinOnce();
     loop_rate.sleep();
   }
+
+
   // dataManager.bool_publish_all = false;
   // write_nodes_debug_data( "/home/mpkuse/Desktop/bundle_adj/pose_graph_analyis", dataManager );
+  // write_nodes_debug_data( debug_output_dir, dataManager );
   // dataManager.getTFIDFRef()->sayHi();
 
 

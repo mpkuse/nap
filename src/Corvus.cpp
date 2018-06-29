@@ -17,7 +17,7 @@ Corvus::Corvus( const Feature3dInvertedIndex  * tfidf, const nap::NapMsg::ConstP
     cout << "Corvus()  ";
     cout << "Opmode: " <<  msg->op_mode << endl;
     cout << "curr.size, prev.size: " << msg->curr.size() << " " << msg->prev.size() << endl;
-    // cout << "curr.timestamp, prev.timestamp: " << msg->c_timestamp << " " << msg->prev_timestamp << endl;
+    cout << "curr.timestamp, prev.timestamp: " << msg->c_timestamp << " " << msg->prev_timestamp << endl;
 
 
     // msg->curr : u, U, u, U ... (projected points interspaced with its 3d point)
@@ -35,6 +35,16 @@ Corvus::Corvus( const Feature3dInvertedIndex  * tfidf, const nap::NapMsg::ConstP
     this->globalidx_of_curr = find_indexof_node( this->global_nodes, msg->c_timestamp );
     this->globalidx_of_prev = find_indexof_node( this->global_nodes, msg->prev_timestamp );
     cout << "globalidx_of_curr,globalidx_of_prev: " << globalidx_of_curr << " " << globalidx_of_prev << endl;
+    cout << "stamp of lookedup curr nodes: "<< this->global_nodes[ this->globalidx_of_curr ]->time_pose << endl;
+    cout << "stamp of lookedup prev nodes: "<< this->global_nodes[ this->globalidx_of_prev ]->time_pose << endl;
+
+    // assert lookedup timing and msg timestamp are same
+    ros::Duration __diff__curr, __diff__prev;
+    __diff__curr = this->global_nodes[ this->globalidx_of_curr ]->time_pose - msg->c_timestamp;
+    __diff__prev = this->global_nodes[ this->globalidx_of_prev ]->time_pose - msg->prev_timestamp;
+    assert(   (__diff__curr.sec == 0  &&  __diff__curr.nsec < 1000000) || (__diff__curr.sec == -1  &&  __diff__curr.nsec > (1000000000-1000000))  );
+    assert(   (__diff__prev.sec == 0  &&  __diff__prev.nsec < 1000000) || (__diff__prev.sec == -1  &&  __diff__prev.nsec > (1000000000-1000000))  );
+
     assert( this->globalidx_of_curr >= 0 && this->globalidx_of_prev >= 0 );
 
 
@@ -98,7 +108,7 @@ Corvus::Corvus( const Feature3dInvertedIndex  * tfidf, const nap::NapMsg::ConstP
         // Using TFIDF
         Vector4d M_prev, V_prev;
         bool status_prev = tfidf->query_feature_mean(  gidx_of_prev(i) , M_prev );
-        bool status_prev_V = tfidf->query_feature_var(  gidx_of_curr(i) , V_prev );
+        bool status_prev_V = tfidf->query_feature_var(  gidx_of_prev(i) , V_prev );
         assert( status_prev & status_prev_V );
         w_prev.col(i) = M_prev;
         sqrtweight_w_prev(i) = sqrt( 1.0 / ( 1.0 + (double) max( max( V_prev(0), V_prev(1) ), V_prev(2) ) ) );
@@ -122,21 +132,28 @@ Corvus::Corvus( const Feature3dInvertedIndex  * tfidf, const nap::NapMsg::ConstP
             Vector4d M_curr, V_curr;
             bool status_curr = tfidf->query_feature_mean(  gidx_of_curr(i) , M_curr );
             bool status_curr_V = tfidf->query_feature_var(  gidx_of_curr(i) , V_curr );
-            assert( status_curr && status_curr_V );
+            int n_occurence_curr = -1;
+            bool status_curr_occurence = tfidf->query_feature_n_occurences( gidx_of_curr(i), n_occurence_curr );
+            assert( status_curr && status_curr_V && status_curr_occurence );
             cout << "\tM_curr: " << M_curr(0) << "," << M_curr(1) << "," <<M_curr(2) << "," <<M_curr(3) << ";";
             cout << "\tw=" << 1.0 / ( 1.0 + (double) max( max( V_curr(0), V_curr(1) ), V_curr(2) ) );
             cout << "\tV_curr: " << V_curr(0) << "," << V_curr(1) << "," <<V_curr(2) << "," <<V_curr(3) << ";";
+            cout << "\t_occurence_curr: "<< n_occurence_curr << ";";
+
 
 
             cout << endl;
             cout << "\tw_prev: "<< w_prev(0,i) << "," << w_prev(1,i) << "," << w_prev(2,i) << "," << w_prev(3,i) << ";";
             Vector4d M_prev, V_prev;
             bool status_prev = tfidf->query_feature_mean(  gidx_of_prev(i) , M_prev );
-            bool status_prev_V = tfidf->query_feature_var(  gidx_of_curr(i) , V_prev );
-            assert( status_prev & status_prev_V );
+            bool status_prev_V = tfidf->query_feature_var(  gidx_of_prev(i) , V_prev );
+            int n_occurence_prev = -1;
+            bool status_prev_occurence = tfidf->query_feature_n_occurences( gidx_of_prev(i), n_occurence_prev );
+            assert( status_prev & status_prev_V && status_prev_occurence );
             cout << "\tM_prev: " << M_prev(0) << "," << M_prev(1) << "," <<M_prev(2) << "," <<M_prev(3) << ";";
             cout << "\tw=" << 1.0 / ( 1.0 + (double) max( max( V_prev(0), V_prev(1) ), V_prev(2) ) );
             cout << "\tV_prev: " << V_prev(0) << "," << V_prev(1) << "," <<V_prev(2) << "," <<V_prev(3) << ";";
+            cout << "\n_occurence_prev: "<< n_occurence_prev << ";";
 
 
             cout << endl;
@@ -755,6 +772,7 @@ bool Corvus::computeRelPose_3dprev_3dcurr( Matrix4d& to_return_p_T_c, ceres::Sol
             // if less than 15 switching inliers, suggest to reject.
             if( switching_inliers < 15 ) {
                 cout << "[Reject]: less than 15 switching inliers, suggest to reject.\n";
+                status_string = "[Reject]: less than 15 switching inliers, suggest to reject.";
                 status = false;
             }
         #endif
@@ -834,11 +852,16 @@ int Corvus::find_indexof_node( const vector<Node*>& global_nodes, ros::Time stam
 
     // cout << i << " "<< diff.sec << " " << diff.nsec << endl;
 
-    if( diff < ros::Duration(0.0001) && diff > ros::Duration(-0.0001) ){
-      return i;
+    // if( diff < ros::Duration(0.0001) && diff > ros::Duration(-0.0001) ){
+    //   return i;
+    // }
+    // Safer
+    // if( diff.sec == 0  &&  diff.nsec > -1000000  &&  diff.nsec < 1000000 ) { // is within 1-mili-sec
+    if( (diff.sec == 0  &&  diff.nsec < 1000000) || (diff.sec == -1  &&  diff.nsec > (1000000000-1000000) )  ) { // is within 1-mili-sec
+        return i;
     }
   }//TODO: the duration can be a fixed param. Basically it is used to compare node timestamps.
-  // ROS_INFO( "Last Diff=%d:%d. Cannot find specified timestamp in nodelist. ", diff.sec,diff.nsec);
+  ROS_ERROR( "Corvus::find_indexof_node global_nodes[last]->time_stamp - stamp=%d:%d. Cannot find specified timestamp in nodelist. ", diff.sec,diff.nsec);
   return -1;
 }
 
@@ -1380,7 +1403,7 @@ void Corvus::raw_to_eigenmat( const double * quat, const double * t, Matrix4d& d
 
 void Corvus::eigenmat_to_raw( const Matrix4d& T, double * quat, double * t)
 {
-  assert( T(3,3) == 1 );
+  assert( abs(T(3,3)-1.0) < 1.0E-7 );
   Quaterniond q( T.topLeftCorner<3,3>() );
   quat[0] = q.w();
   quat[1] = q.x();
@@ -1404,7 +1427,8 @@ void Corvus::rawyprt_to_eigenmat( const double * ypr, const double * t, Matrix4d
 
 void Corvus::eigenmat_to_rawyprt( const Matrix4d& T, double * ypr, double * t)
 {
-  assert( T(3,3) == 1 );
+  // assert( T(3,3) == 1 );
+  assert( abs(T(3,3)-1.0) < 1.0E-7 );
   Vector3d T_cap_ypr = R2ypr( T.topLeftCorner<3,3>() );
   ypr[0] = T_cap_ypr(0);
   ypr[1] = T_cap_ypr(1);

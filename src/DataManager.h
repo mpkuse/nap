@@ -176,7 +176,9 @@ private:
   //
   // Buffer Utilities
   //
-  int find_indexof_node( ros::Time stamp );
+  // int find_indexof_node( ros::Time stamp );
+  int find_indexof_node( ros::Time stamp, bool print_info=false );
+
 
   std::queue<cv::Mat> unclaimed_im;
   std::queue<ros::Time> unclaimed_im_time;

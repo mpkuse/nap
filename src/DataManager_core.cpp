@@ -158,8 +158,8 @@ void DataManager::raw_nap_cluster_assgn_callback( const sensor_msgs::ImageConstP
 void DataManager::image_callback( const sensor_msgs::ImageConstPtr& msg )
 {
   // Search for the timestamp in pose-graph
-  int i_ = find_indexof_node(msg->header.stamp);
-  ROS_DEBUG( "Received - Image - %d", i_ );
+  int i_ = find_indexof_node(msg->header.stamp, true);
+  ROS_DEBUG_STREAM( "\t\timage_callback: " << msg->header.stamp << " find_indexof_node: " << i_ );
 
   cv::Mat image, image_resized;
   try{
@@ -226,7 +226,7 @@ void DataManager::point_cloud_callback( const sensor_msgs::PointCloudConstPtr& m
 {
   int i_ = find_indexof_node(msg->header.stamp);
   // cout << "stamp3d : " << msg->header.stamp << endl;
-  // ROS_WARN( "Received3d:: PointCloud: %d. nUnclaimed: %d,%d,%d", i_, (int)unclaimed_pt_cld.size(), (int)unclaimed_pt_cld_time.size(), (int)unclaimed_pt_cld_globalid.size() );
+  ROS_DEBUG_STREAM( "\tpoint_cloud_callback: " <<  msg->header.stamp << " find_indexof_node: " << i_ );
   // assert( msg->channels.size() == msg->points.size() && msg->points.size() > 0  );
 
   if( i_ < 0 )
@@ -342,9 +342,9 @@ void DataManager::camera_pose_callback( const nav_msgs::Odometry::ConstPtr msg )
 {
   Node * n = new Node(msg->header.stamp, msg->pose.pose);
   nNodes.push_back( n );
-  ROS_DEBUG( "Recvd msg - camera_pose_callback");
+  // ROS_DEBUG( "camera_pose_callback msg - camera_pose_callback");
   // cout << "add-node : " << msg->header.stamp << endl;
-  ROS_DEBUG_STREAM( "add-node : " << msg->header.stamp );
+  ROS_DEBUG_STREAM( "camera_pose_callback add-node : " << msg->header.stamp );
 
 
   // ALSO add odometry edges to 1 previous.
@@ -406,7 +406,8 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
   // cout << "Last Node timestamp : "<< nNodes.back()->time_stamp - nNodes[0]->time_stamp << endl;
   if( i_curr < 0 || i_prev < 0 )
   {
-      ROS_WARN( "cannot find nodes pointed by napmsg, ignore this nap-msg");
+      ROS_ERROR( "DataManager::place_recog_callback cannot find nodes pointed by napmsg, ignore this nap-msg");
+      ROS_INFO( "DataManager::place_recog_callback cannot find nodes pointed by napmsg, ignore this nap-msg");
       return;
   }
 
@@ -913,29 +914,48 @@ void DataManager::republish_nap( const ros::Time& t_c, const ros::Time& t_p, con
 // ////////////////////////////////
 
 // Loop over each node and return the index of the node which is clossest to the specified stamp
-int DataManager::find_indexof_node( ros::Time stamp )
+// #define __DataManager_find_indexof_node__debug( msg ) msg
+#define __DataManager_find_indexof_node__debug( msg )
+
+int DataManager::find_indexof_node( ros::Time stamp, bool print_info )
 {
   ros::Duration diff;
+  // assert( nNodes.size() > 0 && "DataManager::find_indexof_node");
+  __DataManager_find_indexof_node__debug( cout << "\tSearch: "<< stamp << endl );
   for( int i=0 ; i<nNodes.size() ; i++ )
   {
     diff = nNodes[i]->time_stamp - stamp;
 
-    // cout << i << " "<< diff.sec << " " << diff.nsec << endl;
+    if( print_info ) {
+    __DataManager_find_indexof_node__debug( cout << "\t\t"<< i << " of "<< nNodes.size() << " " << nNodes[i]->time_stamp <<  " node[i]->time_stamp - stamp(sec,nsec)="<< diff.sec << "," << diff.nsec << endl );
+    }
 
     // if( abs(diff.sec) <= int32_t(0) && abs(diff.nsec) < int32_t(1000000) ) {
     // if( abs(diff.sec) <= int32_t(0) && abs(diff.nsec) == int32_t(0) ) {
-    if( diff < ros::Duration(0.0001) && diff > ros::Duration(-0.0001) ){
-      return i;
+    // if( diff < ros::Duration(0.0001) && diff > ros::Duration(-0.0001) ){
+    //   return i;
+    // }
+    // Safer
+    if( (diff.sec == 0  &&  diff.nsec < 1000000) || (diff.sec == -1  &&  diff.nsec > (1000000000-1000000) )  ) { // is within 1-mili-sec
+        if( print_info) {
+            __DataManager_find_indexof_node__debug( cout << "\t\tFound\n" );
+        }
+        return i;
     }
   }//TODO: the duration can be a fixed param. Basically it is used to compare node timestamps.
-  // ROS_INFO( "Last Diff=%d:%d. Cannot find specified timestamp in nodelist. ", diff.sec,diff.nsec);
+  // ROS_ERROR( "DataManager::find_indexof_node nNodes[last]->time_stamp - stamp=%d:%d. Cannot find specified timestamp in nodelist. ", diff.sec,diff.nsec);
+
+  // for( int i=0 ; i<nNodes.size() ; i++ ) {
+    //   __DataManager_find_indexof_node__debug( cout << "\t\t"<< i << " of "<< nNodes.size() << " " << nNodes[i]->time_stamp <<  " diff(sec,nsec)="<< diff.sec << "," << diff.nsec << endl );
+  // }
+
   return -1;
 }
 
 
 void DataManager::flush_unclaimed_napmap()
 {
-  ROS_WARN( "flush_unclaimed_napmapIM:%d, T:%d", (int)unclaimed_napmap.size(), (int)unclaimed_napmap_time.size() );
+  ROS_WARN( "flush_unclaimed_napmapIM queue_sizes: %d, T:%d", (int)unclaimed_napmap.size(), (int)unclaimed_napmap_time.size() );
 
 
   // int N = max(20,(int)unclaimed_im.size() );
@@ -962,12 +982,13 @@ void DataManager::flush_unclaimed_napmap()
 
 void DataManager::flush_unclaimed_im()
 {
-  ROS_WARN( "IM:%d, T:%d", (int)unclaimed_im.size(), (int)unclaimed_im_time.size() );
+  ROS_WARN( "flush_unclaimed_im queue_sizes: IM:%d, T:%d", (int)unclaimed_im.size(), (int)unclaimed_im_time.size() );
 
   // std::queue<cv::Mat> X_im;
   // std::queue<ros::Time> X_tm;
 
-  int N = max(20,(int)unclaimed_im.size() );
+  // int N = max(20,(int)unclaimed_im.size() );
+  int N = (int)unclaimed_im.size();
   // while( !unclaimed_im.empty() )
   for( int i=0 ; i<N ; i++)
   {
@@ -1001,7 +1022,7 @@ void DataManager::flush_unclaimed_im()
 
 void DataManager::flush_unclaimed_pt_cld()
 {
-  ROS_WARN( "flush_unclaimed_pt_cld(): PtCld %d, %d, %d", (int)unclaimed_pt_cld.size(), (int)unclaimed_pt_cld_time.size(), (int)unclaimed_pt_cld_globalid.size() );
+  ROS_WARN( "flush_unclaimed_pt_cld(): PtCld queue_sizes:  %d, %d, %d", (int)unclaimed_pt_cld.size(), (int)unclaimed_pt_cld_time.size(), (int)unclaimed_pt_cld_globalid.size() );
   int M = max(20,(int)unclaimed_pt_cld.size()); // Potential BUG. If not found, the ptcld is pushed at the end, where you will never get to as you see only first 20 elements!
   for( int i=0 ; i<M ; i++ )
   {
@@ -1044,7 +1065,7 @@ void DataManager::flush_unclaimed_pt_cld()
 }
 void DataManager::flush_unclaimed_2d_feat()
 {
-  ROS_WARN( "flush2dfeat %d, %d", (int)unclaimed_2d_feat.size(), (int)unclaimed_2d_feat_time.size() );
+  ROS_WARN( "flush2dfeat queues_sizes : %d, %d", (int)unclaimed_2d_feat.size(), (int)unclaimed_2d_feat_time.size() );
   // int M = max(20,(int)unclaimed_2d_feat.size());
   int M = unclaimed_2d_feat.size();
   cout << "flush_feat2d()\n";

@@ -198,7 +198,7 @@ void LocalBundle::randomViewTriangulate(int max_itr, int flag )
   // 4. mask_a_b = AND( p1,  pk ) # to get list of points which were tracked correctly in each of a and b
   // 5. store( mask, _3dpt )
   //    repeat
-
+  randomViewTriangulate_debug( cout << "FLAG = "<< flag << endl );
   assert( flag == 0 || flag == 1);
 
   // printMatrixInfo( "adj_mat", adj_mat );
@@ -232,6 +232,9 @@ void LocalBundle::randomViewTriangulate(int max_itr, int flag )
     // pick a rrandom node --A
     // _1 = rand() % n_ptClds;
     // _2 = rand() % n_ptClds;
+
+    /*
+    ///////////////////////////// OLD Approach to pick _1 and _2.///////////////////////////////
 
     // pick a random node from _1set, _2set, _3set. --B
     if( flag == 0 )
@@ -309,10 +312,76 @@ void LocalBundle::randomViewTriangulate(int max_itr, int flag )
     {
     if(  !( ( _1_type==3 ) && ( _2_type==3 )  ) )
     {
-      randomViewTriangulate_debug(cout << "reject, since type is something other than 1 or 2\n");
+      randomViewTriangulate_debug(cout << "reject, since type is something other than 3\n");
       continue;
     }
     }
+
+
+    ////////////////// END of Old Approach ////////////////////////////
+    */
+
+    ////////////////////// NEW //////////////////
+    if( flag == 0 )
+    {
+      // pick 2 uniques from _1set U _2set
+      assert(  (_1set.size() + _2set.size())  > 0 );
+      int _tmp_r1 = rand() % ( _1set.size() + _2set.size() );
+      int _tmp_r2 = rand() % ( _1set.size() + _2set.size() );
+
+      if( _tmp_r1 < _1set.size() )
+        _1 = _1set[ _tmp_r1 ];
+      else
+        _1 = _2set[ _tmp_r1-int(_1set.size()) ];
+
+      if( _tmp_r2 < _1set.size() )
+        _2 = _1set[ _tmp_r2 ];
+      else
+        _2 = _2set[ _tmp_r2-int( _1set.size() ) ];
+
+      // _1 should contain smaller of the 2, _2 should contain larger of the 2.
+      int _tmp_1 = min( _1, _2 );
+      int _tmp_2 = max( _1, _2 );
+      _1 = _tmp_1;
+      _2 = _tmp_2;
+
+
+      randomViewTriangulate_debug(cout << "picked nodes with local index "<< _1 << " " << _2 << endl);
+      if( _1 == _2 )
+      {
+        randomViewTriangulate_debug(cout << "same, ignore it\n");
+        continue;
+      }
+
+    }
+    if( flag == 1 )
+    {
+      // pick 2 uniques from _3set.
+      assert( _3set.size() > 0 );
+      int _tmp_r1 = rand() % ( _3set.size() );
+      int _tmp_r2 = rand() % ( _3set.size() );
+
+      _1 = _3set[ _tmp_r1 ];
+      _2 = _3set[ _tmp_r2 ];
+
+      // _1 should contain smaller of the 2, _2 should contain larger of the 2.
+      int _tmp_1 = min( _1, _2 );
+      int _tmp_2 = max( _1, _2 );
+      _1 = _tmp_1;
+      _2 = _tmp_2;
+
+      randomViewTriangulate_debug(cout << "picked nodes with local index "<< _1 << " " << _2 << endl);
+      if( _1 == _2 )
+      {
+        randomViewTriangulate_debug(cout << "same, ignore it\n");
+        continue;
+      }
+    }
+
+    ///////////////////////// END NEW ////////////////////
+
+
+
 
 
 
@@ -902,6 +971,7 @@ LocalBundle::LocalBundle( const nap::NapMsg::ConstPtr& msg,
   {
     // cout << "---\nPointbundle "<< i << endl;
     int seq = find_indexof_node( global_nodes, msg->bundle[i].header.stamp );
+    assert( seq >= 0 && "loop on msg->bundle" );
     int seq_debug = msg->bundle[i].header.seq;
 
     MatrixXd e_ptsA;
@@ -925,7 +995,8 @@ LocalBundle::LocalBundle( const nap::NapMsg::ConstPtr& msg,
     nap_idx_of_nodes.push_back(seq_debug);
 
 
-    cout << "pointcloud# " << i << " : global_idx=" << seq <<  "\t#pts=" <<  msg->bundle[i].points.size()  << "\tnap_idx=" << seq_debug <<  "\tvalid_image: " << global_nodes[seq]->valid_image()  << endl;
+    // cout << "pointcloud# " << i << " : global_idx=" << seq <<  "\t#pts=" <<  msg->bundle[i].points.size()  << "\tnap_idx=" << seq_debug <<  "\tvalid_image: " << global_nodes[seq]->valid_image()  << endl;
+    cout << "pointcloud# " << i << " : global_idx=" << seq <<  "\t#pts=" <<  msg->bundle[i].points.size()  << "\tnap_idx=" << seq_debug <<  "\tvalid_image: " << global_nodes[seq]->valid_image()  << "\ttimestamp: "<< msg->bundle[i].header.stamp << endl;
 
   }
 
@@ -954,8 +1025,10 @@ LocalBundle::LocalBundle( const nap::NapMsg::ConstPtr& msg,
 
     int a_stamp_global_idx = find_indexof_node( global_nodes, a_stamp ); ///< global index
     int b_stamp_global_idx = find_indexof_node( global_nodes, b_stamp );
+    assert( a_stamp_global_idx>=0 && b_stamp_global_idx>=0 && "in constructor, loop on pairs, a_stamp_global_idx, b_stamp_global_idx" );
     int _i = find_indexof_node( msg->bundle, a_stamp ); ///< local bundle index
     int _j = find_indexof_node( msg->bundle, b_stamp );
+    assert( _i >=0  && _j >= 0 && "in constructor, loop on pairs, _i, _j");
 
     local_idx_of_pairs.push_back(_i);
     local_idx_of_pairs.push_back(_j);
@@ -1383,21 +1456,30 @@ void LocalBundle::pointcloud_2_matrix( const vector<geometry_msgs::Point32>& ptC
 }
 
 
+
+
+
 // Loop over each node and return the index of the node which is clossest to the specified stamp
 int LocalBundle::find_indexof_node( const vector<Node*>& global_nodes, ros::Time stamp )
 {
   ros::Duration diff;
+
   for( int i=0 ; i<global_nodes.size() ; i++ )
   {
     diff = global_nodes[i]->time_stamp - stamp;
 
-    // cout << i << " "<< diff.sec << " " << diff.nsec << endl;
 
-    if( diff < ros::Duration(0.0001) && diff > ros::Duration(-0.0001) ){
-      return i;
+
+    // if( diff < ros::Duration(0.0001) && diff > ros::Duration(-0.0001) ){
+    //   return i;
+    // }
+    // Safer
+    // if( diff.sec == 0  &&  diff.nsec > -1000000  &&  diff.nsec < 1000000 ) { // is within 1-mili-sec
+    if( (diff.sec == 0  &&  diff.nsec < 1000000) || (diff.sec == -1  &&  diff.nsec > (1000000000-1000000) )  ) { // is within 1-mili-sec
+        return i;
     }
   }//TODO: the duration can be a fixed param. Basically it is used to compare node timestamps.
-  // ROS_INFO( "Last Diff=%d:%d. Cannot find specified timestamp in nodelist. ", diff.sec,diff.nsec);
+  ROS_ERROR( "LocalBundle::find_indexof_node global_nodes[last]->time_stamp - stamp=%d:%d. Cannot find specified timestamp in nodelist. ", diff.sec,diff.nsec);
   return -1;
 }
 
@@ -1405,17 +1487,24 @@ int LocalBundle::find_indexof_node( const vector<Node*>& global_nodes, ros::Time
 int LocalBundle::find_indexof_node( const vector<sensor_msgs::PointCloud>& global_nodes, ros::Time stamp )
 {
   ros::Duration diff;
+
   for( int i=0 ; i<global_nodes.size() ; i++ )
   {
     diff = global_nodes[i].header.stamp - stamp;
 
+
     // cout << i << " "<< diff.sec << " " << diff.nsec << endl;
 
-    if( diff < ros::Duration(0.0001) && diff > ros::Duration(-0.0001) ){
-      return i;
+    // if( diff < ros::Duration(0.0001) && diff > ros::Duration(-0.0001) ){
+    //   return i;
+    // }
+    // Safer
+    // if( diff.sec == 0  &&  diff.nsec > -1000000  &&  diff.nsec < 1000000 ) { // is within 1-mili-sec
+    if( (diff.sec == 0  &&  diff.nsec < 1000000) || (diff.sec == -1  &&  diff.nsec > (1000000000-1000000) )  ) { // is within 1-mili-sec
+        return i;
     }
   }//TODO: the duration can be a fixed param. Basically it is used to compare node timestamps.
-  // ROS_INFO( "Last Diff=%d:%d. Cannot find specified timestamp in nodelist. ", diff.sec,diff.nsec);
+  ROS_ERROR( "global_nodes[last].header.stamp - stamp=%d:%d. Cannot find specified timestamp in nodelist. ", diff.sec,diff.nsec);
   return -1;
 }
 
@@ -1680,7 +1769,8 @@ void LocalBundle::raw_to_eigenmat( const double * quat, const double * t, Matrix
 
 void LocalBundle::eigenmat_to_raw( const Matrix4d& T, double * quat, double * t)
 {
-  assert( T(3,3) == 1 );
+  // assert( T(3,3) == 1 );
+  assert( abs(T(3,3)-1.0) < 1.0E-7 );
   Quaterniond q( T.topLeftCorner<3,3>() );
   quat[0] = q.w();
   quat[1] = q.x();
@@ -1704,7 +1794,8 @@ void LocalBundle::rawyprt_to_eigenmat( const double * ypr, const double * t, Mat
 
 void LocalBundle::eigenmat_to_rawyprt( const Matrix4d& T, double * ypr, double * t)
 {
-  assert( T(3,3) == 1 );
+  // assert( T(3,3) == 1 );
+  assert( abs(T(3,3)-1.0) < 1.0E-7 );
   Vector3d T_cap_ypr = R2ypr( T.topLeftCorner<3,3>() );
   ypr[0] = T_cap_ypr(0);
   ypr[1] = T_cap_ypr(1);
@@ -1918,6 +2009,7 @@ bool LocalBundle::crossRelPoseComputation3d2d( ceres::Solver::Summary& summary, 
   VectorXd curr_mask = visibility_mask_nodes.row( localidx_of_icurr );
 
   int nresidual_terms = 0;
+  int nbehind = 0, ngood_reprojection=0;
   for( int i=0 ; i<this->iprev_X_iprev_triangulated.cols() ; i++ )
   {
     if( curr_mask(i) == 0 ) { // this 3dpoint is not visible in this view
@@ -1931,6 +2023,10 @@ bool LocalBundle::crossRelPoseComputation3d2d( ceres::Solver::Summary& summary, 
     if( !is_behind && good_ ) {} else{ continue ;}
 
     nresidual_terms++;
+
+    if( is_behind ) nbehind++;
+    if( good_ ) ngood_reprojection++;
+
 
     // 4DOF loss
     // ceres::CostFunction * cost_function = Align3d2d__4DOF::Create( this->iprev_X_iprev_triangulated.col(i),
@@ -1956,6 +2052,7 @@ bool LocalBundle::crossRelPoseComputation3d2d( ceres::Solver::Summary& summary, 
   cout << "Total 3d points : "<< this->iprev_X_iprev_triangulated.cols() << endl;
   cout << "nresidual_terms : "<< nresidual_terms << endl;
   cout << "curr_mask.sum() : "<< curr_mask.sum() << endl;
+  cout << "nbehind : "<< nbehind << "      ngood_reprojection : " << ngood_reprojection  << endl;
   assert( nresidual_terms > 10 ); //should have atleast 10 good points for pnp
 
   //
