@@ -1,5 +1,5 @@
 #include "DataManager.h"
-
+#include "EdgeManager.h"
 // Core functions to subscribe to messages and build the pose graph
 
 DataManager::DataManager(ros::NodeHandle &nh )
@@ -10,8 +10,13 @@ DataManager::DataManager(ros::NodeHandle &nh )
     pub_chatter_colocation = this->nh.advertise<nap::NapMsg>( "/colocation_chatter", 1000 );
 
 
+
     tfidf = new Feature3dInvertedIndex();
+
+
+
 }
+
 
 
 DataManager::DataManager(const DataManager &obj) {
@@ -188,6 +193,8 @@ void DataManager::image_callback( const sensor_msgs::ImageConstPtr& msg )
 
 }
 
+// TODO: Consider complete removal of this subscription. the 3d point clouds from vins_estimator now
+// contains everything including global id.
 void DataManager::tracked_features_callback( const sensor_msgs::PointCloudConstPtr& msg )
 {
   // ROS_INFO( 'Received2d:: Features: %d', (int)msg->points.size() );
@@ -293,7 +300,7 @@ void DataManager::point_cloud_callback( const sensor_msgs::PointCloudConstPtr& m
     }
     }
 
-    // 1.2 msg->channels
+    // 1.2 msg->channels[4] --> gid of every pt
     assert( msg->channels.size() == msg->points.size() && msg->channels[0].values.size() == 5 );
     VectorXi _ptCld_id = VectorXi::Constant( msg->points.size(), -1 );
     for( int i=0 ; i<msg->channels.size() ; i++ )
@@ -301,9 +308,24 @@ void DataManager::point_cloud_callback( const sensor_msgs::PointCloudConstPtr& m
         _ptCld_id(i) = (int)msg->channels[i].values[4];
     }
 
+    // 1.3 msg->channels[0,1] and msg->channels[2,3] --> unvn and uv of every pt (imaged points)
+    MatrixXd _ptCld_unvn = MatrixXd::Zero( 3, msg->points.size() ); // 3xN
+    MatrixXd _ptCld_uv   = MatrixXd::Zero( 3, msg->points.size() ); // 3xN
+    for( int i=0 ; i<msg->points.size() ; i++ )
+    {
+        _ptCld_unvn(0,i) = msg->channels[i].values[0];
+        _ptCld_unvn(1,i) = msg->channels[i].values[1];
+        _ptCld_unvn(2,i) = 1.0;
+        _ptCld_uv(0,i) = msg->channels[i].values[2];
+        _ptCld_uv(1,i) = msg->channels[i].values[3];
+        _ptCld_uv(2,i) = 1.0;
+    }
+
 
     // 2. Put this eigen matrix to queue
     unclaimed_pt_cld.push( _ptCld );
+    unclaimed_pt_cld_unvn.push( _ptCld_unvn );
+    unclaimed_pt_cld_uv.push( _ptCld_uv );
     unclaimed_pt_cld_time.push( msg->header.stamp );
     unclaimed_pt_cld_globalid.push( _ptCld_id );
     flush_unclaimed_pt_cld();
@@ -322,7 +344,14 @@ void DataManager::point_cloud_callback( const sensor_msgs::PointCloudConstPtr& m
         int _gid = (int)msg->channels[i].values[4];
         Vector4d _3dpt;
         _3dpt << msg->points[i].x, msg->points[i].y, msg->points[i].z, 1.0;
-        tfidf->add( _gid, _3dpt, i_ );
+
+        Vector3d _unvn, _uv;
+        _unvn << msg->channels[i].values[0], msg->channels[i].values[1], 1.0;
+        _uv   << msg->channels[i].values[2], msg->channels[i].values[3], 1.0;
+
+        // also add _unvn, _uv to tfidf
+        tfidf->add( _gid, _3dpt, _unvn, _uv, i_ );
+        // tfidf->add( _gid, _3dpt, i_ );
     }
 
 
@@ -341,14 +370,16 @@ void DataManager::point_cloud_callback( const sensor_msgs::PointCloudConstPtr& m
 void DataManager::camera_pose_callback( const nav_msgs::Odometry::ConstPtr msg )
 {
   Node * n = new Node(msg->header.stamp, msg->pose.pose);
+  getNodesLock();
   nNodes.push_back( n );
+  getNodesUnlock();
   // ROS_DEBUG( "camera_pose_callback msg - camera_pose_callback");
   // cout << "add-node : " << msg->header.stamp << endl;
   ROS_DEBUG_STREAM( "camera_pose_callback add-node : " << msg->header.stamp );
 
 
   // ALSO add odometry edges to 1 previous.
-  int N = nNodes.size();
+  int N = getNodesSize(); //nNodes.size();
   int prev_k = 1; //TODO: This could be a parameter.
   if( N <= prev_k )
     return;
@@ -402,8 +433,6 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
   int i_prev = find_indexof_node(msg->prev_timestamp);
 
   // cout << i_curr << "<-->" << i_prev << endl;
-  // cout <<  msg->c_timestamp-nNodes[0]->time_stamp << "<-->" << msg->prev_timestamp-nNodes[0]->time_stamp << endl;
-  // cout << "Last Node timestamp : "<< nNodes.back()->time_stamp - nNodes[0]->time_stamp << endl;
   if( i_curr < 0 || i_prev < 0 )
   {
       ROS_ERROR( "DataManager::place_recog_callback cannot find nodes pointed by napmsg, ignore this nap-msg");
@@ -422,14 +451,15 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
   enabled_opmode.push_back(17);
   */
   assert( enabled_opmode.size() > 0 );
-
+  // ROS_INFO( "nNodes (in global_nodes vector) = %d", nNodes.size() );
 
 
   if( std::find(enabled_opmode.begin(), enabled_opmode.end(),  (int)msg->op_mode  ) != enabled_opmode.end() )
   {
       // found the item
       // OK! let this be processed.
-      ROS_INFO( "Process napmsg (op_mode=%d)", msg->op_mode );
+      ROS_DEBUG( "Process napmsg (op_mode=%d)", msg->op_mode );
+    //   ROS_INFO( "Process napmsg (op_mode=%d)", msg->op_mode );
   }
   else
   {
@@ -856,7 +886,38 @@ void DataManager::place_recog_callback( const nap::NapMsg::ConstPtr& msg  )
     return;
   }
 
+  if( msg->op_mode == 12 )
+  {
+    // ROS_INFO( "msg->op_mode12 : Set closure-edge-subtype : EDGE_TYPE_LOOP_SUBTYPE_BASIC");
+    e->setLoopEdgeSubtype(EDGE_TYPE_LOOP_SUBTYPE_BASIC);
 
+    // This contains just 2 timestamps. No other useful info.
+    // edgemanager->sayHi();
+    // assert( is_edge_manager_available );
+    // edge_manager->addEdge( i_curr, i_prev, msg->goodness );
+    // cout << "[DataManager::place_recog_callback] Adding Edge (opmode12): " << i_curr << "<--->" << i_prev << "\tgoodness=" << msg->goodness << endl;
+    // cout << "[DataManager::place_recog_callback] Contains global_id correspondences len = " << msg->visibility_table_idx.size() << endl;
+
+    assert( msg->visibility_table_idx.size() > 0 && msg->visibility_table_idx.size()%2 == 0 && "for opmode12 visibility_table_idx must contain even number of values");
+    REdge * re = new REdge( i_curr, i_prev, msg->goodness );
+
+    for( int _y=0 ; _y<msg->visibility_table_idx.size()/2 ; _y++ ) {
+        re->add_global_correspondence( msg->visibility_table_idx[2*_y], msg->visibility_table_idx[2*_y+1]  );
+    }
+
+
+    m_r_edges.lock();
+    r_edges.push_back( re );
+    m_r_edges.unlock();
+
+
+    // cout << "place recog call back added loopClosureEdges.push_back()\n";
+    loopClosureEdges.push_back( e );
+
+
+
+    return;
+  }
 
 
   ROS_ERROR( "in place_recog_callback: Error computing rel pose. Edge added without pose. This might be fatal!");
@@ -922,12 +983,13 @@ int DataManager::find_indexof_node( ros::Time stamp, bool print_info )
   ros::Duration diff;
   // assert( nNodes.size() > 0 && "DataManager::find_indexof_node");
   __DataManager_find_indexof_node__debug( cout << "\tSearch: "<< stamp << endl );
-  for( int i=0 ; i<nNodes.size() ; i++ )
+  int nNodes_size = getNodesSize();
+  for( int i=0 ; i<nNodes_size ; i++ )
   {
     diff = nNodes[i]->time_stamp - stamp;
 
     if( print_info ) {
-    __DataManager_find_indexof_node__debug( cout << "\t\t"<< i << " of "<< nNodes.size() << " " << nNodes[i]->time_stamp <<  " node[i]->time_stamp - stamp(sec,nsec)="<< diff.sec << "," << diff.nsec << endl );
+    __DataManager_find_indexof_node__debug( cout << "\t\t"<< i << " of "<< nNodes_size << " " << nNodes[i]->time_stamp <<  " node[i]->time_stamp - stamp(sec,nsec)="<< diff.sec << "," << diff.nsec << endl );
     }
 
     // if( abs(diff.sec) <= int32_t(0) && abs(diff.nsec) < int32_t(1000000) ) {
@@ -1023,23 +1085,34 @@ void DataManager::flush_unclaimed_im()
 void DataManager::flush_unclaimed_pt_cld()
 {
   ROS_WARN( "flush_unclaimed_pt_cld(): PtCld queue_sizes:  %d, %d, %d", (int)unclaimed_pt_cld.size(), (int)unclaimed_pt_cld_time.size(), (int)unclaimed_pt_cld_globalid.size() );
+  assert( unclaimed_pt_cld.size() == unclaimed_pt_cld_globalid.size() );
+  assert( unclaimed_pt_cld_unvn.size() == unclaimed_pt_cld_uv.size() );
+  assert( unclaimed_pt_cld_time.size() == unclaimed_pt_cld.size() );
+  assert( unclaimed_pt_cld_time.size() == unclaimed_pt_cld_unvn.size() );
   int M = max(20,(int)unclaimed_pt_cld.size()); // Potential BUG. If not found, the ptcld is pushed at the end, where you will never get to as you see only first 20 elements!
   for( int i=0 ; i<M ; i++ )
   {
     // Matrix<double,3,Dynamic> e;
-    MatrixXd e;
+    MatrixXd e, e_unvn, e_uv;
     e = unclaimed_pt_cld.front();
+    e_unvn = unclaimed_pt_cld_unvn.front();
+    e_uv = unclaimed_pt_cld_uv.front();
     ros::Time t = ros::Time( unclaimed_pt_cld_time.front() );
     VectorXi e_globalid;
     e_globalid = unclaimed_pt_cld_globalid.front();
     unclaimed_pt_cld.pop();
+    unclaimed_pt_cld_unvn.pop();
+    unclaimed_pt_cld_uv.pop();
     unclaimed_pt_cld_time.pop();
     unclaimed_pt_cld_globalid.pop();
+
     int i_ = find_indexof_node(t);
     if( i_ < 0 )
     {
       //still not found, push back again
       unclaimed_pt_cld.push( e );
+      unclaimed_pt_cld_unvn.push( e_unvn );
+      unclaimed_pt_cld_uv.push( e_uv );
       unclaimed_pt_cld_time.push( t );
       unclaimed_pt_cld_globalid.push( e_globalid );
     }
@@ -1057,7 +1130,14 @@ void DataManager::flush_unclaimed_pt_cld()
           int _gid = (int)e_globalid(i);
           Vector4d _3dpt;
           _3dpt << e(0,i), e(1,i), e(2,i), 1.0;
-          tfidf->add( _gid, _3dpt, i_ );
+
+          Vector3d _2dpt_unvn, _2dpt_uv;
+          _2dpt_unvn << e_unvn(0,i), e_unvn(1,i), 1.0;
+          _2dpt_uv   << e_uv(0,i), e_uv(1,i), 1.0;
+
+          // Add e_unvn.col(i) to tfidf and add e_uv.col(i) to tfidf
+          tfidf->add( _gid, _3dpt, _2dpt_unvn, _2dpt_uv, i_ );
+        //   tfidf->add( _gid, _3dpt, i_ );
       }
 
     }
@@ -1091,6 +1171,24 @@ void DataManager::flush_unclaimed_2d_feat()
     }
   }
 
+}
+
+void DataManager::getNodesLock() { m_nNodes.lock(); }
+void DataManager::getNodesUnlock() { m_nNodes.unlock(); }
+int DataManager::getNodesSize() {
+    getNodesLock();
+    int n = nNodes.size();
+    getNodesUnlock();
+    return n;
+}
+
+void DataManager::getREdgesLock() { m_r_edges.lock(); }
+void DataManager::getREdgesUnlock() { m_r_edges.unlock(); }
+int DataManager::getREdgesSize() {
+    getREdgesLock();
+    int n = r_edges.size();
+    getREdgesUnlock();
+    return n;
 }
 
 // /// Debug file - Mark for removal. The debug txt file is now handled inside

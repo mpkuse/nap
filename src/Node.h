@@ -93,7 +93,7 @@ public:
 
 
   // 2d features (tracked)
-  Matrix<double,3,Dynamic> feat2d; //TODO: Consider making this private
+  Eigen::Matrix<double,3,Dynamic> feat2d; //TODO: Consider making this private
   bool m_2dfeats; //TODO: Consider making this private
   void setFeatures2dHomogeneous( ros::Time time, const vector<geometry_msgs::Point32> & points );
   void setFeatures2dHomogeneous( ros::Time time, const Matrix<double,3,Dynamic>& e );
@@ -128,5 +128,7 @@ private:
   cv::Mat image;
 
   cv::Mat nap_clusters;
+
+  std::mutex m_;
 
 };

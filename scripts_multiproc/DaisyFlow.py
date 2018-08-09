@@ -187,9 +187,9 @@ class DaisyFlow:
             if (mask is not None) and (mask[xi,0] == 0):
                 continue
 
-            cv2.circle( xcanvas, tuple(pt1[xi]), 4, (255,0,255) )
+            cv2.circle( xcanvas, tuple(pt1[xi]), 2, (255,0,255) )
             ptb = tuple(np.array(pt2[xi]) + [im1.shape[1],0])
-            cv2.circle( xcanvas, ptb, 4, (255,0,255) )
+            cv2.circle( xcanvas, ptb, 2, (255,0,255) )
 
             if mark is None:
                 line_color = (255,0,0)
@@ -218,6 +218,37 @@ class DaisyFlow:
 
         out_im = alpha*im1 + (1 - alpha)*cv2.resize(out_imcurr,  (im1.shape[1], im1.shape[0])  )
         return out_im.astype('uint8')
+
+
+    # pt1 : 3xN or 2xN
+    def plot_points( self, im1, pt1, color=(255,0,255), annotations=None ):
+        assert( pt1.shape[0] == 3 or pt1.shape[0] == 2 )
+        if annotations is not None:
+            assert( len(annotations) == pt1.shape[1] )
+
+        for i in range( pt1.shape[1] ):
+            pt = (int(pt1[0,i]), int(pt1[1,i]))
+            cv2.circle( im1, pt, 2, color, -1 )
+            if annotations is not None:
+                cv2.putText( im1, str(annotations[i]), pt, cv2.FONT_HERSHEY_SIMPLEX, .3, color )
+
+        return im1
+
+    # pt1 : 3xN or 2xN
+    def plot_points_side_by_side( self, im1, pt1, im2, pt2, color=(255,0,255) ):
+
+        assert( pt1.shape[0] == 3 or pt1.shape[0] == 2 )
+        assert( pt2.shape[0] == 3 or pt2.shape[0] == 2 )
+        assert( pt1.shape[1] == pt2.shape[1] )
+
+        C = np.concatenate( (im1,im2), axis=1 )
+        for i in range( pt1.shape[1] ):
+            p1 = (int(pt1[0,i]), int(pt1[1,i]) )
+            p2 = (int(pt2[0,i]) + im1.shape[1] , int(pt2[1,i]) )
+            cv2.circle( C, p1, 2, color, -1 )
+            cv2.circle( C, p2, 2, color, -1 )
+            cv2.line( C, p1, p2, color, 1 )
+        return C
 
 
     ############################# HELPERS FOR real computation ########################
@@ -442,7 +473,7 @@ class DaisyFlow:
             ____K = (self.uim_lut[ch0]).max() + 1
             for hj in range(____K-1, 0, -1): #range(1,____K):
                 if (Z_curr == hj).sum() == 0 and (Z_prev == hj).sum() == 0:
-                    # Make all the best of the clusters as hj. ie. replace all the zeros with hj
+                    # Make all the rest of the clusters as hj. ie. replace all the zeros with hj
                     Z_curr[ Z_curr == 0 ] = hj
                     Z_prev[ Z_prev == 0 ] = hj
                     # code.interact( local=locals() )
@@ -651,6 +682,235 @@ class DaisyFlow:
 
 
         return __t_pt, __topNN_dist, __lowe_ratio, mask
+
+
+    def opencv_callback(self, event, x,y,flags, param):
+        if event == cv2.EVENT_LBUTTONDOWN:
+        # if event == cv2.EVENT_MOUSEMOVE:
+            print 'callback', x,y
+            cv2.circle( np.copy(self.___im_curr), (x,y), 7, (255,0,0), -1 )
+
+            # now find distance of D_curr(x,y) to \forall (i,j) of D_prev(i,j)
+
+            MAP = np.zeros( (self.___daisy_prev.shape[0], self.___daisy_prev.shape[1]) )
+            for i in range( MAP.shape[0] ):
+                for j in range( MAP.shape[1] ):
+                    # MAP[i,j] = np.dot( self.___daisy_curr[y,x,:], self.___daisy_prev[i,j,:] )
+                    MAP[i,j] = np.linalg.norm( self.___daisy_curr[y,x,:] - self.___daisy_prev[i,j,:] )
+
+            print 'in MAP, min=', MAP.min(), '  max=', MAP.max()
+            MAP = (MAP-MAP.min()) / (MAP.max() - MAP.min()) * 255.
+            MAP = MAP.astype('uint8')
+            MAP_falsecolormap = cv2.applyColorMap( MAP, cv2.COLORMAP_JET )
+            cv2.imshow( 'MAP_falsecolormap', MAP_falsecolormap )
+
+            # code.interact( local=locals() )
+
+
+
+    def guided_matches_virgo( self, ch0, d_ch0, pts0, ch1, d_ch1, pts1 ):
+        """ Given 2 images, tracked points and amap, produce a matching
+
+            pts0: 3xN
+            pts1: 3xM
+        """
+
+
+
+        assert self.uim[ch0] is not None
+        assert self.uim[ch1] is not None
+
+        self.___im_curr = self.uim[ch0]
+        self.___im_prev = self.uim[ch1]
+        self.___pts_curr = pts0
+        self.___pts_prev = pts1
+        COLLECTED_of_0 = []
+        COLLECTED_of_1 = []
+
+
+
+        daisy0 = self._view_daisy( d_ch=d_ch0 )
+        daisy1 = self._view_daisy( d_ch=d_ch1 )
+
+
+        LUT = ColorLUT()
+        Z0_ = self._prominent_clusters( 0 )
+        Z1_ = self._prominent_clusters( 1 )
+        Z0_[:,:] = 0
+        Z1_[:,:] = 0
+        cv2.imshow( 'Z0_', LUT.lut( Z0_.astype('uint8') ) )
+        cv2.imshow( 'Z1_', LUT.lut( Z1_.astype('uint8') ) )
+
+        # Mark each of the points in pts0 with their clusterID
+        pts0_cids = np.zeros( pts0.shape[1] )
+        for i in range( pts0.shape[1] ):
+            try:
+                _xx = int(pts0[0,i]/4.) #/4 because Z0_ is of size 60x80 while the original image in which the co-ordinates pts0 belong was 240x320
+                _yy = int(pts0[1,i]/4.)
+                pts0_cids[i] = Z0_[ _yy, _xx ]
+            except:
+                pass
+
+        # Mark each of the points in pts1 with their clusterID
+        pts1_cids = np.zeros( pts1.shape[1] )
+        for i in range( pts1.shape[1] ):
+            try:
+                _xx = int(pts1[0,i]/4.)
+                _yy = int(pts1[1,i]/4.)
+                pts1_cids[i] = Z1_[ _yy, _xx ]
+            except:
+                pass
+
+
+        # Loop over clusterIDs
+        zmin = min(Z0_.min(), Z1_.min())
+        zmax = max( Z0_.max(), Z1_.max())
+        if zmin == zmax:
+            zrange = [zmin]
+        else:
+            zrange = range( zmin, zmax)
+        for cid in zrange: # loop over all cids
+            print 'plotting feats with cid=', cid
+            _0_args = np.where(pts0_cids == cid )[0]
+            _1_args = np.where(pts1_cids == cid )[0]
+            if _0_args.shape[0] == 0 or _1_args.shape[0] == 0 :
+                print cid, ' was not found in one of the point sets'
+                continue
+
+
+            pts0_subset = pts0[ :, _0_args ] #3xL
+            pts1_subset = pts1[ :, _1_args ] #3xK
+            print 'pts0_subset has ', pts0_subset.shape[1] , ' pts and pts1_subset has ', pts1_subset.shape[1], ' pts'
+
+
+            # collect daisy for subsets, ie. at `pts0_subset` and `pts1_subset`
+            A = []  # descriptors of pts0_subset
+            A_neighbors = [] # array-of-arrays
+            for l in range( pts0_subset.shape[1] ):
+                _x = pts0_subset[0,l]
+                _y = pts0_subset[1,l]
+                A.append( daisy0[ int(_y),int(_x),:]  )
+
+                A_n = []
+                # collect daisy for multiple neighbors  around (_x,_y )
+                for n in range(15):
+                    try:
+                        _rx = np.random.randint( -3,3 )
+                        _ry = np.random.randint( -3,3 )
+                        if _rx == 0 and _ry == 0: #skip if the random ofset is 0,0
+                            continue
+                        A_n.append( daisy0[ int(_y+_ry), int(_x+_rx), : ] )
+                    except:
+                        pass
+
+                A_neighbors.append( A_n )
+
+
+            B = []  # descriptors of pts1_subset
+            B_U_Bn = []
+            for k in range( pts1_subset.shape[1] ):
+                _x = pts1_subset[0,k]
+                _y = pts1_subset[1,k]
+                B.append( daisy1[ int(_y),int(_x),:]  )
+
+                # B_U_Bn (B union neighbhours of B) contains 5 around B.
+                for n in range(10):
+                    try:
+                        _rx = np.random.randint( -3,3 )
+                        _ry = np.random.randint( -3,3 )
+
+                        B_U_Bn.append( daisy1[ int(_y+_ry), int(_x+_rx), : ] )
+                    except:
+                        B_U_Bn.append( daisy1[ int(_y), int(_x), : ] )
+
+
+
+
+            # NN search between A and B
+            # FLANN_INDEX_KDTREE = 0
+            # index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 5)
+            # search_params = dict(checks=50)   # or pass empty dictionary
+            # flann = cv2.FlannBasedMatcher(index_params,search_params)
+            flann = cv2.BFMatcher( )
+            matches = flann.knnMatch( np.array(A), np.array(B), k=3 )
+
+
+            for e, m in enumerate(matches): #loop on the found matches
+                print '---'
+                votes = {}
+                for mi in m: # look at the 3 nearest neighbors
+                    print mi.queryIdx, mi.trainIdx, mi.distance
+                    votes[mi.trainIdx] = 0
+
+                # rematches = flann.knnMatch( np.array(A_neighbors[e]), np.array(B), k=1 )
+                rematches = flann.knnMatch( np.array(A_neighbors[e]), np.array(B_U_Bn), k=1 )
+                for re, rm in enumerate(rematches):
+                    print '\t^^^',
+                    print rm[0].queryIdx, rm[0].trainIdx/10, rm[0].distance
+                    __p = int(rm[0].trainIdx/10)
+                    # print rm[0].queryIdx, rm[0].trainIdx, rm[0].distance
+                    # __p = int(rm[0].trainIdx)
+                    if __p in votes.keys():
+                        votes[__p] += 1
+                print 'votes for 3 nn ', votes
+                votes_res = [ ke for ke in votes if votes[ke] > 13 ]
+                if len(votes_res) > 0:
+                    print "Accept", mi.queryIdx , '<--->', votes_res[0]
+                    COLLECTED_of_0.append( pts0_subset[:,mi.queryIdx]  )
+                    COLLECTED_of_1.append( pts1_subset[:,votes_res[0]] )
+
+                else :
+                    print "Reject"
+
+
+
+
+            # cv2.imshow( 'pts0_subset', self.plot_points( np.copy(self.uim[ch0]), pts0_subset, annotations=range(pts0_subset.shape[1]) ) )
+            # cv2.imshow( 'pts1_subset', self.plot_points( np.copy(self.uim[ch1]), pts1_subset, annotations=range(pts1_subset.shape[1]) ) )
+            # cv2.waitKey(0)
+
+
+
+        if len( COLLECTED_of_0) == 0:
+            return None, None, None
+
+        COLLECTED_of_0 = np.array( COLLECTED_of_0 ) #now this is Nx3
+        COLLECTED_of_1 = np.array( COLLECTED_of_1 )
+        print COLLECTED_of_1.shape, np.transpose( COLLECTED_of_1 ).shape
+
+
+        # E, mask = cv2.findFundamentalMat( COLLECTED_of_0[:,0:2] , COLLECTED_of_1[:,0:2] , param1=5 )
+        # print 'mask.sum()', sum(mask)
+        # COLLECTED_of_0 = np.array( list( COLLECTED_of_0[i,:] for i in np.where( mask[:,0] == 1)[0] ) )
+        # COLLECTED_of_1 = np.array( list( COLLECTED_of_1[i,:] for i in np.where( mask[:,0] == 1)[0] ) )
+
+
+        # result_im0 = self.plot_points( np.copy(self.uim[ch0]), np.transpose(COLLECTED_of_0), annotations=range( len(COLLECTED_of_0)) )
+        # result_im1 = self.plot_points( np.copy(self.uim[ch1]), np.transpose(COLLECTED_of_1), annotations=range( len(COLLECTED_of_1)) )
+        # cv2.imshow( 'result_im0_im1', np.concatenate( (result_im0, result_im1 ), axis=1 ) )
+
+        # code.interact( local=locals() )
+        # resss = self.plot_point_sets( self.uim[ch0], np.array(COLLECTED_of_0), self.uim[ch1], np.array(COLLECTED_of_1) )
+        # cv2.imshow( 'resss', resss )
+        # cv2.waitKey(0)
+
+        resss = self.plot_points_side_by_side( self.uim[ch0], np.transpose(COLLECTED_of_0), self.uim[ch1], np.transpose( COLLECTED_of_1 ) )
+        cv2.imshow( 'resss', resss )
+
+        return None, None, None
+
+
+        cv2.namedWindow( 'virgo+im_curr' )
+        cv2.setMouseCallback( 'virgo+im_curr', self.opencv_callback  )
+
+        while True:
+            cv2.imshow( 'virgo+im_curr', self.___im_curr )
+            cv2.imshow( 'virgo+im_prev', self.___im_prev )
+            key = cv2.waitKey(30)
+            if key == ord('q'):
+                # quit()
+                return None, None, None
+
 
 
 
@@ -899,8 +1159,8 @@ class DaisyFlow:
         masked_selected_score = list( selected_score[q]  for q in np.where( mask[:,0] == 1 )[0] )
 
         if DEBUG:
-            cv2.imshow( 'curr_overlay', self.points_overlay( im_curr, pts_curr) )
-            cv2.imshow( 'prev_overlay', self.points_overlay( im_prev, pts_prev) )
+            # cv2.imshow( 'curr_overlay', self.points_overlay( im_curr, pts_curr) )
+            # cv2.imshow( 'prev_overlay', self.points_overlay( im_prev, pts_prev) )
             cv2.imshow( 'selected', self.plot_point_sets( im_curr, selected_A, im_prev, selected_B) )
             cv2.imshow( 'selected+fundamentalmatrixtest', self.plot_point_sets( im_curr, masked_pts_curr, im_prev, masked_pts_prev) )
 

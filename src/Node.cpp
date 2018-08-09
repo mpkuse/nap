@@ -33,6 +33,7 @@ Node::Node( ros::Time time_stamp, geometry_msgs::Pose pose )
 
 void Node::getCurrTransform(Matrix4d& M)
 {
+    m_.lock();
   M = Matrix4d::Zero();
   M.col(3) << e_p, 1.0;
   // Matrix3d R = e_q.toRotationMatrix();
@@ -42,10 +43,12 @@ void Node::getCurrTransform(Matrix4d& M)
   // cout << "e_q [w,x,y,z]\n" << e_q.w() << " " << e_q.x() << " " << e_q.y() << " " << e_q.z() << " " << endl;
   // cout << "R\n" << R << endl;
   // cout << "M\n"<< M << endl;
+  m_.unlock();
 }
 
 void Node::getOriginalTransform(Matrix4d& M)
 {
+    m_.lock();
   M = Matrix4d::Zero();
   M.col(3) << org_p, 1.0;
   // Matrix3d R = org_q.toRotationMatrix();
@@ -55,6 +58,7 @@ void Node::getOriginalTransform(Matrix4d& M)
   // cout << "e_q [w,x,y,z]\n" << e_q.w() << " " << e_q.x() << " " << e_q.y() << " " << e_q.z() << " " << endl;
   // cout << "R\n" << R << endl;
   // cout << "M\n"<< M << endl;
+  m_.unlock();
 }
 
 ////////////// 3d points
@@ -86,16 +90,20 @@ void Node::getOriginalTransform(Matrix4d& M)
 
 void Node::setPointCloud( ros::Time time, const MatrixXd& e, const VectorXi& e_globalid )
 {
+    m_.lock();
   // ptCld = Matrix<double,3,Dynamic>( e );
   this->ptCld = MatrixXd( e );
   this->ptCld_id = VectorXi( e_globalid ); m_3dpts_globalid = true;
   this->time_pcl = ros::Time(time);
   m_3dpts = true;
+  m_.unlock();
 }
 
 void Node::setPointCloud( ros::Time time, const vector<geometry_msgs::Point32> & points,
                 const vector<sensor_msgs::ChannelFloat32>& channels )
 {
+    m_.lock();
+
   // ptCld = Matrix<double,3,Dynamic>(3,points.size());
   assert( points.size() > 0 );
   ptCld = MatrixXd::Zero(4,points.size());
@@ -121,6 +129,8 @@ void Node::setPointCloud( ros::Time time, const vector<geometry_msgs::Point32> &
       ptCld_id(i) = (int)channels[i].values[4];
   }
   m_3dpts_globalid = true;
+
+  m_.unlock();
 
 }
 
@@ -152,7 +162,7 @@ const VectorXi& Node::getPointCloudGlobalIds()
 //   }
 // }
 
-////////////// 2d tracked features
+////////////// 2d tracked features - Mark for complete removal
 void Node::setFeatures2dHomogeneous( ros::Time time, const vector<geometry_msgs::Point32> & points )
 {
   feat2d = Matrix<double,3,Dynamic>(3,points.size());
@@ -166,6 +176,7 @@ void Node::setFeatures2dHomogeneous( ros::Time time, const vector<geometry_msgs:
   m_2dfeats = true;
 }
 
+//- Mark for complete removal
 void Node::setFeatures2dHomogeneous( ros::Time time, const Matrix<double,3,Dynamic>& e )
 {
   feat2d = Matrix<double,3,Dynamic>( e );
@@ -173,6 +184,7 @@ void Node::setFeatures2dHomogeneous( ros::Time time, const Matrix<double,3,Dynam
   m_2dfeats = true;
 }
 
+// - Mark for complete removal
 void Node::getFeatures2dHomogeneous( MatrixXd& M )
 {
   // return feat2d;
@@ -183,8 +195,10 @@ void Node::getFeatures2dHomogeneous( MatrixXd& M )
 /////////////// Image
 void Node::setImage( ros::Time time, const cv::Mat& im )
 {
+    m_.lock();
   image = cv::Mat(im.clone());
   this->time_image = ros::Time(time);
+  m_.unlock();
 }
 
 
@@ -197,8 +211,10 @@ const cv::Mat& Node::getImageRef()
 /////////////// Nap Cluster Map
 void Node::setNapClusterMap( ros::Time time, const cv::Mat& im )
 {
+    m_.lock();
   this->nap_clusters = cv::Mat(im.clone());
   this->time_nap_clustermap = ros::Time(time);
+  m_.unlock();
 }
 
 

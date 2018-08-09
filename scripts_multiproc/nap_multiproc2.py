@@ -148,15 +148,15 @@ tcol = tcolor
 def xprint( msg, threadId ):
     threadId = str(threadId)
     if threadId.find( 'worker_score_computation') > 0 :
-        return
+       return
     if threadId.find( 'worker_cpu') > 0 :
         return
     if threadId.find( 'worker_gpu') > 0 :
         return
     # if threadId.find( 'worker_bundle_cpu') > 0 :
         # return
-    if threadId.find( 'worker_qdd_processor') > 0 :
-        return
+    # if threadId.find( 'worker_qdd_processor') > 0 :
+        # return
 
 
     print '[%s]' %( str(threadId) ), msg
@@ -502,6 +502,10 @@ def worker_score_computation( process_flags, Qd, S_timestamp, S_netvlad, Q_time_
 
     rate = rospy.Rate( 15 )
     curr_item_idx = 0 #of S_netvlad
+    prev_candidate_idx = -1
+    prev_candidate_score = -1
+    pprev_candidate_idx = -1 #previous of previous. note the double-p
+    pprev_candidate_score = -1
     while process_flags['MAIN_ENDED'] is False:
         try:
             curr_len = len(S_netvlad)
@@ -520,7 +524,7 @@ def worker_score_computation( process_flags, Qd, S_timestamp, S_netvlad, Q_time_
         # Find loop candidates and put idx_curr and idx_prev in  Qd
         if curr_item_idx < 30:
             curr_item_idx = curr_item_idx + 1
-            # xprint( "too few items", THREAD_NAME )
+            # xprint( "too few items, ignore", THREAD_NAME )
             continue
 
 
@@ -552,6 +556,7 @@ def worker_score_computation( process_flags, Qd, S_timestamp, S_netvlad, Q_time_
             xprint( 'DIY plotting', THREAD_NAME )
             r = Plot2Mat( )
             r.plot( sim_scores_logistic, line_color=(0,255,0) )
+            Qp = r.plot( DOT_word, line_color=(0,0,255) )
 
 
 
@@ -564,56 +569,98 @@ def worker_score_computation( process_flags, Qd, S_timestamp, S_netvlad, Q_time_
             # Qp = r.render()
 
 
+        # A Simple Procedure to get candidates.
+        #   Following things need to be done using just `DOT_word`:
+        #   a) Qd.put( (i_curr, i_prev) )
+        #   b) Q_scores_plot.put( Qp.astype('uint8') )
+        #   c) Q_time_netvlad_etc.put( 1000.*(time.time() - startETC ) )
+        xprint( 'DOT_word.shape'+str(DOT_word.shape), THREAD_NAME )
 
-        # Top-5 from (0 to N-25), followed by thresholding Thresh.
-        keep_top_n = 20
-        skip_last_n = 25
-        score_thresh = 0.5
-        max_enqueue = 4
-        if Qd.qsize() > 20:
-            max_enqueue = 1
-        if Qd.qsize() > 15:
-            max_enqueue = 2
-
-        _QQW = [(i,sim_scores_logistic[i]) for i in np.argsort(sim_scores_logistic[0:-skip_last_n])[-keep_top_n:]]
-        __QQW = [sim_scores_logistic[i] for i in np.argsort(sim_scores_logistic[0:-skip_last_n])[-keep_top_n:]]
-        n_found = (np.array(__QQW) > score_thresh).sum()
-        n_items_enqueued = 0
-        _items_enqueued = []
-        for idx, scr in _QQW:
-            if scr < score_thresh:
-                continue
-
-            latestTimeStamp = S_timestamp[curr_item_idx].to_sec()
-            # Avoid matches from near current
-            if (latestTimeStamp -  S_timestamp[idx].to_sec()) <10.  or idx < 5:
-                continue
-
-            if n_items_enqueued > max_enqueue: #if already enough put into the queue, den quit
-                break
-
-            i_curr = curr_item_idx
-            i_prev = idx
-
-            hj = np.array( _items_enqueued )
-            if len( hj ) > 0:
-                __l = abs(np.array(_items_enqueued ) - i_prev)
-                # if min(__l) < 5  :
-                if (__l < 10).sum() > 2: #dont let more than 2 nearby
-                    continue # dont enqueue if something very near to i_prev is already enqueued
-
-            xprint( 'Enqueue(%d,%d)' %(i_curr, i_prev), THREAD_NAME )
+        # Here I am using a max candidate, but it is possible to design elaborate schemes especially using fuzzy candidate list etc.
+        # For example, see scipy.find_peaks_cwt() is an interesting way based on a 2006 bioinformatics paper. https://docs.scipy.org/doc/scipy-0.19.1/reference/generated/scipy.signal.find_peaks_cwt.html
+        max_candidate_score = np.max( DOT_word[0:-25] ) #ignore latest 25 keyframes
+        max_candidate_idx   = np.argmax( DOT_word[0:-25] )
 
 
+        ##### Current these are not in use...but look like good ####
+        from scipy import signal
+        peakind = signal.find_peaks_cwt(DOT_word[0:-25], np.arange(1,10))
+        xprint( '\t\tpeakind: '+str(peakind), THREAD_NAME )
+        xprint( '\t\tpeakval: '+str( np.round(DOT_word[peakind],2) ), THREAD_NAME )
+        #############################################################
 
-            Qd.put( (i_curr, i_prev) )
-            n_items_enqueued = n_items_enqueued + 1
-            _items_enqueued.append( i_prev )
+
+        # If current candidate satisfy the threshold and last 2 candidates are with 6 KF of the current candidate, then accept the match
+        if( max_candidate_score > 0.915 and \
+                        abs(prev_candidate_idx-max_candidate_idx) < 6  and\
+                        abs(pprev_candidate_idx-max_candidate_idx) < 6  \
+           ):
+            xprint( '\tloop candidates: %d<-->%d (score=%4.4f)' %( curr_item_idx , max_candidate_idx, max_candidate_score ), THREAD_NAME )
+            Qd.put( (curr_item_idx, max_candidate_idx, max_candidate_score) )
+        else:
+            xprint( '\tno candidates', THREAD_NAME)
 
 
-        # xprint( 'Found %d candidates above the thresh' %(len(argT) ), THREAD_NAME  )
-        xprint( 'Found=%d, Enqueued=%d' %(n_found, n_items_enqueued), THREAD_NAME )
-        Qp = r.mark(  np.array( _items_enqueued )  )
+        # enque candidate
+
+        prev_candidate_score = max_candidate_score
+        prev_candidate_idx = max_candidate_idx
+        pprev_candidate_score = prev_candidate_score
+        pprev_candidate_idx = prev_candidate_idx
+
+
+
+        if False:
+            # Top-5 from (0 to N-25), followed by thresholding Thresh.
+            keep_top_n = 20
+            skip_last_n = 25
+            score_thresh = 0.5
+            max_enqueue = 4
+            if Qd.qsize() > 20:
+                max_enqueue = 1
+            if Qd.qsize() > 15:
+                max_enqueue = 2
+
+            _QQW = [(i,sim_scores_logistic[i]) for i in np.argsort(sim_scores_logistic[0:-skip_last_n])[-keep_top_n:]]
+            __QQW = [sim_scores_logistic[i] for i in np.argsort(sim_scores_logistic[0:-skip_last_n])[-keep_top_n:]]
+            n_found = (np.array(__QQW) > score_thresh).sum()
+            n_items_enqueued = 0
+            _items_enqueued = []
+            for idx, scr in _QQW:
+                if scr < score_thresh:
+                    continue
+
+                latestTimeStamp = S_timestamp[curr_item_idx].to_sec()
+                # Avoid matches from near current
+                if (latestTimeStamp -  S_timestamp[idx].to_sec()) <10.  or idx < 5:
+                    continue
+
+                if n_items_enqueued > max_enqueue: #if already enough put into the queue, den quit
+                    break
+
+                i_curr = curr_item_idx
+                i_prev = idx
+
+                hj = np.array( _items_enqueued )
+                if len( hj ) > 0:
+                    __l = abs(np.array(_items_enqueued ) - i_prev)
+                    # if min(__l) < 5  :
+                    if (__l < 10).sum() > 2: #dont let more than 2 nearby
+                        continue # dont enqueue if something very near to i_prev is already enqueued
+
+                xprint( 'Enqueue(%d,%d)' %(i_curr, i_prev), THREAD_NAME )
+
+
+
+                Qd.put( (i_curr, i_prev) )
+                n_items_enqueued = n_items_enqueued + 1
+                _items_enqueued.append( i_prev )
+
+
+            # xprint( 'Found %d candidates above the thresh' %(len(argT) ), THREAD_NAME  )
+            xprint( 'Found=%d, Enqueued=%d' %(n_found, n_items_enqueued), THREAD_NAME )
+            Qp = r.mark(  np.array( _items_enqueued )  )
+
 
         if Q_scores_plot is not None:
             Q_scores_plot.put( Qp.astype('uint8') )
@@ -1278,6 +1325,58 @@ def worker_qdd_processor( process_flags, Qdd, S_thumbnails, S_timestamp, S_lut_r
         Q_match_im_bundle.close()
 
 
+# feat2d.shape == 3xN
+# annotations: a vector of len N
+def mark_uv( im, feat2d, annotations=None, color=(255,0,255) ):
+    assert( feat2d.shape[0] == 2 or feat2d.shape[0] == 3)
+    assert( feat2d.shape[1] > 5 )
+
+    if annotations is not None:
+        assert( feat2d.shape[1] == len(annotations) )
+
+
+    for i in range( feat2d.shape[1] ):
+        pt = tuple( feat2d[0:2,i].astype('int32') )
+        cv2.circle( im, pt, 1, color, -1 )
+
+        if annotations is not None:
+             cv2.putText(im,str(annotations[i]), pt, cv2.FONT_HERSHEY_COMPLEX, 0.3, color )
+
+
+    return  im
+
+# feat2d.shape == 3xN
+# a1, a2: annotations. a vector of len N
+def mark_uv_pair( im1, pt1, im2, pt2, a1=None, a2=None, color=(255,0,255), enable_lines=True, enable_circles=True ):
+    assert( pt1.shape[0] == 3 or pt1.shape[0] == 2 )
+    assert( pt2.shape[0] == 3 or pt2.shape[0] == 2 )
+    assert( pt1.shape[1] == pt2.shape[1] )
+
+
+    if a1 is not None:
+        assert( pt1.shape[1] == len(a1) )
+        assert( a2 is not None and pt1.shape[1] == len(a2))
+
+
+    C = np.concatenate( (im1,im2), axis=1 )
+    for i in range( pt1.shape[1] ):
+        p1 = (int(pt1[0,i]), int(pt1[1,i]) )
+        p2 = (int(pt2[0,i]) + im1.shape[1] , int(pt2[1,i]) )
+
+        if enable_circles:
+            cv2.circle( C, p1, 2, color, -1 )
+            cv2.circle( C, p2, 2, color, -1 )
+
+        if enable_lines:
+            cv2.line( C, p1, p2, color, 1 )
+
+
+        if a1 is not None:
+             cv2.putText(C,str(a1[i]), p1, cv2.FONT_HERSHEY_COMPLEX, 0.3, color )
+             cv2.putText(C,str(a2[i]), p2, cv2.FONT_HERSHEY_COMPLEX, 0.3, color )
+
+    return C
+
 # Attempt to get rid of the GeometricVerification class. Consumed Qd to produce Qdd
 # 2way matches and bundles. This is replacement for worker_cpu.
 def worker_bundle_cpu(  process_flags, Qd, Qdd, S_thumbnails, S_timestamp, S_lut_raw,\
@@ -1317,8 +1416,14 @@ def worker_bundle_cpu(  process_flags, Qd, Qdd, S_thumbnails, S_timestamp, S_lut
         # Images
         i_curr = g[0]
         i_prev = g[1]
+
+        if len( g ) == 3:
+            i_curr_prev_score = g[2]
         im_curr = S_thumbnails[ i_curr ]
         im_prev = S_thumbnails[ i_prev ]
+
+
+
 
         # Timestamps
         t_curr   = S_timestamp[ i_curr ]
@@ -1339,6 +1444,11 @@ def worker_bundle_cpu(  process_flags, Qd, Qdd, S_thumbnails, S_timestamp, S_lut
         feat2d_curr = np.dot( FF['K'], feature_factory.features[feat2d_curr_idx ] ) #3xN in homogeneous cords
         feat2d_prev = np.dot( FF['K'], feature_factory.features[feat2d_prev_idx ] )
 
+        # The observed feature co-ordinate are in original image co-ordinate, we need to scale it to 240x320. hence the matrix
+        resize_correction = np.array( [[320./640, 0., 0.] , [0., 240./512, 0.], [0.,0.,1.]] )
+        feat2d_obs_curr = np.dot( resize_correction, FF['features_obs'][feat2d_curr_idx] )
+        feat2d_obs_prev = np.dot( resize_correction, FF['features_obs'][feat2d_prev_idx] )
+
         feat3d_curr = FF['point3d'][feat2d_curr_idx]
         feat3d_prev = FF['point3d'][feat2d_prev_idx] # This is added may,28,2018. (for opmode 18)
 
@@ -1350,7 +1460,7 @@ def worker_bundle_cpu(  process_flags, Qd, Qdd, S_thumbnails, S_timestamp, S_lut
 
 
         ###
-        ### Feed Data and Daisy Geometry COmputation
+        ### Feed Data and Daisy Geometry Computation
         ###
         DF.set_image( im_curr, ch=0, d_ch=0 )
         DF.set_image( im_prev, ch=1, d_ch=1 )
@@ -1359,12 +1469,56 @@ def worker_bundle_cpu(  process_flags, Qd, Qdd, S_thumbnails, S_timestamp, S_lut
         ###
         ### Step-1 :  DF.guided_matches()
         startGuided = time.time()
-        selected_curr_i, selected_prev_i, score = DF.guided_matches( 0, 0, feat2d_curr, 1, 1, feat2d_prev )
+        # selected_curr_i, selected_prev_i, score = DF.guided_matches( 0, 0, feat2d_curr, 1, 1, feat2d_prev )
+        selected_curr_i, selected_prev_i, score = DF.guided_matches( 0, 0, feat2d_obs_curr, 1, 1, feat2d_obs_prev )
         if len(selected_curr_i ) == 0 :
             score = 0.;
-        xprint( 'guided_matches exec in (ms): %4.2f' %( 1000. *( time.time() - startGuided) ), THREAD_NAME )
+        guided_matches_exec_time_ms = 1000. *( time.time() - startGuided)
+        xprint( 'guided_matches exec in (ms): %4.2f' %( guided_matches_exec_time_ms ), THREAD_NAME )
         xprint( 'len_selected_curr_i : '+str( len(selected_curr_i))+'\tscore_string'+str(score) , THREAD_NAME  )
         xprint( 'guided_matches Score: %4.2f' %(score), THREAD_NAME )
+
+        if True: #Plot this candidate and imshow. Set it to false when not needed
+            if score < 2.5:
+                continue
+            # im0 = im_curr
+            # im1 = im_prev
+            im0 = mark_uv( np.copy(im_curr), feat2d_curr  )
+            im1 = mark_uv( np.copy(im_prev), feat2d_prev  )
+
+            im0 = mark_uv( im0, feat2d_obs_curr, color=(0,255,0)  )
+            im1 = mark_uv( im1, feat2d_obs_prev, color=(0,255,0)  )
+
+            # paire = mark_uv_pair( im0, feat2d_curr[0:2,selected_curr_i], im1, feat2d_prev[0:2, selected_prev_i], enable_circles=False )
+            paire = mark_uv_pair( im0, feat2d_obs_curr[0:2,selected_curr_i], im1, feat2d_obs_prev[0:2, selected_prev_i],\
+                        a1=feat2d_curr_global_idx[selected_curr_i], a2=feat2d_prev_global_idx[selected_prev_i], enable_circles=False )
+
+
+            blank_space = np.ones( (im0.shape[0], 50, 3) )*255
+
+            im = np.concatenate( (im0, blank_space.astype('uint8'), im1,), axis=1 )
+            status = np.zeros( (120,im.shape[1],3)).astype('uint8')
+            cv2.putText(status, '%d<                   >%d' %( i_curr, i_prev ), (10,35), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255) )
+            cv2.putText(status, 'guided_matches Score: %4.2f' %(score), (10,65), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255,255,255) )
+            cv2.putText(status, 'netvlad        Score: %4.2f' %(i_curr_prev_score), (10,85), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255,255,255) )
+            im = np.concatenate( (im,status), axis=0 )
+            cv2.imshow( THREAD_NAME, im )
+            cv2.imshow( THREAD_NAME+'_paire', paire )
+            cv2.waitKey(10)
+
+            nap_msg = make_nap_msg( t_curr, t_prev, (0.6,1.0,0.6) )
+            nap_msg.op_mode = 12
+            nap_msg.t_curr = t_curr
+            nap_msg.t_prev = t_prev
+            nap_msg.goodness = score
+
+            # Also add global ids of the matched - the corresponding feature's global IDs are set into NapMsg/visibility_table_idx
+            # at position 2*i: global ID from curr image
+            # at position 2*i+1: global ID from prev image
+            for _hh in range( len(selected_curr_i) ): # Loop over matched points
+                nap_msg.visibility_table_idx.append( feat2d_curr_global_idx[ selected_curr_i[_hh] ] )
+                nap_msg.visibility_table_idx.append( feat2d_prev_global_idx[ selected_prev_i[_hh] ] )
+            Q_2way_napmsg.put( nap_msg )
 
 
         # Rules ! based on score-heuristics
@@ -1376,7 +1530,7 @@ def worker_bundle_cpu(  process_flags, Qd, Qdd, S_thumbnails, S_timestamp, S_lut
 
         # Fill in Q_2way_napmsg
         #           ---""--- usual stuff, copy from nap_multiproc_node.py (basically fill in 2way nap msg)
-        if( score >= 3.  or ( score > 2.0 and len(selected_curr_i) > 15 ) ):
+        if False and ( score >= 3.  or ( score > 2.0 and len(selected_curr_i) > 15 ) ):
             # Step-1:
             nap_msg = make_nap_msg( t_curr, t_prev, (0.6,1.0,0.6) )
             nap_msg.op_mode = 20
@@ -1405,7 +1559,7 @@ def worker_bundle_cpu(  process_flags, Qd, Qdd, S_thumbnails, S_timestamp, S_lut
 
         # Fill in Qdd (queue to hold verified candidate worthy on dense local bundle adjustment.)
         # Need to also limit the amount of info I put in this.
-        if (score > 2 and len(selected_curr_i) > 20) or (score > 3 and len(selected_curr_i) > 15) or score > 3.5:
+        if False and ( (score > 2 and len(selected_curr_i) > 20) or (score > 3 and len(selected_curr_i) > 15) or score > 3.5 ):
             if check_nearby( list_of_items_put_into_qdd, (i_curr, i_prev)) is False:
                 # if score is sufficiently high and this item is not already processed
                 xprint( tcol.OKGREEN+'Score is sufficiently high and this candidate is not already processed'+tcol.ENDC, THREAD_NAME )
@@ -1418,7 +1572,7 @@ def worker_bundle_cpu(  process_flags, Qd, Qdd, S_thumbnails, S_timestamp, S_lut
         #            ****  OPMODE18 ****
         # Fill in nap_msg with **opmode18**. This mode gives the 3d points from the tracked features.
         # and the tracked points in normalized co-ordinates.
-        if( score >= 3.  or ( score > 2.0 and len(selected_curr_i) > 15 ) ):
+        if False and ( score >= 3.  or ( score > 2.0 and len(selected_curr_i) > 15 ) ):
             # Step-1:
             nap_msg = make_nap_msg( t_curr, t_prev, (0.6,1.0,0.6) )
             nap_msg.op_mode = 18 # has gidx set to -180 (this will be verified in DataManager_core.cpp::place_recog_callback). Later merge these two
@@ -1446,7 +1600,7 @@ def worker_bundle_cpu(  process_flags, Qd, Qdd, S_thumbnails, S_timestamp, S_lut
             Q_2way_napmsg.put( nap_msg )
 
 
-        if score < 2.5:
+        if False and score < 2.5:
             continue
 
         # done with rules.
@@ -1467,6 +1621,10 @@ def worker_bundle_cpu(  process_flags, Qd, Qdd, S_thumbnails, S_timestamp, S_lut
             dash_pane = cv2.putText( dash_pane, '%d' %(i_prev), (im_curr.shape[1]+100,30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 2 )
             dash_pane = cv2.putText( dash_pane, 'Score: %4.2f, inp#feat2d: %d out#feat2d: %d' %(score, feat2d_curr.shape[1], len(selected_curr_i)), (10,70), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 2 )
             xcanvas = np.concatenate( (xcanvas_2way,dash_pane),  axis=0  )
+
+            # Uncomment this if need be. COmmented for thesis proposal video
+            # cv2.imshow( THREAD_NAME+'_xcanvas', xcanvas )
+            # cv2.waitKey(10)
 
             Q_match_im_canvas.put( xcanvas )
 
@@ -1555,6 +1713,7 @@ if __name__ == "__main__":
     FEAT_FACT_SEMAPHORES = manager.dict()
     FEAT_FACT_SEMAPHORES['timestamp'] = feature_factory.timestamp
     FEAT_FACT_SEMAPHORES['features'] = feature_factory.features
+    FEAT_FACT_SEMAPHORES['features_obs'] = feature_factory.features_obs
     FEAT_FACT_SEMAPHORES['global_index'] = feature_factory.global_index
     FEAT_FACT_SEMAPHORES['point3d'] = feature_factory.point3d
     FEAT_FACT_SEMAPHORES['K'] = feature_factory.K
@@ -1778,17 +1937,17 @@ if __name__ == "__main__":
         # BASE__DUMP = '/home/mpkuse/Desktop/bundle_adj'
         BASE__DUMP = rospy.get_param( '/nap/debug_output_dir')
         if BASE__DUMP is not None:
-            print 'Writing ', BASE__DUMP+'/S_netvlad.npy'
-            print 'Writing ', BASE__DUMP+'/S_timestamp.npy'
-            print 'Writing ', BASE__DUMP+'/S_thumbnails.npy'
-            print 'Writing ', BASE__DUMP+'/S_thumbnail_lut_raw.npy'
+            print 'Writing ', BASE__DUMP+'/S_netvlad.npy', str(np.array(S_netvlad).shape)
+            print 'Writing ', BASE__DUMP+'/S_timestamp.npy',  str(np.array(S_timestamp).shape)
+            print 'Writing ', BASE__DUMP+'/S_thumbnails.npy',  str(np.array(S_thumbnails).shape)
+            print 'Writing ', BASE__DUMP+'/S_thumbnail_lut_raw.npy',  str(np.array(S_lut_raw).shape)
             np.save( BASE__DUMP+'/S_netvlad.npy', np.array(S_netvlad) )
             np.save( BASE__DUMP+'/S_timestamp.npy', np.array(S_timestamp) )
             np.save( BASE__DUMP+'/S_thumbnails.npy', np.array(S_thumbnails) )
             np.save( BASE__DUMP+'/S_lut_raw.npy', np.array(S_lut_raw) )
 
             if S_full_res is not None:
-                print 'Writing ', BASE__DUMP+'/S_full_res.npy'
+                print 'Writing ', BASE__DUMP+'/S_full_res.npy',  str(np.array(S_full_res).shape)
                 np.save( BASE__DUMP+'/S_full_res.npy', np.array(S_full_res) )
 
             # code.interact( local=locals() )
@@ -1806,6 +1965,12 @@ if __name__ == "__main__":
             with open( fname+'_features.pickle', 'wb') as fp:
                 pickle.dump( FEAT_FACT_SEMAPHORES['features'], fp )
 
+            # Features in observed co-ordinates
+            print 'Writing pickle: ',  fname+'_features_obs.pickle'
+            print 'len=', len(FEAT_FACT_SEMAPHORES['features_obs'])
+            with open( fname+'_features_obs.pickle', 'wb') as fp:
+                pickle.dump( FEAT_FACT_SEMAPHORES['features_obs'], fp )
+
             # Gobal feature index
             print 'Writing pickle: ',  fname+'_global_index.pickle'
             print 'len=', len(FEAT_FACT_SEMAPHORES['global_index'])
@@ -1814,6 +1979,8 @@ if __name__ == "__main__":
 
             # feature_factory.dump_to_file( BASE__DUMP+"/feature_factory" ) #this does not work
             ## Done writing `FEAT_FACT_SEMAPHORES`
+            print 'K(cam intrinsics) = ', FEAT_FACT_SEMAPHORES['K']
+            print 'K_org(cam intrinsics) = ', FEAT_FACT_SEMAPHORES['K_org']
     except:
         print 'ROSPARAM `/nap/debug_output_dir` not found so not writing debug info'
 

@@ -71,7 +71,6 @@ using namespace Eigen;
 
 using namespace std;
 
-
 // CLasses In this Node
 #include "Node.h"
 #include "Edge.h"
@@ -83,7 +82,8 @@ using namespace std;
 
 #include "tic_toc.h"
 
-
+class EdgeManager; // fwd declaration to break circular dependency
+class REdge;
 
 class DataManager
 {
@@ -99,6 +99,11 @@ public:
       debug_directory_is_set=true;
       ROS_INFO( "DEBUG Directory :: %s",  BASE__DUMP.c_str() );
   }
+
+
+
+
+
 private:
     vector<int> enabled_opmode;
     string BASE__DUMP;
@@ -153,7 +158,20 @@ public:
 
 
   const vector<Node*>& getNodesRef() { return nNodes; }
+  const vector<REdge*>& getREdgesRef() { return r_edges; }
   const Feature3dInvertedIndex * getTFIDFRef() { return tfidf; }
+  const PinholeCamera& getCameraRef() { return camera;}
+  const ros::Publisher& getMarkerPublisher() { return pub_pgraph; }
+
+  void getREdgesLock();
+  void getREdgesUnlock();
+  int getREdgesSize();
+
+
+  void getNodesLock();
+  void getNodesUnlock();
+  int getNodesSize() ;
+
 
 private:
 
@@ -161,15 +179,21 @@ private:
     // Republish                                       //
     // /////////////////////////////////////////////// //
     ros::Publisher pub_chatter_colocation;
-    void republish_nap( const ros::Time& t_c, const ros::Time& t_p, const Matrix4d& p_T_c, int32_t op_mode, float goodness=0.001 );
     void republish_nap( const nap::NapMsg::ConstPtr& msg );
+public:
+    void republish_nap( const ros::Time& t_c, const ros::Time& t_p, const Matrix4d& p_T_c, int32_t op_mode, float goodness=0.001 );
 
+private:
   //
   // Core Data variables
   //
   vector<Node*> nNodes; //list of notes
   vector<Edge*> odometryEdges; //list of odometry edges
   vector<Edge*> loopClosureEdges; //List of closure edges
+  vector<REdge*> r_edges; //< list of edges opmode12.
+  std::mutex m_r_edges;
+  std::mutex m_nNodes;
+
 
   Feature3dInvertedIndex  * tfidf; // TF-IDF (inverted index of 3d points by globalidx)
 
@@ -189,9 +213,11 @@ private:
   void flush_unclaimed_napmap();
 
   // std::queue<Matrix<double,3,Dynamic>> unclaimed_pt_cld;
-  std::queue<MatrixXd> unclaimed_pt_cld;
-  std::queue< VectorXi  > unclaimed_pt_cld_globalid;
-  std::queue<ros::Time> unclaimed_pt_cld_time;
+  std::queue<MatrixXd> unclaimed_pt_cld; //4xN
+  std::queue<MatrixXd> unclaimed_pt_cld_unvn; //3xN
+  std::queue<MatrixXd> unclaimed_pt_cld_uv; //3xN
+  std::queue< VectorXi  > unclaimed_pt_cld_globalid; // N
+  std::queue<ros::Time> unclaimed_pt_cld_time; // N
   void flush_unclaimed_pt_cld();
 
   std::queue<Matrix<double,3,Dynamic>> unclaimed_2d_feat;

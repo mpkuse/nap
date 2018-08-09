@@ -62,6 +62,8 @@ using namespace std;
 #include "Edge.h"
 #include "PinholeCamera.h"
 #include "DataManager.h"
+#include "EdgeManager.h"
+#include "Feature3dInvertedIndex.h"
 
 #include "cnpy.h"
 // #include "SolvePoseGraph.h"
@@ -99,6 +101,74 @@ void print_matrix( string msg, const Eigen::Ref<const MatrixXd>& M, const Eigen:
   cout << msg<< M.rows() << "_" << M.cols() << "=\n" << M.format(fmt) << endl;
 
 }
+
+
+// write images to disk
+#define ____main__poses_file 1
+void write_kf_debug_data( const string& base_path, const DataManager&  dataManager )
+{
+    cout << "write all the keyframes to :"<< base_path << endl;
+    vector<Node*> all_nodes = dataManager.getNodesRef();
+    cout << "Total Nodes: " << all_nodes.size() << endl;
+    int c = 0;
+
+    ofstream myfile;
+    char txtfname[200];
+    snprintf( txtfname, 200, "%s/kf/poses.txt", base_path.c_str() );
+    cout << "Open poses file: "<< txtfname << endl;
+    #if ____main__poses_file
+    myfile.open ( string(txtfname), ios::out );
+    assert( myfile.is_open() );
+    #endif
+
+
+    for( int i=0 ; i<all_nodes.size() ; i+=3 ) //loop over every node
+    {
+        // cout << i << " valid_image " << all_nodes[i]->valid_image() << endl;
+        if( i > 1 )
+        {
+            cout << "del_time: " << all_nodes[i]->time_image - all_nodes[i-1]->time_image << endl;
+        }
+
+        if( all_nodes[i]->valid_image() )
+        {
+            cv::Mat im = all_nodes[i]->getImageRef();
+
+            char fname[200];
+            snprintf( fname, 200, "%s/kf/%06d.jpg", base_path.c_str(), c );
+            cout << i << " write image: "<< fname << endl;
+            c++;
+            cv::imwrite( fname, im  );
+
+
+            #if ____main__poses_file
+            // Write pose in row-major. write only 3 rows (12 doubles)
+            Matrix4d M;
+            all_nodes[i]->getOriginalTransform( M );
+            for( int row=0 ; row<3; row++ )
+            {
+                for( int col=0 ; col<4 ; col++ )
+                {
+                    myfile << M(row,col) << " ";
+                    // myfile << 0.0 << " ";
+                }
+            }
+            myfile << "\n";
+            #endif
+        }
+        else
+        {
+            cout << i << " invalid image\n";
+        }
+    }
+
+    #if ____main__poses_file
+    myfile.close();
+    cout << "Close poses file: "<< txtfname << endl;
+    #endif
+
+}
+
 
 // Writes the data to file (debug)
 void write_nodes_debug_data( const string& base_path, const DataManager&  dataManager )
@@ -194,8 +264,9 @@ int main(int argc, char ** argv )
   // enabled_opmode.push_back(29); // 3way (not in use)
   // enabled_opmode.push_back(20); // contains t_curr, t_prev and matched-tracked points.
   // enabled_opmode.push_back(18); // Corvus
-  enabled_opmode.push_back(28); // LocalBundle
-  enabled_opmode.push_back(17);    // Corvus with tfidf.
+  // enabled_opmode.push_back(28); // LocalBundle
+  // enabled_opmode.push_back(17);    // Corvus with tfidf.
+  enabled_opmode.push_back(12);    // Raw edge (just a result of thresholding on descriptor score)
   dataManager.setOpmodesToProcess( enabled_opmode );
 
 
@@ -220,7 +291,7 @@ int main(int argc, char ** argv )
   ros::Subscriber sub_pcl_topic = nh.subscribe( point_cloud_topic, 1000, &DataManager::point_cloud_callback, &dataManager );
 
 
-#if LOCALBUNDLE_DEBUG_LVL > 0 || CORVUS_DEBUG_LVL > 0
+#if LOCALBUNDLE_DEBUG_LVL > 0 || CORVUS_DEBUG_LVL > 0 || __Feature3dInvertedIndex_DEBUG_LVL >0 || __EdgeManager_DEBUG_LVL > 0
   //
   //   This is not a requirement for core computation. But is subscribed for debug reasons. Especially to verify correctness of 3way matches
   string image_topic = string( "/vins_estimator/keyframe_image");
@@ -256,6 +327,9 @@ int main(int argc, char ** argv )
   std::cout<< Color::green <<  "Coordinates to Pose Processor Node by mpkuse!" << Color::def << endl;
 
 
+  // Edge Processor Thread Launch
+  EdgeManager * edge_manager = new EdgeManager( &dataManager );
+  std::thread edge_proc_thread( &EdgeManager::loop, *edge_manager );
 
 
 
@@ -270,9 +344,15 @@ int main(int argc, char ** argv )
   }
 
 
+  edge_proc_thread.join();
+
+
   // dataManager.bool_publish_all = false;
   // write_nodes_debug_data( "/home/mpkuse/Desktop/bundle_adj/pose_graph_analyis", dataManager );
   // write_nodes_debug_data( debug_output_dir, dataManager );
+  // write_kf_debug_data( debug_output_dir, dataManager  );
+
+
   // dataManager.getTFIDFRef()->sayHi();
 
 

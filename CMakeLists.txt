@@ -85,6 +85,9 @@ add_executable( pose_graph_opt_node
                     src/cnpy.cpp
                     #src/SolvePoseGraph.cpp
                     src/Feature3dInvertedIndex.cpp
+                    src/EdgeManager.cpp
+                    src/utils/PoseManipUtils.cpp
+                    src/utils/RosMarkerUtils.cpp
               )
 
 target_link_libraries( ls_pose_graph_opt ${CERES_LIBRARIES}  ${catkin_LIBRARIES} )

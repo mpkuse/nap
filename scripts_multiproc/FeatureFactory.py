@@ -30,12 +30,14 @@ class FeatureFactory:
             print 'Using Ordinary lists'
             self.timestamp = []
             self.features = [] #in Normalized co-ordinates or original image.
+            self.features_obs = [] # observed
             self.global_index = [] #list of 1d array
             self.point3d = []
         else:
             print 'Using Semaphore lists'
             self.timestamp = manager.list()
             self.features = manager.list() #in Normalized co-ordinates or original image.
+            self.features_obs = manager.list() # observed image co-rodinates
             self.global_index = manager.list() #list of 1d array
             self.point3d = manager.list()
 
@@ -153,12 +155,20 @@ class FeatureFactory:
 
 
         # Store normalized co-ordinates
+        assert( len(data.channels[0].values) == 5 )
+
         X_normed = np.zeros( (3, nPts) ) #in homogeneous co-ordinates
+        X_observed = np.zeros( (3, nPts) ) # raw observed
         for i, ch in enumerate( data.channels ):
             X_normed[0,i] = ch.values[0]
             X_normed[1,i] = ch.values[1]
             X_normed[2,i] = 1.0
+
+            X_observed[0,i] = ch.values[2]
+            X_observed[1,i] = ch.values[3]
+            X_observed[2,i] = 1.0
         self.features.append( X_normed )
+        self.features_obs.append( X_observed )
 
         #TODO: Now there is no concept of global indices. This needs fixing.
         # Also I have disabled subscribing to keyframe image in nap node for debugging. remember to uncomment it. Also deal with global index
@@ -175,8 +185,8 @@ class FeatureFactory:
         gindex = []
         assert( len(data.channels[0].values) == 5 )
         for i, ch in enumerate( data.channels ):
-            gindex.append( ch.values[4] )
-        self.global_index.append( gindex )
+            gindex.append( int(ch.values[4]) )
+        self.global_index.append( np.array(gindex) )
 
 
     def find_index( self, stamp ):

@@ -62,8 +62,8 @@
 
 
     <!-- Bag set 06, Sequences captured with blackbox4, softtry-sequences -->
-    <arg name="bag_path" default="/media/mpkuse/Bulk_Data/other_seqs/blackbox4_bags/" />
-    <arg name="bag_file" default="2018-02-19-17-52-36.bag" doc="single loop in lab"/>
+    <!-- <arg name="bag_path" default="/media/mpkuse/Bulk_Data/other_seqs/blackbox4_bags/" /> -->
+    <!-- <arg name="bag_file" default="2018-02-19-17-52-36.bag" doc="single loop in lab"/> -->
     <!-- <arg name="bag_file" default="2018-03-20-10-40-43.bag" doc="multiple loops in lab"/> -->
     <!-- <arg name="bag_file" default="2018-04-13-17-59-15.bag" doc="loopy in drone flying area of lab"/> -->
     <!-- <arg name="bag_file" default="2018-04-13-18-28-56.bag" doc=""/> -->
@@ -76,7 +76,7 @@
     <!-- <arg name="bag_file" default="2018-04-26-15-28-15.bag" doc="ground plane + long in lab. inside and outside 2ndflr cyt"/> -->
 
 
-    <!-- Bag set 07. captured with blackbox4 around coffee shop -->
+    <!-- Bag set 08. captured with blackbox4 around coffee shop -->
     <!-- <arg name="bag_path" default="/media/mpkuse/Bulk_Data/other_seqs/blackbox4_bags/" /> -->
     <!-- <arg name="bag_file" default="2018-04-15-14-02-59.bag" doc=""/> -->
     <!-- <arg name="bag_file" default="2018-04-15-14-08-06.bag" doc=""/> -->
@@ -84,6 +84,12 @@
 
 
     <!-- <arg name="bag_file" default="2018-06-25-15-46-44.bag" doc="2F lobby. outside RI"/> -->
+    <!-- <arg name="bag_file" default="2018-07-12-16-01-00.bag" doc="base. to test invariance to rotation."/> -->
+
+
+    <!-- Bag set 09. Captured with MOCAP. In drone flying area of RI. Has mocap data -->
+    <arg name="bag_path" default="/media/mpkuse/Bulk_Data/other_seqs/blackbox4_bags/with_mocap" />
+    <arg name="bag_file" default="2018-08-09-12-00-42.bag" doc="trial sequence with mocap"/>
 
 
 
@@ -101,8 +107,9 @@
 <!-- ##################
      ###### VINS ######
      ################## -->
-    <arg name="config_path" default = "$(find feature_tracker)/../config/black_box4/blackbox4.yaml" />
-    <arg name="vins_path" default = "$(find feature_tracker)/../config/../" />
+    <arg name="config_path" default="$(find feature_tracker)/../config/black_box4/blackbox4.yaml" />
+    <!-- <arg name="config_path" default = "$(find feature_tracker)/../config/point_gray/point_gray_config.yaml" /> -->
+    <arg name="vins_path" default="$(find feature_tracker)/../config/../" />
 
     <node name="feature_tracker" pkg="feature_tracker" type="feature_tracker" output="log">
         <param name="config_file" type="string" value="$(arg config_path)" />
@@ -115,12 +122,12 @@
     </node>
 
     <!-- 4DOF pose graph -->
-    <node name="pose_graph" pkg="pose_graph" type="pose_graph" output="log">
+    <!-- <node name="pose_graph" pkg="pose_graph" type="pose_graph" output="log">
       <param name="config_file" type="string" value="$(arg config_path)" />
       <param name="visualization_shift_x" type="int" value="0" />
       <param name="visualization_shift_y" type="int" value="0" />
       <param name="skip_cnt" type="int" value="0" />
-    </node>
+    </node> -->
 
     <!-- 6DOF pose graph -->
     <node name="keyframe_pose_graph_slam" pkg="solve_keyframe_pose_graph" type="keyframe_pose_graph_slam" output="log">
@@ -256,7 +263,7 @@
 
 
   <!-- Subscribes to keyframe pointcloud (from vins_estimator node) and publishes marker message to show 1st 50 frames point cloud and ground plane -->
-  <node name="plane_detect" pkg="plane_detect" type="plane_detect_node.py"  output="log">
+  <!-- <node name="plane_detect" pkg="plane_detect" type="plane_detect_node.py"  output="log">
     <param name="RANSAC_n_iterations" type="int" value="2000"/>
     <param name="RANSAC_sigma" type="double" value="0.02"/>
     <param name="RANSAC_q" type="int" value="100"/>
@@ -268,7 +275,7 @@
     <param name="PLANE_a_color" type="double" value=".8"/>
     <param name="PLANE_xspan" type="double" value="5"/>
     <param name="PLANE_yspan" type="double" value="5"/>
-  </node>
+  </node> -->
 
 
 
